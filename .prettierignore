@@ -1,0 +1,17 @@
+# Build & dependency output
+node_modules/
+dist/
+build/
+coverage/
+*.tsbuildinfo
+
+# Lockfile
+pnpm-lock.yaml
+
+# Prose docs are the source of truth and hand-formatted — not code-style enforced.
+*.md
+docs/
+
+# Recordings / models
+recordings/
+models/

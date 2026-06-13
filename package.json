@@ -1,0 +1,33 @@
+{
+  "name": "race-engineer",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "AI race engineer for sim racing (Le Mans Ultimate). Windows-only runtime; read-only and advisory.",
+  "license": "SEE LICENSE IN LICENSE",
+  "packageManager": "pnpm@9.15.9",
+  "engines": {
+    "node": ">=20",
+    "pnpm": ">=9"
+  },
+  "scripts": {
+    "dev": "echo \"[dev] The Electron shell is wired in build-plan task T6.1; there is no app to run yet.\"",
+    "build": "pnpm -r --if-present build",
+    "typecheck": "pnpm -r --if-present typecheck",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "eslint . && prettier --check .",
+    "format": "prettier --write ."
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.17.0",
+    "@types/node": "^22.10.5",
+    "eslint": "^9.17.0",
+    "eslint-config-prettier": "^9.1.0",
+    "globals": "^15.14.0",
+    "prettier": "^3.4.2",
+    "typescript": "^5.7.2",
+    "typescript-eslint": "^8.19.0",
+    "vitest": "^3.0.0"
+  }
+}

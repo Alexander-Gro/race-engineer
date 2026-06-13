@@ -1,0 +1,5 @@
+{
+  "//": "Root config for editors. Per-package typecheck runs via `pnpm -r typecheck`.",
+  "extends": "./tsconfig.base.json",
+  "files": []
+}
