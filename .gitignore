@@ -1,0 +1,42 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build output
+dist/
+build/
+out/
+release/
+*.tsbuildinfo
+
+# Secrets & local env — NEVER commit API keys (see CLAUDE.md rule 6, docs/15)
+.env
+.env.*
+!.env.example
+
+# Logs
+logs/
+*.log
+
+# Test / coverage
+coverage/
+.vitest/
+
+# Native / Electron build artifacts (later milestones)
+*.node
+
+# OS / editor cruft
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
+
+# Local AI model files — downloaded on first run, never committed (docs/16)
+models/
+
+# Telemetry recordings policy:
+#   Raw captured sessions are large and may contain user-identifying data — NEVER commit them.
+#   Trimmed test fixtures ARE committed explicitly, under packages/**/fixtures or test/fixtures.
+/recordings/
+*.replay.raw

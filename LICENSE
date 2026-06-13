@@ -1,0 +1,10 @@
+LICENSE — PLACEHOLDER (choice pending)
+
+Race Engineer is intended to ship under a permissive open-source license
+(MIT or Apache-2.0). The final license has not yet been selected.
+
+This placeholder is resolved by build-plan task T0.7 (OSS release hygiene),
+which is human-assisted: the maintainer chooses the license before the first
+public release. Until then, all rights are reserved by the project authors.
+
+See docs/11-RISKS-AND-COMPLIANCE.md and docs/16-PLATFORM-PREREQUISITES.md.

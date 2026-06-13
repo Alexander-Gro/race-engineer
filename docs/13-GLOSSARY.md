@@ -1,0 +1,82 @@
+# 13 — Glossary
+
+Sim-racing and project terms used across these docs.
+
+## Racing / strategy
+
+- **Stint** — A run between pit stops.
+- **Pit window** — The lap range in which stopping is optimal given fuel/tires/rules.
+- **Undercut** — Pitting *before* a rival so fresh tires let you gain enough time to
+  emerge ahead after they stop.
+- **Overcut** — Pitting *after* a rival, using clean air / their out-lap traffic to gain
+  track position.
+- **Fuel-save / lift-and-coast** — Lifting off the throttle early before braking to use
+  less fuel, stretching a stint. Measured as liters/lap to save.
+- **Stint pace** — Target lap time to balance speed against tire/fuel life.
+- **Tire degradation (deg)** — Loss of grip/pace as tires wear through a stint.
+- **Double-stinting** — Running two stints on one set of tires.
+- **Out-lap / in-lap** — First lap after leaving the pits / last lap before pitting;
+  excluded from clean fuel/pace samples.
+- **FCY (Full-Course Yellow)** — Whole track neutralized; pitting costs little relative
+  time → strategic opportunity.
+- **Safety car (SC)** — Field bunched behind a pace car; similar pit opportunity.
+- **Blue flag** — Shown to a slower/being-lapped car to yield to a faster one.
+- **Brake bias / brake balance** — Front/rear braking force distribution; adjustable from
+  the cockpit.
+- **TC (Traction Control)** — Driver aid limiting wheelspin; usually multi-level.
+- **ABS (Anti-lock Braking System)** — Driver aid preventing lockups; usually multi-level.
+- **Engine map / mixture** — Selectable engine modes trading power vs fuel/reliability.
+- **Multi-class racing** — Different car classes on track together (in LMU: Hypercar,
+  LMP2, GTE/GT3). Managing pace differences and traffic is a core skill.
+- **Closing rate** — Speed at which one car approaches another (m/s); key for spotting.
+- **Spotter** — Role/feature giving proximity and traffic call-outs ("car left").
+
+## Le Mans Ultimate / engine
+
+- **LMU (Le Mans Ultimate)** — Endurance racing sim by Studio 397 / Motorsport Games,
+  built on the rFactor 2 (gMotor) engine.
+- **rFactor 2 (rF2)** — The underlying simulation engine; LMU inherits its telemetry and
+  plugin interfaces.
+- **Shared memory plugin** — The rF2 Shared Memory Map Plugin (by The Iron Wolf) that
+  mirrors engine telemetry/scoring structs into memory-mapped files for other apps.
+- **MMF (Memory-Mapped File)** — A named shared-memory region (e.g.
+  `$rFactor2SMMP_Telemetry$`) we read for live data.
+- **HWControl** — The plugin's optional write channel for injecting control inputs.
+  **Race Engineer deliberately does not use it** — the app is strictly read-only/advisory.
+- **REST API (LMU)** — LMU's local HTTP server (used by its own UI) exposing
+  session/standings/garage/strategy data; unofficial for our purposes.
+- **Setup (.svm-style)** — The car setup file format; human-readable key/value text in
+  rF2; subject to confirmation for LMU.
+- **CrewChief** — Open-source voice race engineer/spotter (C#) supporting rF2 and LMU;
+  our key reference for feasibility and event taxonomy.
+
+## App / engineering
+
+- **Adapter** — Per-game module that reads/writes a specific game and emits raw frames;
+  the only place game-specific knowledge lives.
+- **Normalizer** — Converts raw game frames into the canonical schema.
+- **Canonical schema / `RaceState`** — The game-agnostic data model everything downstream
+  uses ([04-DATA-MODEL.md](04-DATA-MODEL.md)).
+- **Event Detector** — Produces discrete `EngineerEvent`s from `RaceState` diffs.
+- **Strategy Engine** — Pure deterministic math (fuel/tire/pit/traffic). The LLM never
+  reproduces it.
+- **AI Engineer** — The Claude-based conversational/proactive layer using tool calls.
+- **Latency tier (0–3)** — Reflex / templated / conversational / deliberative; routes each
+  output to the right mechanism ([01-ARCHITECTURE.md](01-ARCHITECTURE.md)).
+- **PTT (Push-to-talk)** — Hold a mapped wheel button to talk to the engineer.
+- **Barge-in** — Interrupting the engineer's speech by pressing PTT.
+- **Tier-0 pre-render** — Fixed spotter phrases synthesized ahead of time for near-zero
+  latency.
+- **Replay harness** — Records/plays raw sessions so development and tests run without the
+  game.
+- **Torn read** — A read of shared memory caught mid-write; guarded by version counters.
+- **Confidence (`confidence01`)** — 0–1 trust value on every estimate; gates proactive
+  call-outs and drives honest hedging.
+- **FFI (koffi)** — Foreign-function interface used to call Win32 / SDL2 from Node without
+  a compiled addon.
+- **Advisory / read-only** — Race Engineer never writes to the game. It reads telemetry
+  and the setup and *tells* the driver what to change; the driver makes every change.
+- **Integrated coaching** — Advice that links an aid/setup/driving change to a strategic
+  outcome (e.g. "save this much tire wear and we undercut car X at the stop on lap Y").
+- **Background strategist** — The always-on loop that recomputes strategy every tick and
+  proactively keys the radio when a confident, material opportunity appears.
