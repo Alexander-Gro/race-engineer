@@ -40,7 +40,15 @@ importers:
 
   packages/adapters/lmu: {}
 
-  packages/adapters/sim-replay: {}
+  packages/adapters/sim-replay:
+    dependencies:
+      '@race-engineer/core':
+        specifier: workspace:*
+        version: link:../../core
+    devDependencies:
+      '@types/node':
+        specifier: ^22.10.5
+        version: 22.19.21
 
   packages/ai: {}
 

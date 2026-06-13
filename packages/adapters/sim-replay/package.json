@@ -8,5 +8,11 @@
   },
   "scripts": {
     "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@race-engineer/core": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.5"
   }
 }
