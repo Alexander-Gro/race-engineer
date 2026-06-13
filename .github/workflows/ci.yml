@@ -44,3 +44,16 @@ jobs:
 
       - name: Test
         run: pnpm test
+
+  secret-scan:
+    # Block accidental commits of API keys/credentials (CLAUDE.md rule 6, docs/11 §R15).
+    # gitleaks-action is free for public repos and individual accounts (no license needed).
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # full history so pushes scan all commits, not just the tip
+      - name: Scan for committed secrets
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

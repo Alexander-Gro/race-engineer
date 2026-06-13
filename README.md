@@ -103,7 +103,8 @@ only in OS secure storage. No secret is ever committed to the repo. See
 
 ## License & disclaimer
 
-License TBD (intended to be a permissive open-source license — MIT or Apache-2.0). Race
+Race Engineer is licensed under the **Apache License 2.0** — see [LICENSE](LICENSE),
+[NOTICE](NOTICE), and [THIRD-PARTY.md](THIRD-PARTY.md). Race
 Engineer is strictly **read-only and advisory**: it reads sanctioned telemetry interfaces
 and the car's setup, then *tells* the driver what to change. It never writes to the game,
 never changes settings or driver aids, and never automates driving. See

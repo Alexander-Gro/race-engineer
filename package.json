@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "description": "AI race engineer for sim racing (Le Mans Ultimate). Windows-only runtime; read-only and advisory.",
-  "license": "SEE LICENSE IN LICENSE",
+  "license": "Apache-2.0",
   "packageManager": "pnpm@9.15.9",
   "engines": {
     "node": ">=20",

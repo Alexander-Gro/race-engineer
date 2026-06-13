@@ -1,0 +1,16 @@
+Race Engineer
+Copyright 2026 Race Engineer contributors
+
+This product is licensed under the Apache License, Version 2.0 (see the LICENSE file).
+
+Affiliation disclaimer
+----------------------
+Race Engineer is an independent project and is not affiliated with, endorsed by,
+or sponsored by Le Mans Ultimate, Studio 397, or Motorsport Games. All product
+names, trademarks, and registered trademarks are the property of their respective
+owners and are used for identification purposes only.
+
+Third-party components
+----------------------
+Race Engineer uses and (in distributed builds) bundles third-party software and
+models. Their licenses and attributions are tracked in THIRD-PARTY.md.
