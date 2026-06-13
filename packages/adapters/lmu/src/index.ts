@@ -1,4 +1,9 @@
 // @race-engineer/adapter-lmu
-// LMU shared-memory reader + REST client + struct decoders (game-specific). See docs/03. Built in M2.
-// Scaffolded empty in build-plan task T0.2.
-export {};
+// Read-only LMU integration. T1.1 ships the rF2 shared-memory S1 dump tooling (struct
+// decoders + torn-read guard, layouts verified in docs/03 §S1). The production GameAdapter
+// + Normalizer mapping land in T2.1/T2.3. There is no write path (CLAUDE.md rule 5).
+export * from './shm/layout';
+export * from './shm/structs';
+export * from './shm/torn-read';
+export * from './shm/win32';
+export * from './shm/reader';

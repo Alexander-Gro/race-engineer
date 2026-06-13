@@ -19,7 +19,8 @@
     "lint": "eslint . && prettier --check .",
     "format": "prettier --write .",
     "inspect": "tsx tools/inspect.ts",
-    "replay": "tsx tools/inspect.ts replay"
+    "replay": "tsx tools/inspect.ts replay",
+    "shm-dump": "tsx packages/adapters/lmu/src/cli/dump.ts"
   },
   "devDependencies": {
     "@eslint/js": "^9.17.0",
