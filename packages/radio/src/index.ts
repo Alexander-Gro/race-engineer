@@ -8,3 +8,16 @@ export { ReactiveRadioLoop } from './loop';
 export type { ReactiveRadioLoopOptions, ReactiveRadioLoopEvents } from './loop';
 export { LATENCY_BUDGET_MS, LatencyAggregator, withinBudget } from './latency';
 export type { TurnLatency, LatencySummary } from './latency';
+export {
+  ProactiveVoiceRouter,
+  templatePhraser,
+  llmPhraser,
+  defaultVoicePriority,
+  PROACTIVE_SYSTEM_PROMPT,
+} from './proactive';
+export type {
+  ProactivePhraser,
+  ProactiveVoiceRouterOptions,
+  RoutedOutcome,
+  LlmPhraserOptions,
+} from './proactive';

@@ -65,12 +65,17 @@ in a small, reviewable, green-tested change.
   T5.3 (hallucination guard + latency harness — `checkSpokenNumbers` in `ai` traces every spoken
   number back to a tool result that turn (rounding-tolerant, sign-insensitive); a `radio` latency
   harness times the Tier-2 path against the docs/01 budgets via an injectable clock. The loop emits
-  `onHallucinationCheck` + `onLatency` (detection-only). 208 tests green).
-- **Next up — Track A (offline, no game needed):** **T5.4** (proactive fuel-low call-out + Tier-0
-  spotter audio) — route `fuel_low` (LLM-phrased, via the radio voice queue) and `car_left/right`
-  (pre-rendered Tier-0 clips) to the `VoicePlayer` at the right priority/tier; synthetic arcs trigger
-  the right audio. This closes the M5 vertical slice up to the MVP gate. Also available: **T4.6**
-  (local-model manager), **T5.1b** (cloud BYO-key providers), **T6.1** (Electron shell).
+  `onHallucinationCheck` + `onLatency` (detection-only). 208 tests green),
+  T5.4 (proactive call-outs — `ProactiveVoiceRouter` in `radio` routes `EngineerEvent`s to the
+  `VoicePlayer` by tier: Tier-0 reflex spotter → pre-rendered clip (preempts, no LLM/synth),
+  `fuel_low` → `templatePhraser` (free default) or `llmPhraser` (BYO-provider) spoken at
+  WARNING/STRATEGY; synthetic fuel + spotter arcs through the real `EventDetector` assert the right
+  audio at the right tier. 221 tests green). **This completes the M5 logic vertical slice.**
+- **Next up — Track A (offline, no game needed):** the M5 *offline* slice is done; the 🚦 MVP gate
+  now needs the **live half** (Track B). Logic work still available offline: **T6.1** (Electron shell
+  + worker-hosted Engineer Core + typed IPC — wires the pipeline/loop/router into the app),
+  **T4.6** (local-model manager), **T5.1b** (cloud BYO-key providers), **T4.4** (local STT/TTS
+  provider stubs).
 - **Track B (needs the Windows rig + LMU):** **T1.5** — `pnpm record` a real stint → commit a
   trimmed fixture (recorder ready). **T2.2 live** — REST probe (Task B) → finish REST→`RaceState`
   mapping + settle S3 aids. **T1.3/T1.4** aids/setup reads. Confirm the spotter `lateralPos`
@@ -355,9 +360,17 @@ passes a verbatim quote; Tier-2 first-audio measured with an injected clock; agg
 tests (18 tests; 208 green). Runtime enforcement *policy* (suppress vs. log on `grounded:false`) is
 a later concern — this wires the check + emit-only callback.
 
-**T5.4 — Proactive fuel-low call-out + Tier-0 spotter audio** · _Claude Code_ · deps: T3.2, T3.4, T4.2
-Build: route `fuel_low` (LLM-phrased) and `car_left/right` (pre-rendered) to the voice queue.
-Verify: synthetic arcs trigger the right audio at the right tier/latency.
+**T5.4 — Proactive fuel-low call-out + Tier-0 spotter audio** · _Claude Code_ · deps: T3.2, T3.4, T4.2 · **done**
+Build: `ProactiveVoiceRouter` in `radio` routes `EngineerEvent`s to the `VoicePlayer` by tier —
+Tier-0 reflex (`car_left/right`/`three_wide`/`clear`) → the **pre-rendered** clip (SPOTTER priority,
+preempts; **no LLM, no live synth**), `fuel_low` → a short phrase via `templatePhraser` (free/offline
+default, docs/15) or `llmPhraser` (BYO-provider, tools-free, quotes the payload number) spoken with
+sentence-streamed TTS at WARNING/STRATEGY. `routeAll` enqueues reflex calls first so a spotter call
+never waits behind a phrased synth. **Read-only/advisory — audio only.**
+Verify: ✅ a declining-fuel synthetic arc (real `EventDetector` + `fuelLowRule`) fires `fuel_low` and
+routes it to spoken audio at escalating priority (STRATEGY→WARNING); a car drawing alongside
+(`spotterRule` over the multi-class fixture) routes to the pre-rendered `car_right` clip with **zero**
+TTS synth calls; reflex preempts chatter, `clear` queues (11 tests; 221 green).
 
 > **🚦 MVP GATE** = [10-ROADMAP](10-ROADMAP.md) Phase 1 acceptance: live LMU, three voice
 > questions answered correctly < ~2 s, spotter < 300 ms, fuel-to-finish spoken, full short
