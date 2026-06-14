@@ -1,4 +1,4 @@
-import type { FuelPlan, RaceState } from '@race-engineer/core';
+import type { FuelPlan, RaceState, StintPlan } from '@race-engineer/core';
 
 /**
  * The query-time snapshot the read-only tools read from (docs/06 §Context strategy). The
@@ -10,6 +10,11 @@ export interface RaceContext {
   raceState: RaceState;
   /** Latest fuel plan from the strategy engine, or null while consumption is still unknown. */
   fuelPlan: FuelPlan | null;
+  /**
+   * Latest stint plan from the strategy engine (T7.3), or null/absent until it has run. Optional so
+   * existing callers stay valid; the Engineer Core fills it in alongside `fuelPlan` when ready.
+   */
+  stintPlan?: StintPlan | null;
 }
 
 /** A getter so tools snapshot the freshest context at call time, not turn-start. */

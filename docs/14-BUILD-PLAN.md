@@ -150,9 +150,11 @@ in a small, reviewable, green-tested change.
   fixture-tested; Tailwind/shadcn reskin + Playwright deferred) → **wire the reactive radio loop +
   proactive router into the shell** (NEXT) → **T4.5** mic/audio I/O → **T6.3** settings/secrets +
   PTT-mapping UI → **T10.1** real STT/TTS (or cloud BYO-key).
-  M7.7–M7.9 / M8 / M9 offline-strategy depth are paused until the app is launchable. (Also still
-  pending offline glue: wire the M7 strategy models into the AI tool surface — `get_stint_plan`,
-  `evaluate_undercut`, `project_pit_window` — so the engineer can actually call them.)
+  M7.7–M7.9 / M8 / M9 offline-strategy depth are paused until the app is launchable. (Offline glue
+  done: `get_stint_plan` + `project_pit_window` are now wired into the AI read-only tool surface,
+  reading a precomputed `ctx.stintPlan` (T7.3) like `get_fuel_plan` reads `ctx.fuelPlan`; 373 green.
+  Still pending: `evaluate_undercut` — needs per-rival tyre-gain/pit-loss context fields the Core
+  doesn't expose yet — and the Core actually *populating* `ctx.fuelPlan`/`ctx.stintPlan` at runtime.)
 - **Track B (needs the Windows rig + LMU) — DEFERRED until the app is launchable (2026-06-14):** by
   decision, hold all rig testing until the Electron app can drive it (capture/validate via the app,
   not PowerShell). When it resumes: **T1.5** `pnpm record` a real stint → trimmed fixture; **T2.2

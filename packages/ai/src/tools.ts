@@ -8,10 +8,12 @@ import type { ToolSpec } from './types';
  * structured, unit-labelled JSON with `confidence01` where relevant; the model quotes these
  * verbatim and never recomputes them (CLAUDE.md rule 1).
  *
- * Only the tools with real backing today are implemented (RaceState fields + the fuel model).
- * The rest of docs/06's surface (`get_stint_plan`, `project_pit_window`, `evaluate_undercut`,
- * `get_setup_summary`, `get_handling_diagnosis`, `verify_change`) lands with the strategy /
- * setup features that back them (M7/M9) — exposing them now would mean inventing numbers.
+ * Only the tools with real backing today are implemented (RaceState fields + the fuel/stint
+ * models). `get_stint_plan` + `project_pit_window` read the precomputed stint plan (T7.3).
+ * The rest of docs/06's surface (`evaluate_undercut` — needs per-rival tyre-gain/pit-loss context
+ * fields the Core doesn't expose yet; `get_setup_summary`, `get_handling_diagnosis`, `verify_change`
+ * — M9 setup features) still lands with the features that back them; exposing them now would mean
+ * inventing numbers.
  */
 
 export interface ToolDef {
@@ -125,6 +127,41 @@ export const READ_ONLY_TOOLS: ToolDef[] = [
         };
       }
       return { available: true, ...ctx.fuelPlan, units: { fuel: 'liters' } };
+    },
+  },
+  {
+    name: 'get_stint_plan',
+    description:
+      'The current stint plan from the strategy engine: per-stint lap boundaries, fuel to load, expected tyre degradation and compound, the pit windows, and mandatory stops remaining. Returns available:false until a plan has been computed.',
+    parameters: NO_ARGS,
+    handler: (_args, ctx) => {
+      const plan = ctx.stintPlan ?? null;
+      if (!plan) {
+        return { available: false, reason: 'No stint plan computed yet' };
+      }
+      return { available: true, ...plan, units: { fuel: 'liters', laps: 'count' } };
+    },
+  },
+  {
+    name: 'project_pit_window',
+    description:
+      'The next pit window from the stint plan: the earliest and latest lap to pit, the recommended (balanced) lap, and why the window is bounded (fuel/tyre/mandatory). Returns available:false when no stop is planned.',
+    parameters: NO_ARGS,
+    handler: (_args, ctx) => {
+      const plan = ctx.stintPlan ?? null;
+      const window = plan?.pitWindows[0] ?? null;
+      if (!plan || !window) {
+        return { available: false, reason: 'No pit stop planned' };
+      }
+      return {
+        available: true,
+        earliestLap: window.earliestLap,
+        latestLap: window.latestLap,
+        // The balanced/nominal stop = the end of the stint this window closes (the first stint).
+        recommendedLap: plan.stints[0]?.endLap ?? window.earliestLap,
+        reason: window.reason,
+        units: { laps: 'count' },
+      };
     },
   },
   {
