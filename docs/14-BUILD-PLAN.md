@@ -117,11 +117,22 @@ in a small, reviewable, green-tested change.
   pitting now is a net loss (tyres too fresh), **hold** within margin. Pure/deterministic, depends on
   `core` only; inputs come from the tyre (T7.1) + pit-loss (T7.2) models. Worked-example (chase→now,
   too-fresh→later, gap-too-big→hold, slow-pit flips→later, defend cover/hold) + property (gain monotone
-  in fresh-tyre advantage; bigger gap ⇒ smaller clearance; confidence∈[0,1]; no NaN/∞) tests. 324 green).
+  in fresh-tyre advantage; bigger gap ⇒ smaller clearance; confidence∈[0,1]; no NaN/∞) tests. 324 green),
+  T7.5 (multi-class traffic forecasting, docs/05 §6 — the LMU differentiator. Two pieces: (a) a
+  predictive **event rule** in `core` `events/rules/traffic.ts` — `trafficForecast` + `trafficRule`
+  emit Tier-1 `faster_class_approaching` (a different-class car closing from behind within a time
+  horizon) and the new `slower_class_ahead` (a different-class car ahead you're catching) from
+  `gapToPlayerS` (+behind/−ahead) and `closingRateMps` (assumed +=closing; flag for live-confirm),
+  one call-out per car per cooldown via the detector, ETA in the payload — the *predictive* sibling
+  the spotter (T3.4) deferred to; (b) **lap-time contamination** hygiene in `strategy` `traffic.ts` —
+  `isStuckBehindTraffic` (per-tick dirty-air predicate) + `lapTrafficWeight` (1−fraction) +
+  `cleanLapValues` (drop laps too contaminated to feed the median fuel model, docs/05 §6 last bullet).
+  Added `slower_class_ahead` to the core `EventType` enum (additive). Fixture-driven (live-rig
+  multi-class capture) + constructed-frame + cooldown + contamination tests. 340 green).
 - **Next up — Track A:** continue **M7** offline strategy depth (the main remaining pure-logic body):
-  **T7.5** (multi-class traffic forecasting: faster-class-approaching / slower-class-ahead warnings +
-  lap-time contamination, docs/05 §6 — the LMU differentiator), then **T7.6** (FCY/SC opportunism,
-  docs/05 §7). The **GUI/runtime** tasks (**T6.2** dashboard, **T4.5** mic/audio)
+  **T7.6** (FCY/SC opportunism: `fci_opportunity` events — cheap stop under yellow, docs/05 §7), then
+  **T7.7** (learning layer: priors per car/track/conditions). The **GUI/runtime** tasks
+  (**T6.2** dashboard, **T4.5** mic/audio)
   need a machine with a screen + the Electron renderer toolchain. The 🚦 MVP gate needs the **live
   half** (Track B) + working voice I/O (T10.1 or cloud STT/TTS).
 - **Track B (needs the Windows rig + LMU):** **T1.5** — `pnpm record` a real stint → commit a
@@ -499,7 +510,7 @@ Verify: ✅ worked linear-fit + noisy-fit + prior-blend + silent-case unit tests
 (13 tests; 276 green). Replay-eval on recorded stints lands with T1.5/T7.7.
 
 Remaining order: ~~T7.2 pit-loss model~~ (done) → ~~T7.3 stint planner~~ (done) → ~~T7.4
-undercut/overcut~~ (done) → T7.5 multi-class traffic forecasting → T7.6 FCY/SC opportunism → T7.7
+undercut/overcut~~ (done) → ~~T7.5 multi-class traffic forecasting~~ (done) → T7.6 FCY/SC opportunism → T7.7
 learning layer (priors per car/track/conditions) → T7.8 strategy UI + rival tracker → T7.9
 proactive strategy call-outs. Each pure-math task is unit-tested with doc-05 examples and
 validated on recorded endurance sessions (replay eval set).

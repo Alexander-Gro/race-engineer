@@ -17,6 +17,7 @@ export const EventTypeSchema = z.enum([
   'box_this_lap',
   'blue_flag',
   'faster_class_approaching',
+  'slower_class_ahead',
   'flag_changed',
   // Tier 2/3 — conversational / deliberative (LLM-phrased or driver-initiated)
   'strategy_update',
