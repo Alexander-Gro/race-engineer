@@ -35,6 +35,25 @@ describe('fuel state honesty', () => {
     expect(m.fuel.lapsRemaining).toEqual({ value: '—', severity: 'unknown' });
     expect(m.fuel.perLap).toEqual({ value: '—', severity: 'unknown' });
     expect(m.fuel.liters.value).toBe('78.0 L'); // a real reading is still shown
+    expect(m.fuel.addAtStop).toEqual({ value: '—', severity: 'unknown' }); // no strategy plan yet
+  });
+
+  it('surfaces the Core strategy engine fuel plan (add-at-stop) when present', () => {
+    const withStrategy: EngineerSnapshot = {
+      ...snap(midStintState),
+      strategy: {
+        fuelPlan: {
+          perLapLiters: 2.6,
+          lapsRemainingOnFuel: 16,
+          lapsToFinish: 20,
+          litersToFinish: 52,
+          litersToAddNextStop: 12.5,
+          fuelSaveTargetLitersPerLap: null,
+          confidence01: 0.8,
+        },
+      },
+    };
+    expect(buildDashboardModel(withStrategy).fuel.addAtStop.value).toBe('12.5 L');
   });
 });
 

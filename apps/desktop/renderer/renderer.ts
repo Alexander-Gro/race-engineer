@@ -54,7 +54,11 @@ const fuelCard = (m: DashboardModel['fuel']): HTMLElement => {
   laps.dataset['severity'] = m.lapsRemaining.severity;
   big.append(laps, el('div', 'fuel-laps-label', 'laps left'));
   const grid = el('div', 'grid-2');
-  grid.append(metric('In tank', m.liters), metric('Per lap', m.perLap));
+  grid.append(
+    metric('In tank', m.liters),
+    metric('Per lap', m.perLap),
+    metric('Add at stop', m.addAtStop),
+  );
   return card('Fuel', big, grid);
 };
 

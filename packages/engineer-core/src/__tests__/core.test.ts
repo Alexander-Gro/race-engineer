@@ -68,4 +68,23 @@ describe('EngineerCore', () => {
     // Snapshots advance through the session (the source spans a multi-lap stint).
     expect(snaps.at(-1)!.monotonicMs).toBeGreaterThan(snaps[0]!.monotonicMs);
   });
+
+  it('attaches a live fuel plan to snapshots once consumption is learned (always-on strategy)', async () => {
+    const snaps: EngineerSnapshot[] = [];
+    const core = new EngineerCore({
+      adapter: syntheticAdapter(scriptedScenario()),
+      normalizer: createCanonicalNormalizer(),
+      transport: (s) => snaps.push(s),
+      snapshotHz: 12,
+    });
+    await core.start();
+
+    const planned = snaps.filter((s) => s.strategy?.fuelPlan != null);
+    expect(planned.length).toBeGreaterThan(0); // the stint burns fuel → a plan emerges
+    const plan = planned.at(-1)!.strategy!.fuelPlan!;
+    expect(plan.perLapLiters).toBeGreaterThan(0);
+    expect(plan.lapsRemainingOnFuel).toBeGreaterThan(0);
+    expect(plan.confidence01).toBeGreaterThanOrEqual(0);
+    expect(plan.confidence01).toBeLessThanOrEqual(1);
+  });
 });

@@ -182,7 +182,7 @@ const nearestRivals = (state: RaceState): { ahead: CarState | null; behind: CarS
 
 export interface DashboardModel {
   session: { phase: string; multiClass: boolean; flag: Reading; remaining: Reading };
-  fuel: { lapsRemaining: Reading; liters: Reading; perLap: Reading };
+  fuel: { lapsRemaining: Reading; liters: Reading; perLap: Reading; addAtStop: Reading };
   tyres: { compound: string | null; corners: [CornerTyre, CornerTyre, CornerTyre, CornerTyre] };
   brakes: { corners: [Reading, Reading, Reading, Reading] };
   aids: { tc: Reading; abs: Reading; brakeBias: Reading; engineMap: Reading };
@@ -241,6 +241,7 @@ export const buildDashboardModel = (
 ): DashboardModel => {
   const s = snapshot.raceState;
   const p = s.player;
+  const fuelPlan = snapshot.strategy?.fuelPlan ?? null; // from the Core's always-on strategy engine
   const { ahead, behind } = nearestRivals(s);
   const [fl, fr, rl, rr] = p.tires;
 
@@ -262,6 +263,8 @@ export const buildDashboardModel = (
       lapsRemaining: fuelLaps(p.fuel.lapsRemainingEst, thresholds),
       liters: num(p.fuel.liters, 1, ' L'),
       perLap: num(p.fuel.perLapAvgLiters, 2, ' L'),
+      // Strategy: fuel to add at the next stop to reach the flag (null until pace/consumption known).
+      addAtStop: num(fuelPlan?.litersToAddNextStop ?? null, 1, ' L'),
     },
     tyres: {
       compound: fl?.compound ?? null,

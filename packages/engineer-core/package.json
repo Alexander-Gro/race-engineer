@@ -10,7 +10,8 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@race-engineer/core": "workspace:*"
+    "@race-engineer/core": "workspace:*",
+    "@race-engineer/strategy": "workspace:*"
   },
   "devDependencies": {
     "@race-engineer/adapter-sim-replay": "workspace:*"

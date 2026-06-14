@@ -6,5 +6,6 @@
 export { EngineerCore } from './core';
 export type { EngineerCoreOptions } from './core';
 export { Throttle, intervalForHz } from './throttle';
+export { StrategyEngine } from './strategy';
 export { SNAPSHOT_CHANNEL } from './ipc';
-export type { EngineerSnapshot, EngineerBridge, SnapshotTransport } from './ipc';
+export type { EngineerSnapshot, EngineerBridge, SnapshotTransport, StrategySummary } from './ipc';

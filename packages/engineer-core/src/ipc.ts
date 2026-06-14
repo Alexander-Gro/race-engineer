@@ -1,4 +1,4 @@
-import type { RaceState } from '@race-engineer/core';
+import type { FuelPlan, RaceState } from '@race-engineer/core';
 
 /**
  * Typed IPC contract between the Engineer Core (worker / utility process) and the renderer
@@ -10,6 +10,13 @@ import type { RaceState } from '@race-engineer/core';
  * Read-only/advisory by construction: snapshots flow Core → renderer only. There is no
  * renderer→game channel anywhere in this contract (CLAUDE.md rule 5).
  */
+
+/** Derived strategy the Core recomputes each snapshot (always-on strategy engine, docs/05). */
+export interface StrategySummary {
+  /** Live fuel plan (per-lap, laps remaining, to-finish, save target), or null while learning. */
+  fuelPlan: FuelPlan | null;
+}
+
 export interface EngineerSnapshot {
   /** Monotonic sequence number. Gaps are expected — snapshots are throttled, not every frame. */
   seq: number;
@@ -17,6 +24,8 @@ export interface EngineerSnapshot {
   monotonicMs: number;
   /** The canonical race state at this snapshot (docs/04). */
   raceState: RaceState;
+  /** Derived strategy. Optional so existing snapshot consumers stay valid; the Core always sets it. */
+  strategy?: StrategySummary;
 }
 
 /** The IPC channel the Core publishes snapshots on. */

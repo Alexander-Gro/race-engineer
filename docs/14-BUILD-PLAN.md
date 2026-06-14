@@ -154,7 +154,12 @@ in a small, reviewable, green-tested change.
   done: `get_stint_plan` + `project_pit_window` are now wired into the AI read-only tool surface,
   reading a precomputed `ctx.stintPlan` (T7.3) like `get_fuel_plan` reads `ctx.fuelPlan`; 373 green.
   Still pending: `evaluate_undercut` — needs per-rival tyre-gain/pit-loss context fields the Core
-  doesn't expose yet — and the Core actually *populating* `ctx.fuelPlan`/`ctx.stintPlan` at runtime.)
+  doesn't expose yet.) **Always-on strategy engine done (2026-06-15):** `engineer-core`'s
+  `StrategyEngine` accumulates green-lap fuel deltas + lap times from the `RaceState` stream and
+  recomputes a live **`FuelPlan`** into every snapshot (`EngineerSnapshot.strategy.fuelPlan`); the
+  dashboard surfaces "add at stop". So the strategy models now compute at runtime in the app
+  (synthetic + live LMU). Feeding the same into the AI `ctx.fuelPlan`/`ctx.stintPlan` lands with the
+  radio loop; stint/undercut need the per-track calibration inputs (rig backlog).
 - **Track B (needs the Windows rig + LMU) — app can now drive it (2026-06-15):** the launchable app
   is the test harness. **`pnpm dev:lmu`** drives the dashboard from the **live LMU shared-memory
   source** (`apps/desktop/src/lmu-host.ts` — `LmuAdapter` + `createLmuNormalizer`, dynamically loaded

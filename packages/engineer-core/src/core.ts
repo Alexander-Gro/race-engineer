@@ -5,6 +5,7 @@ import {
   type RaceState,
 } from '@race-engineer/core';
 import type { EngineerSnapshot, SnapshotTransport } from './ipc';
+import { StrategyEngine } from './strategy';
 import { intervalForHz, Throttle } from './throttle';
 
 /**
@@ -32,6 +33,7 @@ const DEFAULT_SNAPSHOT_HZ = 12;
 
 export class EngineerCore<TFrame> {
   readonly #options: EngineerCoreOptions<TFrame>;
+  readonly #strategy = new StrategyEngine();
   #seq = 0;
 
   constructor(options: EngineerCoreOptions<TFrame>) {
@@ -67,6 +69,7 @@ export class EngineerCore<TFrame> {
       isFrameStable,
       onState: (state) => {
         tail.state = state;
+        this.#strategy.observe(state); // accumulate every tick so a lap boundary is never missed
         if (throttle.accept(state)) {
           this.#emit(state);
           tail.lastSentMs = state.monotonicMs;
@@ -88,6 +91,7 @@ export class EngineerCore<TFrame> {
       seq: this.#seq,
       monotonicMs: state.monotonicMs,
       raceState: state,
+      strategy: this.#strategy.summary(state),
     };
     this.#seq += 1;
     this.#options.transport(snapshot);
