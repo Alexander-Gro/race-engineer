@@ -663,6 +663,43 @@ unchecked items below need a *moving, multi-class* session.
 > Capture artifact: `°`/`ø` shown as `┬░`/`├©` in the saved file is a console code-page
 > display issue (UTF-8 viewed as CP1252), not a decode error.
 
+## S1 — live confirmation #2 (moving, multi-class — 2026-06-14)
+
+Full-grid moving capture via the enhanced all-vehicles dump
+(`pnpm shm-dump --frames 150 --hz 5`, GT3 starting P53 at Circuit de la Sarthe, **53 cars**,
+race green-flag start). Closes most of the "still to verify" list above.
+
+**Confirmed (live)**
+- **Multi-class `mVehicleClass` strings are exactly `Hyper`, `LMP2`, `GT3`** (note: **not**
+  `Hypercar`/`GTE` as the desk-research assumed) — these are the literal strings T2.3 maps to
+  canonical `className`/`classId`.
+- **Dynamic fields populate while moving:** player speed 0→**229 kph**, gears to 6, RPM
+  6960/9400, `mLapDist` advancing (−293 → 522 m, negative = behind the start line on the
+  formation/first lap), and per-car `mTimeBehindLeader`/`mTimeBehindNext` gaps changing
+  frame-to-frame. So speed/dist/gaps are good.
+- **`mPathLateral` is populated and dynamic** (player 7.70 on grid → −2.24 → −4.34 on track;
+  field spans roughly ±5.5 across the grid). Confirms the field exists for spotter geometry.
+- Telemetry (GT3): fuel **84.0/117 L**, **brake bias 48.0%**, 3-zone tyre temps, pressure
+  ~166 kPa, **wear 1.00 (new)**, brake temps, **compound name `Medium`** front/rear.
+- `mGamePhase = 5` (green/racing) and `mYellowFlagState = 0` throughout; `mSectorFlag`
+  observed values **1 and 11** (e.g. `[1,11,1]`, `[11,11,11]`) — enum meanings TBD.
+
+**Still open (need another capture)**
+- **Lap-time population:** player never completed a lap in the 30 s window (`lap=0`
+  throughout), so `mLastLapTime`/`mBestLapTime` stayed at the `0.000`/`-1.000` sentinels —
+  populated values still unconfirmed live (low risk; sentinels → null in T2.3).
+- **FCY / yellow / pit-state enums:** none occurred (clean green, no pit stops) — capture a
+  session with a full-course yellow and a pit entry to read `mGamePhase`/`mYellowFlagState`/
+  `mPitState`/`mUnderYellow`/`mFlag` enum values.
+- **Spotter lateral sign:** `mPathLateral` is each car's offset from the track centerline
+  (not relative to the player), and no annotated side-by-side was captured, so the spotter's
+  `+lateral = driver's right` assumption (T3.4) is **not yet confirmed** — needs a capture
+  where the user notes "car was on my left/right" so we can check the sign of
+  `rival.mPathLateral − player.mPathLateral`.
+- **Brake-bias front/rear:** the field is `mRearBrakeBias` but reads ~48–52% — confirm
+  against the in-game HUD whether this is the front or rear figure so T2.3 maps
+  `aids.brakeBias.frontPct` correctly.
+
 ## S2 / S4 desk-research findings (verify live)
 
 > **Status:** transcribed from public community/tool sources as of 2026-06-14. Base
@@ -961,10 +998,12 @@ Get-ChildItem -Path $SET -Recurse -Filter *.svm | Sort-Object LastWriteTime -des
     section/key names and which map to TC/ABS/brake-bias/engine-map + mechanical/aero, and
     whether REST exposes a cleaner current-setup read (probe step 4). Sources: simracingsetup
     install guide; seralaci setup repo; LMU `.svm` format community thread.
-- [ ] Multi-class specifics: class names/IDs for Hypercar / LMP2 / GTE-GT3 as reported.
+- [x] Multi-class specifics: class names/IDs for Hypercar / LMP2 / GTE-GT3 as reported.
+  **LIVE-CONFIRMED 2026-06-14 (53-car grid):** `mVehicleClass` strings are exactly
+  **`Hyper`**, **`LMP2`**, **`GT3`** — see "S1 — live confirmation #2". (Not "Hypercar"/"GTE";
+  T2.3 maps these literal strings.)
   - *desk-research:* class name is per-vehicle `rF2VehicleScoring.mVehicleClass[32]` (ANSI
-    string). The exact strings LMU emits (e.g. "Hypercar"/"LMP2"/"GTE") are LIVE-VERIFY from
-    a multi-class session dump. Source: `rF2State.h`.
+    string). Source: `rF2State.h`.
 - [ ] FCY / safety-car / pit-rules representation (for strategy opportunism).
   - *desk-research:* `rF2ScoringInfo.mGamePhase`, `mYellowFlagState`, `mSectorFlag[3]`;
     per-vehicle `mUnderYellow`, `mFlag`; plus LSI message strings in `rF2Extended`
