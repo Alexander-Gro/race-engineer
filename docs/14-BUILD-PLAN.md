@@ -88,14 +88,16 @@ in a small, reviewable, green-tested change.
   SHA-256 verify → version-pinned install; idempotent; offline-bundle; corrupt-file removal),
   `recommendRoute` (CPU-vs-GPU + LLM route from VRAM headroom beside the sim), and Ollama
   detect/guide/resolve — all pure over injectable ports; concrete Node/Windows impls are the runtime
-  half. 263 green).
-- **Next up — Track A (offline logic is largely exhausted):** the remaining Track-A tasks are
-  **GUI/runtime** and need a machine with a screen: **T6.2** (live dashboard — Tailwind+shadcn from
-  the `EngineerSnapshot` stream) and **T4.5** (mic permission + audio I/O, `getUserMedia`), both
-  gated on finishing T6.1's Electron renderer toolchain (`pnpm add -D electron electron-vite`).
-  The remaining big pure-logic body is **M7** (endurance strategy depth: tire-deg → pit-loss →
-  stint planner → undercut → traffic → FCY → learning). The 🚦 MVP gate needs the **live half**
-  (Track B) + working voice I/O (T10.1 or cloud STT/TTS).
+  half. 263 green),
+  T7.1 (tire-degradation model in `strategy` — `fitTireDegradation` (least-squares lap-time-vs-stint-lap
+  fit, prior-blended, `confidence01`, silent when no signal) + `predictLapTimeS` + `degLossOverStintS`
+  + `assessTireWindow(s)`; worked-example + property tests. **Opens M7.** 276 green).
+- **Next up — Track A:** continue **M7** offline strategy depth (the main remaining pure-logic body):
+  **T7.2** (pit-loss model: `pitLoss = pitLaneTimeLoss + serviceTime`, `serviceTime = max(refuel,
+  tyre-change, repair)` — docs/05 §3, fully testable), then **T7.3** (stint planner, consumes the fuel
+  + tire-deg + pit-loss models). The **GUI/runtime** tasks (**T6.2** dashboard, **T4.5** mic/audio)
+  need a machine with a screen + the Electron renderer toolchain. The 🚦 MVP gate needs the **live
+  half** (Track B) + working voice I/O (T10.1 or cloud STT/TTS).
 - **Track B (needs the Windows rig + LMU):** **T1.5** — `pnpm record` a real stint → commit a
   trimmed fixture (recorder ready). **T2.2 live** — REST probe (Task B) → finish REST→`RaceState`
   mapping + settle S3 aids. **T1.3/T1.4** aids/setup reads. Confirm the spotter `lateralPos`
@@ -459,7 +461,18 @@ Verify: overlay renders over a borderless window (human); off by default.
 
 ## M7 — Endurance strategy depth (Roadmap Phase 2)
 
-Order within: T7.1 tire-deg model → T7.2 pit-loss model → T7.3 stint planner → T7.4
+**T7.1 — Tire-degradation model** · _Claude Code_ · deps: T0.3 (works on synthetic/recorded laps) · **done**
+Build: `@race-engineer/strategy` `tires.ts` — `fitTireDegradation` (least-squares fit of green
+lap time vs lap-into-stint → `baseLapS + degRatePerLapS·stintLap`, blended with a `tire_models`
+prior the same way the fuel model blends, `confidence01 = n/(n+priorWeight)`; silent when no
+signal), `predictLapTimeS` (end-of-stint pace), `degLossOverStintS` (cumulative deg cost for
+stint-length / double-stint comparison — feeds T7.3), and `assessTireWindow(s)` (temps vs target
+window → cold/in-window/hot/mixed). Pure/deterministic, depends on `core` only.
+Verify: ✅ worked linear-fit + noisy-fit + prior-blend + silent-case unit tests; property tests
+(confidence monotonic in sample count ∈ [0,1]; steeper deg ⇒ slower late-stint pace; no NaN/∞)
+(13 tests; 276 green). Replay-eval on recorded stints lands with T1.5/T7.7.
+
+Remaining order: T7.2 pit-loss model → T7.3 stint planner → T7.4
 undercut/overcut → T7.5 multi-class traffic forecasting → T7.6 FCY/SC opportunism → T7.7
 learning layer (priors per car/track/conditions) → T7.8 strategy UI + rival tracker → T7.9
 proactive strategy call-outs. Each pure-math task is unit-tested with doc-05 examples and
