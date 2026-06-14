@@ -627,9 +627,48 @@ Desk research cannot read live memory. The user must, in an actual LMU session:
 5. Confirm whether the in-cockpit TC/ABS/engine-map *index* is anywhere in SHM (likely
    not) — if absent, route S3 to REST (S2) / setup file (S4).
 
+## S1 — live confirmation (2026-06-14)
+
+The standalone dump (`pnpm shm-dump`) was run against a live LMU session (GT3 at
+Circuit de la Sarthe, solo practice, stationary in the pits). **The plugin works and
+the `pack=4` struct decode is correct for this build** — every sampled field read sane
+and consistent with the in-game state, with no shifted/garbage/NaN values. This
+validates the S1 assumptions and de-risks the real adapter (T2.x); the remaining
+unchecked items below need a *moving, multi-class* session.
+
+**Confirmed working (live)**
+- Plugin loads; `$rFactor2SMMP_Telemetry$` and `$rFactor2SMMP_Scoring$` both open
+  (`telemetry=true scoring=true`). The DLL was already present in the LMU folder.
+- `pack=4` offsets are correct across telemetry + scoring (no garbage/shift/NaN).
+- Populated & correct: track name + length (`Circuit de la Sarthe`, 13624 m), driver
+  name, **vehicle class `GT3`**, fuel + capacity (22.8 / 117 L), engine RPM + **max RPM**
+  (1997 / 9400), gear, **brake bias (`mRearBrakeBias`) = 52.5%**, engine water temp
+  (79 °C), per-wheel temps / pressure (166 kPa) / wear / brake temp, and **tyre
+  compound name strings** (`Medium`).
+- Units verified: tyre & brake temps are Kelvin in the buffer → °C conversion correct;
+  engine water temp already °C; pressure kPa; fuel litres.
+- **Wear direction confirmed: 1.0 = new** (fresh tyres read `wear=1.00`).
+- **S3 (partial): current brake bias IS readable from telemetry.** TC/ABS/engine-map
+  *index* was not exercised (single static read) — still route via REST (S2) / setup (S4).
+
+**Still to verify (needs a moving / multi-class session)**
+- Dynamic fields while driving: speed (read 0 while stationary), lap times
+  (`last`/`best` were `0.000`/`-1.000` = "no lap yet"), `mLapDist`, gaps.
+- Multi-class class strings (only solo `GT3` seen) — confirm the exact Hypercar / LMP2 /
+  GTE strings in a multi-class grid (needed for the schema mapping in T2.3).
+- FCY / yellow / pit-state enum values (`mGamePhase`, `mYellowFlagState`, `mPitState`).
+- `best=-1.000` / `last=0.000` are rF2 "no time yet" sentinels — the Normalizer (T2.3)
+  maps these to null.
+
+> Capture artifact: `°`/`ø` shown as `┬░`/`├©` in the saved file is a console code-page
+> display issue (UTF-8 viewed as CP1252), not a decode error.
+
 ## Open questions for the spikes (track here)
 
-- [ ] **S1** Plugin install path + enable flags for current LMU build; populated fields.
+- [x] **S1** Plugin install path + enable flags for current LMU build; populated fields.
+  **LIVE-CONFIRMED 2026-06-14** (see "S1 — live confirmation"): plugin loads, both maps
+  open, `pack=4` decode correct, and the sampled telemetry/scoring fields populate
+  correctly on a GT3 at Le Mans. (Multi-class strings + moving/dynamic fields still pending.)
   - *desk-research (confirmed from source — see "S1 desk-research findings"):* DLL is
     `rFactor2SharedMemoryMapPlugin64.dll`, installed into `…/Le Mans Ultimate/Plugins/`
     (create if absent; rF2 used `Bin64/Plugins` — exact LMU folder is LIVE-VERIFY). Enabled
@@ -642,7 +681,10 @@ Desk research cannot read live memory. The user must, in an actual LMU session:
     build, and *which fields LMU actually populates vs. zeroes* — desk research cannot read
     live memory. Source: rF2SharedMemoryMapPlugin repo; CrewChief rF2 page; LMU community
     thread (links in findings subsection).
-- [ ] **S1** Are TC/ABS/brake-bias current values readable from telemetry? Where?
+- [x] **S1** Are TC/ABS/brake-bias current values readable from telemetry? Where?
+  **LIVE-CONFIRMED 2026-06-14:** brake bias reads correctly from telemetry
+  (`mRearBrakeBias` = 52.5% on a GT3). TC/ABS/engine-map *index* remains not-in-SHM
+  (route via REST S2 / setup S4) — not yet exercised live.
   - *desk-research (confirmed from source):* **Brake bias IS in telemetry** —
     `rF2VehicleTelemetry.mRearBrakeBias` (`double`, fraction). **TC/ABS/engine-map current
     *levels* are NOT in the per-vehicle telemetry struct.** `rF2Extended.mPhysics`
@@ -656,9 +698,10 @@ Desk research cannot read live memory. The user must, in an actual LMU session:
 - [ ] **S2** Best source for tire compound + available tire sets (SHM vs REST).
   - *desk-research (confirmed from source):* SHM telemetry declares compound fields —
     `mFront/RearTireCompoundIndex` (`unsigned char`) and `mFront/RearTireCompoundName[18]`
-    (`char`) on `rF2VehicleTelemetry`; **not** in Extended. Whether LMU fills the *name*
-    strings (rF2 often left them blank) is LIVE-VERIFY; REST may still be the better source
-    for *available* tire sets. Source: `rF2State.h`.
+    (`char`) on `rF2VehicleTelemetry`; **not** in Extended. **LIVE-CONFIRMED 2026-06-14:**
+    LMU *does* populate the compound name strings (read `Medium` front/rear on a GT3), so
+    SHM is a viable source for the *current* compound; REST may still be better for
+    *available* tire sets. Source: `rF2State.h`.
 - [ ] **S3** Are current TC/ABS/brake-bias/engine-map values *readable* (telemetry/extended buffer or setup file)? (Read-only — we never write them.)
   - *desk-research (confirmed from source):* see the second S1 item above. Summary: brake
     bias = telemetry (`rF2VehicleTelemetry.mRearBrakeBias`); TC/ABS *difficulty* flags =
