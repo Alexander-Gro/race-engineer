@@ -42,6 +42,12 @@ export interface AudioSink {
 /** TTS provider (docs/07 §interfaces). Cloud (BYO-key) and local (Piper/Kokoro) impls slot in here. */
 export interface TtsProvider {
   readonly name: string;
+  /**
+   * Whether the provider is ready to use — its native backend is wired (local) or its key is
+   * present (cloud). `undefined` ⇒ always ready (e.g. the fakes). Lets a profile build a
+   * graceful fallback chain instead of failing mid-race (docs/15 §free routes).
+   */
+  readonly available?: boolean;
   /** Stream synthesized audio so playback can start before the whole reply is generated. */
   synthesizeStream(text: string, voice: VoiceId): AsyncIterable<AudioChunk>;
   /** Pre-render fixed phrases once (Tier-0); returns a phrase→clip map. */
@@ -87,6 +93,8 @@ export interface SttStream {
 /** STT provider (docs/07 §interfaces). Cloud (BYO-key) and local (faster-whisper) impls slot in here. */
 export interface SttProvider {
   readonly name: string;
+  /** Readiness for a graceful fallback chain (docs/15); `undefined` ⇒ always ready (the fakes). */
+  readonly available?: boolean;
   startStream(opts?: { sampleRate?: number; hints?: readonly string[] }): SttStream;
 }
 

@@ -75,12 +75,16 @@ in a small, reviewable, green-tested change.
   `EngineerCore` drives the pipeline → throttled ~12 Hz `RaceState` snapshots over a typed,
   read-only Core→renderer IPC contract; `apps/desktop` gains the Electron shell scaffold
   (main/preload/utility-process worker/renderer). Core + throttle + worker wiring unit-tested
-  offline against the synthetic source; the Electron **boot is the human-verify half**. 228 green).
-- **Next up — Track A (offline, no game needed):** **T6.2** (live dashboard — Tailwind+shadcn
-  widgets for fuel / 4-corner tires / brakes / aids / position+gaps / timing, rendered from the
-  `EngineerSnapshot` stream + fixtures; needs the Electron renderer toolchain installed). Also
-  available without the GUI: **T4.6** (local-model manager), **T5.1b** (cloud BYO-key providers),
-  **T4.4** (local STT/TTS provider stubs). The 🚦 MVP gate still needs the **live half** (Track B).
+  offline against the synthetic source; the Electron **boot is the human-verify half**. 228 green),
+  T4.4 (local provider shells in `voice` — `piperTts`/`kokoroTts`, `fasterWhisperStt`/`whisperCppStt`
+  behind the existing TTS/STT ifaces with an injected native backend deferred to T10.1; a config-only
+  `selectTts/SttProvider` selector + the free/local `DEFAULT_VOICE_PROFILE`; `available?` + a
+  `ProviderNotReadyError` fallback seam. 236 green).
+- **Next up — Track A (offline, no game needed):** **T5.1b** (cloud BYO-key LLM providers — Claude
+  via `@anthropic-ai/sdk` + a free cloud tier behind `LlmProvider`, key from OS secure storage,
+  mocked-transport conformance tests like the Ollama provider). Also: **T4.6** (local-model manager),
+  **T6.2** (live dashboard — needs the Electron renderer toolchain installed). The 🚦 MVP gate still
+  needs the **live half** (Track B).
 - **Track B (needs the Windows rig + LMU):** **T1.5** — `pnpm record` a real stint → commit a
   trimmed fixture (recorder ready). **T2.2 live** — REST probe (Task B) → finish REST→`RaceState`
   mapping + settle S3 aids. **T1.3/T1.4** aids/setup reads. Confirm the spotter `lateralPos`
@@ -300,9 +304,18 @@ Verify: ✅ a held-button utterance transcribes; partials stream; gating + cance
 _Human:_ STT key (premium) or local STT; a real mic; confirm a held-button utterance transcribes.
 Context: [07-VOICE-IO](07-VOICE-IO.md), [15-COST-AND-FREE-OPERATION](15-COST-AND-FREE-OPERATION.md).
 
-**T4.4 — Local fallback interfaces (stubs)** · _Claude Code_ · deps: T4.2, T4.3
-Build: Piper/whisper.cpp provider shells behind the same ifaces (impl can be deferred to M10).
-Verify: interface conformance tests; provider-swap is config-only.
+**T4.4 — Local fallback interfaces (stubs)** · _Claude Code_ · deps: T4.2, T4.3 · **done**
+Build: local provider shells in `voice` behind the existing `TtsProvider`/`SttProvider` ifaces —
+`LocalTtsProvider` (`piperTts`/`kokoroTts`), `LocalSttProvider` (`fasterWhisperStt`/`whisperCppStt`).
+The native binding (binary + model) is an **injected backend deferred to T10.1**: without it the
+shell reports `available:false` and throws `ProviderNotReadyError` (so a profile falls back, never
+crashes mid-race — docs/15 §free routes); with it (T10.1, or a fake in tests) it delegates. A
+config-only selector (`selectTtsProvider`/`selectSttProvider` + `VoiceProviderConfig`) and
+`DEFAULT_VOICE_PROFILE` = the docs/15 **free/local** default (`kokoro` + `faster-whisper`, no key).
+Added optional `available?` to the provider interfaces (additive). **Read-only — voice I/O only.**
+Verify: ✅ interface-conformance tests (shape + not-ready throw + injected-backend delegation);
+provider-swap is config-only (swap one field → different provider, no code change); default profile
+is free/local (8 tests; 236 green). Native impl + live audio: T10.1.
 
 **T4.5 — Microphone permission + audio I/O** · _Claude Code (live verify human-assisted)_ · deps: T4.3
 Build: `getUserMedia` capture; handle OS-denied mic (deep-link `ms-settings:privacy-microphone`);

@@ -28,3 +28,16 @@ export { FakeTtsProvider } from './providers/fake-tts';
 export { FakeSttProvider } from './providers/fake-stt';
 export { MockAudioSink } from './backends/mock-sink';
 export { MockMicSource } from './backends/mock-mic';
+// Local provider shells (T4.4) — free/offline default; native backends wired in T10.1.
+export { ProviderNotReadyError } from './providers/errors';
+export { LocalTtsProvider, piperTts, kokoroTts } from './providers/local-tts';
+export type { LocalTtsEngine, LocalTtsConfig, LocalTtsBackend } from './providers/local-tts';
+export { LocalSttProvider, fasterWhisperStt, whisperCppStt } from './providers/local-stt';
+export type {
+  LocalSttEngine,
+  LocalSttConfig,
+  LocalSttBackend,
+  SttStartOptions,
+} from './providers/local-stt';
+export { DEFAULT_VOICE_PROFILE, selectTtsProvider, selectSttProvider } from './profile';
+export type { VoiceProviderConfig, TtsEngineId, SttEngineId } from './profile';
