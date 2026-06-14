@@ -104,16 +104,23 @@ pit windows. Recompute on meaningful change (pace shift, FCY, damage, weather).
 
 ## 5. Undercut / overcut
 
-For a rival within striking range, compare pitting now vs later:
+For a rival within striking range, compare pitting now vs later. You pit now for fresh tyres
+while the rival stays out; over the laps they run on worn tyres you swing time in your favour:
 
 ```
-undercutGain ≈ (rivalOutLapDelta + rivalInLapDelta)            // time rival loses by staying out a lap on old tires
-              - (yourFreshTireAdvantage over the same lap)
-              - pitDeltaDifference
+undercutGainS = lapsRivalStaysOut * freshTyreGainPerLap   // you on fresh vs rival on worn, per lap
+              - outLapLoss                                 // your cold-tyre / pit-exit out-lap penalty
+              - (pitLossSelf - pitLossRival)               // pit-delta difference (usually ~0)
 ```
-Simplified decision: pit now (undercut) if your projected position after both cars cycle
-through stops is ahead; pit later (overcut) if track position + clean air outweighs fresh
-tires. Present as a recommendation with the key numbers, not a black box.
+The fresh-tyre advantage *adds* to the swing; the out-lap penalty and any pit-delta subtract. The
+per-lap swing assumes evenly-matched cars (your fresh-vs-worn gain ≈ the rival's worn-tyre deficit).
+
+Decision (`evaluate_undercut` → `{ recommend, deltaS, undercutGainS, rationale, confidence01 }`):
+pit **now** if the swing clears the gap and gains track position (chasing: passes the rival;
+defending: covers their threat); pit **later** (overcut) if pitting now is a net time loss (tyres
+too fresh); **hold** otherwise (within a configurable margin). `deltaS` is your projected advantage
+after the cycle (signed, >0 = good for you). Present as a recommendation with the key numbers, not a
+black box.
 
 ## 6. Multi-class traffic (LMU-critical)
 
@@ -153,7 +160,7 @@ These are the only ways the LLM touches strategy (see [06-AI-ENGINEER.md](06-AI-
 get_fuel_plan(): FuelPlan
 get_stint_plan(): StintPlan
 project_pit_window(opts?): { earliestLap, latestLap, recommendedLap, reason }
-evaluate_undercut(rivalId): { recommend: 'now'|'later'|'hold', deltaS, rationale }
+evaluate_undercut(rivalId): { recommend: 'now'|'later'|'hold', deltaS, undercutGainS, rationale, confidence01 }
 get_tire_status(): { perWheel: Tire[], windowStatus, degEstimate, confidence01 }
 get_fuel_save_target(): { saveLitersPerLap, coachingHint } | null
 ```

@@ -108,10 +108,20 @@ in a small, reviewable, green-tested change.
   balances laps across stints. Emits stint boundaries, recommended fuel loads, `expectedDegradation01`,
   and per-stop `[earliest, latest]` pit windows. Worked-example (fuel-bound 2×15, tyre-bound 4×10,
   trade-off → 3 stints, mandatory-stop) + property (more tank ⇒ not more stints; contiguous/cover-exact;
-  schema-valid; no NaN/∞) tests. 312 green).
+  schema-valid; no NaN/∞) tests. 312 green),
+  T7.4 (undercut/overcut in `strategy` `undercut.ts` — `evaluateUndercut` returns the docs/05 §5 tool
+  shape `{ recommend: 'now'|'later'|'hold', deltaS, undercutGainS, rationale, confidence01 }`:
+  `undercutGainS = laps·freshTyreGain − outLapLoss − (pitLossSelf − pitLossRival)` (made
+  dimensionally concrete — fresh-tyre advantage adds, out-lap/pit-delta subtract; docs/05 §5 updated
+  to match), then **now** if the swing clears the gap (chase passes / defend covers), **later** if
+  pitting now is a net loss (tyres too fresh), **hold** within margin. Pure/deterministic, depends on
+  `core` only; inputs come from the tyre (T7.1) + pit-loss (T7.2) models. Worked-example (chase→now,
+  too-fresh→later, gap-too-big→hold, slow-pit flips→later, defend cover/hold) + property (gain monotone
+  in fresh-tyre advantage; bigger gap ⇒ smaller clearance; confidence∈[0,1]; no NaN/∞) tests. 324 green).
 - **Next up — Track A:** continue **M7** offline strategy depth (the main remaining pure-logic body):
-  **T7.4** (undercut/overcut: pit-now-vs-later vs a rival, docs/05 §5), then **T7.5** (multi-class
-  traffic forecasting). The **GUI/runtime** tasks (**T6.2** dashboard, **T4.5** mic/audio)
+  **T7.5** (multi-class traffic forecasting: faster-class-approaching / slower-class-ahead warnings +
+  lap-time contamination, docs/05 §6 — the LMU differentiator), then **T7.6** (FCY/SC opportunism,
+  docs/05 §7). The **GUI/runtime** tasks (**T6.2** dashboard, **T4.5** mic/audio)
   need a machine with a screen + the Electron renderer toolchain. The 🚦 MVP gate needs the **live
   half** (Track B) + working voice I/O (T10.1 or cloud STT/TTS).
 - **Track B (needs the Windows rig + LMU):** **T1.5** — `pnpm record` a real stint → commit a
@@ -488,8 +498,8 @@ Verify: ✅ worked linear-fit + noisy-fit + prior-blend + silent-case unit tests
 (confidence monotonic in sample count ∈ [0,1]; steeper deg ⇒ slower late-stint pace; no NaN/∞)
 (13 tests; 276 green). Replay-eval on recorded stints lands with T1.5/T7.7.
 
-Remaining order: ~~T7.2 pit-loss model~~ (done) → ~~T7.3 stint planner~~ (done) → T7.4
-undercut/overcut → T7.5 multi-class traffic forecasting → T7.6 FCY/SC opportunism → T7.7
+Remaining order: ~~T7.2 pit-loss model~~ (done) → ~~T7.3 stint planner~~ (done) → ~~T7.4
+undercut/overcut~~ (done) → T7.5 multi-class traffic forecasting → T7.6 FCY/SC opportunism → T7.7
 learning layer (priors per car/track/conditions) → T7.8 strategy UI + rival tracker → T7.9
 proactive strategy call-outs. Each pure-math task is unit-tested with doc-05 examples and
 validated on recorded endurance sessions (replay eval set).
