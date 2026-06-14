@@ -6,3 +6,4 @@ export * from './validators';
 export * from './adapter';
 export * from './normalize';
 export * from './pipeline';
+export * from './events';
