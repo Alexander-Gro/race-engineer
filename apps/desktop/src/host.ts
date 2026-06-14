@@ -8,9 +8,9 @@ import { EngineerCore, type SnapshotTransport } from '@race-engineer/engineer-co
  * values with no game running — the T6.1 verify. The worker passes a `transport` that
  * `postMessage`s snapshots to the Electron main, which forwards them to the renderer.
  *
- * Going live is a one-line swap: replace `syntheticAdapter(...)` + `createCanonicalNormalizer()`
- * with the LMU adapter + `createLmuNormalizer()`. Kept here (not in the Electron entry) so it
- * stays unit-testable with no Electron and no game. Read-only/advisory — snapshots only.
+ * The live equivalent is `createLmuEngineerCore` in `./lmu-host` (LMU adapter + `createLmuNormalizer`),
+ * which the worker dynamically imports when `ENGINEER_SOURCE=lmu`. Kept here (not in the Electron
+ * entry) so it stays unit-testable with no Electron and no game. Read-only/advisory — snapshots only.
  */
 export interface EngineerHostOptions {
   /** Snapshot rate to the UI. Default is the Core's (12 Hz). */

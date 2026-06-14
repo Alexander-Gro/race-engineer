@@ -34,6 +34,10 @@ pnpm install
 # 2. Dev — opens a window with HMR, streaming the synthetic RaceState:
 pnpm --filter @race-engineer/desktop dev
 
+# 3. LIVE — drive the dashboard from a real LMU session (Windows rig, LMU running with the
+#    shared-memory plugin). Selects the LMU source via ENGINEER_SOURCE=lmu:
+pnpm dev:lmu      # (or: pnpm --filter @race-engineer/desktop dev:lmu)
+
 # Or build a runnable bundle (no display needed for the build itself) and preview it:
 pnpm --filter @race-engineer/desktop build:electron
 pnpm --filter @race-engineer/desktop preview
@@ -42,10 +46,15 @@ pnpm --filter @race-engineer/desktop preview
 pnpm --filter @race-engineer/desktop typecheck:electron
 ```
 
-**Expected:** the window opens and shows evolving values (position, fuel, last lap, laps
-remaining) streamed from the synthetic source at ~12 Hz — proving the Adapter → Normalizer →
-throttle → IPC → renderer pipe end to end. Swap the source in `src/host.ts`
-(`syntheticAdapter` → the LMU adapter + `createLmuNormalizer`) to drive it from a live session.
+**Expected (`dev`):** the window opens and shows evolving values (position, fuel, last lap, laps
+remaining) streamed from the **synthetic** source at ~12 Hz — proving the Adapter → Normalizer →
+throttle → IPC → renderer pipe end to end.
+
+**Live (`dev:lmu`):** the worker dynamically loads the LMU shared-memory source (`src/lmu-host.ts`,
+koffi — Windows-only) instead. With LMU running it streams your **real** telemetry; until LMU is in
+a session it waits (the dashboard shows "Waiting…", and the worker logs the status to the terminal).
+Fields the SHM normalizer doesn't map yet (brakes, TC/ABS, …) render as "—" until the REST merge
+(T2.2) lands. The source choice is the **only** difference — the same pipeline drives both.
 
 > First-boot notes (dev machine): `build:electron` is verified green here; the window boot
 > itself is the human step. If the renderer's `Content-Security-Policy` (in `renderer/index.html`)

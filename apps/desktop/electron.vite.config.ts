@@ -21,6 +21,8 @@ const bundleWorkspaceSrc = (): ReturnType<typeof externalizeDepsPlugin> =>
       '@race-engineer/core',
       '@race-engineer/engineer-core',
       '@race-engineer/adapter-sim-replay',
+      // Bundled (raw TS) but its native `koffi` import stays external (a real node_modules addon).
+      '@race-engineer/adapter-lmu',
     ],
   });
 

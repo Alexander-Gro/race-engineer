@@ -12,6 +12,7 @@
   },
   "scripts": {
     "dev": "pnpm --filter @race-engineer/desktop dev",
+    "dev:lmu": "pnpm --filter @race-engineer/desktop dev:lmu",
     "build": "pnpm -r --if-present build",
     "typecheck": "pnpm -r --if-present typecheck && tsc --noEmit -p tools/tsconfig.json",
     "test": "vitest run",

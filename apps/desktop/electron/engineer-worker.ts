@@ -2,23 +2,45 @@ import type { EngineerSnapshot } from '@race-engineer/engineer-core';
 import { createSyntheticEngineerCore } from '../src/host';
 
 /**
- * Engineer Core worker (build-plan T6.1) — runs in the Electron utility process so the 60 Hz
- * tick pipeline stays **off the UI thread**. It drives the offline synthetic source (so the app
- * shows live values with no game) and `postMessage`s throttled snapshots to the main process,
- * which forwards them to the renderer.
+ * Engineer Core worker (build-plan T6.1) — runs in the Electron utility process so the tick
+ * pipeline stays **off the UI thread**. It `postMessage`s throttled snapshots to the main process,
+ * which forwards them to the renderer. Read-only/advisory: the worker only reads telemetry.
  *
- * Going live = swapping the source inside `createSyntheticEngineerCore` for the LMU adapter +
- * normalizer. Read-only/advisory: the worker only reads telemetry and emits snapshots.
+ * Source is chosen by the `ENGINEER_SOURCE` env var:
+ *   - default → the offline **synthetic** scenario (paced + looped) so the app shows live values
+ *     with no game (`pnpm dev`);
+ *   - `lmu` → the real **shared-memory** source on the Windows rig (`pnpm dev:lmu`). The LMU wiring
+ *     (koffi, Windows-only native) is **dynamically imported only when selected**, so the synthetic
+ *     demo never loads koffi. Until LMU is in a session it emits nothing — the dashboard waits.
  */
 const transport = (snapshot: EngineerSnapshot): void => {
   process.parentPort.postMessage(snapshot);
 };
 
-// Pace + loop the synthetic source so the dashboard shows continuous, evolving live values (a real
-// game emits in real time; the finite scenario would otherwise flash past before the UI subscribes).
-const core = createSyntheticEngineerCore(transport, {
-  snapshotHz: 12,
-  frameIntervalMs: 150,
-  loop: true,
-});
-void core.start();
+void (async (): Promise<void> => {
+  const source = process.env['ENGINEER_SOURCE'] === 'lmu' ? 'lmu' : 'synthetic';
+  try {
+    if (source === 'lmu') {
+      // eslint-disable-next-line no-console
+      console.log(
+        '[engineer-worker] source=lmu — reading shared memory (waiting for an LMU session)',
+      );
+      const { createLmuEngineerCore } = await import('../src/lmu-host');
+      await createLmuEngineerCore(transport, { snapshotHz: 12 }).start();
+    } else {
+      // Pace + loop the synthetic source so the dashboard shows continuous, evolving values (a real
+      // game emits in real time; the finite scenario would otherwise flash past before the UI subscribes).
+      await createSyntheticEngineerCore(transport, {
+        snapshotHz: 12,
+        frameIntervalMs: 150,
+        loop: true,
+      }).start();
+    }
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error(
+      `[engineer-worker] "${source}" source failed — is LMU running with the plugin?`,
+      err,
+    );
+  }
+})();

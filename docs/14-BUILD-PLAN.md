@@ -155,9 +155,12 @@ in a small, reviewable, green-tested change.
   reading a precomputed `ctx.stintPlan` (T7.3) like `get_fuel_plan` reads `ctx.fuelPlan`; 373 green.
   Still pending: `evaluate_undercut` — needs per-rival tyre-gain/pit-loss context fields the Core
   doesn't expose yet — and the Core actually *populating* `ctx.fuelPlan`/`ctx.stintPlan` at runtime.)
-- **Track B (needs the Windows rig + LMU) — DEFERRED until the app is launchable (2026-06-14):** by
-  decision, hold all rig testing until the Electron app can drive it (capture/validate via the app,
-  not PowerShell). When it resumes: **T1.5** `pnpm record` a real stint → trimmed fixture; **T2.2
+- **Track B (needs the Windows rig + LMU) — app can now drive it (2026-06-15):** the launchable app
+  is the test harness. **`pnpm dev:lmu`** drives the dashboard from the **live LMU shared-memory
+  source** (`apps/desktop/src/lmu-host.ts` — `LmuAdapter` + `createLmuNormalizer`, dynamically loaded
+  only when `ENGINEER_SOURCE=lmu`; koffi stays external; the synthetic demo never touches it). So rig
+  validation now happens by *watching the dashboard* with LMU running, not PowerShell. When it
+  resumes: **T1.5** `pnpm record` a real stint → trimmed fixture; **T2.2
   live** REST probe → finish REST→`RaceState` mapping + settle S3 aids; **T1.3/T1.4** aids/setup reads;
   confirm the gap/`lateralPos`/closing signs + brake-bias front/rear + FCY/pit enums. **Full
   actionable list:** the **Rig verification backlog (consolidated)** in

@@ -52,7 +52,14 @@ const createWindow = (): BrowserWindow => {
 /** One worker for the app's lifetime, broadcasting snapshots to every open window. */
 const startEngineerWorker = (): void => {
   // The worker runs the tick pipeline; the bundler emits `engineer-worker.js` alongside main.
-  worker = utilityProcess.fork(path.join(__dirname, 'engineer-worker.js'));
+  // Inherit env (so ENGINEER_SOURCE=lmu reaches the worker) and pipe its console to our terminal
+  // (so the live-source status — "waiting for an LMU session", errors — is visible during `dev:lmu`).
+  worker = utilityProcess.fork(path.join(__dirname, 'engineer-worker.js'), [], {
+    stdio: 'pipe',
+    env: process.env,
+  });
+  worker.stdout?.on('data', (chunk: Buffer) => process.stdout.write(chunk));
+  worker.stderr?.on('data', (chunk: Buffer) => process.stderr.write(chunk));
   worker.on('message', (snapshot: EngineerSnapshot) => {
     lastSnapshot = snapshot;
     // Broadcast to all live windows so a re-opened window (macOS dock re-open) keeps receiving.
