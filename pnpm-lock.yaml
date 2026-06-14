@@ -11,6 +11,9 @@ importers:
       '@eslint/js':
         specifier: ^9.17.0
         version: 9.39.4
+      '@race-engineer/adapter-lmu':
+        specifier: workspace:*
+        version: link:packages/adapters/lmu
       '@race-engineer/adapter-sim-replay':
         specifier: workspace:*
         version: link:packages/adapters/sim-replay
@@ -49,6 +52,9 @@ importers:
 
   packages/adapters/lmu:
     dependencies:
+      '@race-engineer/core':
+        specifier: workspace:*
+        version: link:../../core
       koffi:
         specifier: ^3.0.0
         version: 3.0.2

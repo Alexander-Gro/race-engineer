@@ -368,12 +368,15 @@ export interface RawScoringInfo {
   trackLengthM: number;
   numVehicles: number;
   gamePhase: number;
+  yellowFlagState: number;
+  sectorFlag: [number, number, number];
   ambientTempC: number;
   trackTempC: number;
 }
 
 const readScoringInfo = (b: Buffer, base: number): RawScoringInfo => {
   const o = (name: string): number => base + offsetOf(scoringInfoLayout, name);
+  const sf = o('mSectorFlag');
   return {
     trackName: readChars(b, o('mTrackName'), 64),
     session: b.readInt32LE(o('mSession')),
@@ -383,6 +386,8 @@ const readScoringInfo = (b: Buffer, base: number): RawScoringInfo => {
     trackLengthM: b.readDoubleLE(o('mLapDist')),
     numVehicles: b.readInt32LE(o('mNumVehicles')),
     gamePhase: b.readUInt8(o('mGamePhase')),
+    yellowFlagState: b.readInt8(o('mYellowFlagState')),
+    sectorFlag: [b.readInt8(sf), b.readInt8(sf + 1), b.readInt8(sf + 2)],
     ambientTempC: b.readDoubleLE(o('mAmbientTemp')),
     trackTempC: b.readDoubleLE(o('mTrackTemp')),
   };
@@ -396,6 +401,9 @@ export interface RawVehicleScoring {
   vehicleClass: string;
   totalLaps: number;
   lapDistM: number;
+  /** Signed lateral offset from the track path centerline — confirms the spotter sign (T3.4). */
+  pathLateral: number;
+  timeBehindNext: number;
   timeBehindLeader: number;
   lapsBehindLeader: number;
   bestLapTime: number;
@@ -403,6 +411,8 @@ export interface RawVehicleScoring {
   numPitstops: number;
   inPits: boolean;
   pitState: number;
+  underYellow: boolean;
+  flag: number;
 }
 
 const readVehicleScoring = (b: Buffer, base: number): RawVehicleScoring => {
@@ -415,6 +425,8 @@ const readVehicleScoring = (b: Buffer, base: number): RawVehicleScoring => {
     vehicleClass: readChars(b, o('mVehicleClass'), 32),
     totalLaps: b.readInt16LE(o('mTotalLaps')),
     lapDistM: b.readDoubleLE(o('mLapDist')),
+    pathLateral: b.readDoubleLE(o('mPathLateral')),
+    timeBehindNext: b.readDoubleLE(o('mTimeBehindNext')),
     timeBehindLeader: b.readDoubleLE(o('mTimeBehindLeader')),
     lapsBehindLeader: b.readInt32LE(o('mLapsBehindLeader')),
     bestLapTime: b.readDoubleLE(o('mBestLapTime')),
@@ -422,6 +434,8 @@ const readVehicleScoring = (b: Buffer, base: number): RawVehicleScoring => {
     numPitstops: b.readInt16LE(o('mNumPitstops')),
     inPits: b.readUInt8(o('mInPits')) !== 0,
     pitState: b.readUInt8(o('mPitState')),
+    underYellow: b.readUInt8(o('mUnderYellow')) !== 0,
+    flag: b.readUInt8(o('mFlag')),
   };
 };
 

@@ -170,31 +170,51 @@ Build: locate the setup directory; parse a setup file (read-only) into `SetupPar
 Verify: parsed values match the in-game garage. Never write.
 Output: location + format notes → doc 03.
 
-**T1.5 — Record a real session** · _human-assisted_ · deps: T1.1
-Build: dump a full short stint of raw frames to a replay file; commit a trimmed version as
-a test fixture.
-Verify: `pnpm replay <file>` runs it through the M0 pipeline.
+**T1.5 — Record a real session** · _human-assisted_ · deps: T1.1 → **tooling ready (T2.4)**
+Build: dump a full short stint to a replay file; commit a trimmed version as a test fixture.
+The recorder now exists — on the rig run `pnpm record [--frames N] [--hz H] [--out file]`
+(Adapter → Normalizer → Recorder → canonical-`RaceState` JSONL).
+Verify: `pnpm replay <file>` runs it through the M0 pipeline. _Human:_ capture on the rig + commit a trimmed fixture.
 
 ---
 
 ## M2 — Real LMU adapter + Normalizer (real fields)
 
-**T2.1 — `adapters/lmu` SharedMemoryReader** · _Claude Code (verify human-assisted)_ · deps: T1.1, T0.5
-Build: production reader behind `GameAdapter`; struct decoders mirroring the plugin headers;
-`capabilities()` (`hasSharedMemory`, `readsCurrentAids`, `readsSetup`, populated `fields`).
-Verify: against the T1.5 recording (Claude Code) and a live session (human).
+**T2.1 — `adapters/lmu` SharedMemoryReader** · _Claude Code (verify human-assisted)_ · deps: T1.1, T0.5 · **done**
+Build: `LmuAdapter implements GameAdapter<LmuRawFrame>` — wraps the S1 torn-read-guarded reader
++ struct decoders, polls at a configurable Hz, `capabilities()`. Reader/clock injectable →
+unit-tested off-Windows with a fake (5 tests). Read-only (FILE_MAP_READ only; no write/control
+buffer).
+Verify: ✅ off-Windows unit tests (capabilities, poll→emit, skip-when-no-scoring, stop/close).
+_Human:_ run against a live session on the rig to confirm the wrapper end-to-end.
 
-**T2.2 — REST client (read-only, cached)** · _Claude Code_ · deps: T1.2, T2.1
-Build: polling client (1–5 Hz) merged into the adapter; feature-detected; graceful when absent.
-Verify: replay/fixture tests; live check (human).
+**T2.2 — REST client (read-only, cached)** · _Claude Code_ · deps: T1.2 (desk-researched; live pending), T2.1 · **done (transport; mapping pending live payloads)**
+Build: `LmuRestClient` — **GET-only** read-only client (writes structurally impossible: hard-coded
+GET + frozen endpoint allow-list, per docs/03 §S2). Base `http://localhost:6397` with IPv4→IPv6
+fallback, feature-detection, TTL cache, throttled re-probe + shared in-flight detect; localhost
+only. Endpoints: sessions / getAllVehicles / weather / strategy/usage (Virtual Energy) /
+garage / RepairAndRefuel. Returns raw payloads.
+Verify: ✅ mocked-fetch tests (detect, IPv6 fallback, cache+expiry, graceful-absent, throttle,
+GET-only). **Pending live (Task B):** capture real payloads (Swagger) → map Virtual Energy +
+pit/refuel into `RaceState` in the Normalizer; live connectivity check on the rig.
 
-**T2.3 — Normalizer: real fields → `RaceState`** · _Claude Code_ · deps: T2.1
-Build: full mapping (units, wheel order, gaps, class, derived fuel-per-lap), merging SHM+REST.
-Verify: recording → canonical `RaceState` matches hand-checked expectations; unit tests.
+**T2.3 — Normalizer: real fields → `RaceState`** · _Claude Code_ · deps: T2.1 · **done (SHM; REST merge with T2.2)**
+Build: `createLmuNormalizer()` maps `LmuRawFrame` → canonical `RaceState` — units (K→°C), wheel
+order [FL,FR,RL,RR], class strings (`Hyper`/`LMP2`/`GT3` → className + lowercased classId), gaps
+relative to player, stateful closing-rate + rolling fuel-per-lap, gamePhase/yellow → flags,
+lap-time sentinels → null. The single rF2→canonical crossing point.
+Unmapped-in-SHM (null/0 placeholders, filled by T2.2/decoder follow-ups): aids.tc/abs,
+engine.map, inputs, worldPos, car.name, sectorYellows; brake-bias front/rear flagged (docs/03).
+Verify: ✅ unit tests assert the mapping + **schema-validate the output** (`RaceStateSchema`);
+multi-class grid mirroring the live rig capture (6 tests).
 
-**T2.4 — Recorder (`pnpm record`)** · _Claude Code_ · deps: T2.1
-Build: capture live frames to replay files for fixtures/regression.
-Verify: record → replay round-trips identically.
+**T2.4 — Recorder (`pnpm record`)** · _Claude Code_ · deps: T2.1 · **done**
+Build: game-agnostic `Recorder` (sim-replay) captures the canonical `RaceState` stream and
+saves the JSON-Lines replay format (`maxFrames` cap, `truncated` flag — no silent loss);
+`pnpm record` CLI (`tools/record.ts`) wires LmuAdapter → Normalizer → Recorder, fail-fast if
+LMU isn't running. Reuses `serializeReplay`, so output replays via `pnpm replay`.
+Verify: ✅ record → serialize/save → `parseReplay`/`readReplayFile` round-trips identically +
+cap/truncation (3 tests). _Human:_ live capture on the rig.
 
 ---
 
