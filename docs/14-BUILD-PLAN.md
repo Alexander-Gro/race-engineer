@@ -91,11 +91,17 @@ in a small, reviewable, green-tested change.
   half. 263 green),
   T7.1 (tire-degradation model in `strategy` — `fitTireDegradation` (least-squares lap-time-vs-stint-lap
   fit, prior-blended, `confidence01`, silent when no signal) + `predictLapTimeS` + `degLossOverStintS`
-  + `assessTireWindow(s)`; worked-example + property tests. **Opens M7.** 276 green).
+  + `assessTireWindow(s)`; worked-example + property tests. **Opens M7.** 276 green),
+  T7.2 (pit-stop time model in `strategy` `pit.ts` — `refuelTimeS` (fuelToAdd / rate), `serviceTimeS`
+  (max of the parallel refuel ∥ tyres ∥ repair ops, + the dominating `bottleneck`), `computePitLoss`
+  (`pitLaneTimeLoss + serviceTime` → `PitLoss`), and `estimatePitLaneTimeLossS` (derive the per-track
+  transit penalty from one measured pit pass = transit − service − on-track-equivalent, clamped ≥0).
+  Pure/deterministic, depends on `core` only; feeds the stint planner (T7.3 — one fewer stop saves one
+  `totalPitLossS`, weighed vs `degLossOverStintS`). Worked-example (47 s / 30 s / 62 s stops) + property
+  tests (refuel monotone in fuel; total ≥ pit-lane loss and ≥ service; no NaN/∞). 293 green).
 - **Next up — Track A:** continue **M7** offline strategy depth (the main remaining pure-logic body):
-  **T7.2** (pit-loss model: `pitLoss = pitLaneTimeLoss + serviceTime`, `serviceTime = max(refuel,
-  tyre-change, repair)` — docs/05 §3, fully testable), then **T7.3** (stint planner, consumes the fuel
-  + tire-deg + pit-loss models). The **GUI/runtime** tasks (**T6.2** dashboard, **T4.5** mic/audio)
+  **T7.3** (stint planner, consumes the fuel + tire-deg + pit-loss models), then **T7.4**
+  (undercut/overcut). The **GUI/runtime** tasks (**T6.2** dashboard, **T4.5** mic/audio)
   need a machine with a screen + the Electron renderer toolchain. The 🚦 MVP gate needs the **live
   half** (Track B) + working voice I/O (T10.1 or cloud STT/TTS).
 - **Track B (needs the Windows rig + LMU):** **T1.5** — `pnpm record` a real stint → commit a
@@ -472,7 +478,7 @@ Verify: ✅ worked linear-fit + noisy-fit + prior-blend + silent-case unit tests
 (confidence monotonic in sample count ∈ [0,1]; steeper deg ⇒ slower late-stint pace; no NaN/∞)
 (13 tests; 276 green). Replay-eval on recorded stints lands with T1.5/T7.7.
 
-Remaining order: T7.2 pit-loss model → T7.3 stint planner → T7.4
+Remaining order: ~~T7.2 pit-loss model~~ (done) → T7.3 stint planner → T7.4
 undercut/overcut → T7.5 multi-class traffic forecasting → T7.6 FCY/SC opportunism → T7.7
 learning layer (priors per car/track/conditions) → T7.8 strategy UI + rival tracker → T7.9
 proactive strategy call-outs. Each pure-math task is unit-tested with doc-05 examples and
