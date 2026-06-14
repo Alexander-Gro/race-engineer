@@ -61,10 +61,17 @@ const num = (n: number | null, digits = 1, unit = ''): Reading =>
     ? UNKNOWN
     : { value: `${n.toFixed(digits)}${unit}`, severity: 'neutral' };
 
+/** Signed display that never shows a misleading `-0.0`: a value rounding to zero carries no sign. */
+const signedStr = (n: number, digits: number, unit: string): string => {
+  const rounded = Number.parseFloat(n.toFixed(digits));
+  const sign = rounded > 0 ? '+' : rounded < 0 ? '-' : '';
+  return `${sign}${Math.abs(rounded).toFixed(digits)}${unit}`;
+};
+
 const signed = (n: number | null, digits = 1, unit = 's'): Reading =>
   n === null || !Number.isFinite(n)
     ? UNKNOWN
-    : { value: `${n >= 0 ? '+' : ''}${n.toFixed(digits)}${unit}`, severity: 'neutral' };
+    : { value: signedStr(n, digits, unit), severity: 'neutral' };
 
 /** mm:ss for a duration, for the session clock. */
 const clock = (s: number | null): Reading => {
@@ -202,32 +209,29 @@ const corner = (tyre: Tire, t: DashboardThresholds): CornerTyre => ({
   pressure: num(tyre.pressureKpa, 0, ' kPa'),
 });
 
-const fasterClassBehind = (
-  state: RaceState,
-  behind: CarState | null,
-  t: DashboardThresholds,
-): boolean => {
-  if (behind === null || behind.gapToPlayerS === null || behind.closingRateMps === null)
-    return false;
-  const differentClass =
-    state.player.className === null ||
-    behind.className === null ||
-    state.player.className !== behind.className;
-  return (
-    differentClass &&
-    behind.closingRateMps > t.closingMps &&
-    behind.gapToPlayerS <= t.fasterClassHorizonS
-  );
-};
+/**
+ * Is ANY different-class car closing from behind within the horizon (docs/09 warning strip)? Scans
+ * the whole field — not just the nearest car behind — so a faster-class car isn't missed when a
+ * same-class car happens to be marginally closer (mirrors the canonical traffic rule, T7.5).
+ */
+const fasterClassBehind = (state: RaceState, t: DashboardThresholds): boolean =>
+  state.cars.some((car) => {
+    if (car.isPlayer || car.id === state.player.id) return false;
+    if (car.gapToPlayerS === null || car.closingRateMps === null) return false;
+    if (!(car.gapToPlayerS > 0 && car.gapToPlayerS <= t.fasterClassHorizonS)) return false;
+    if (car.closingRateMps <= t.closingMps) return false;
+    return (
+      state.player.className === null ||
+      car.className === null ||
+      state.player.className !== car.className
+    );
+  });
 
 const deltaToBest = (player: PlayerCar): Reading => {
   if (player.lastLapS === null || player.bestLapS === null) return UNKNOWN;
-  const delta = player.lastLapS - player.bestLapS;
-  // Faster-than-best (negative) is good; slower is neutral context, not "bad".
-  return {
-    value: `${delta >= 0 ? '+' : ''}${delta.toFixed(1)}s`,
-    severity: delta <= 0 ? 'good' : 'neutral',
-  };
+  const delta = Number.parseFloat((player.lastLapS - player.bestLapS).toFixed(1));
+  // Faster-than-or-equal-to best is good; slower is neutral context, not "bad". No misleading -0.0.
+  return { value: signedStr(delta, 1, 's'), severity: delta <= 0 ? 'good' : 'neutral' };
 };
 
 /** Build the display model for one snapshot (docs/09 §A). Pure, deterministic. */
@@ -289,7 +293,7 @@ export const buildDashboardModel = (
       position: `P${p.position}${classPos}`,
       ahead: rival(ahead, thresholds),
       behind: rival(behind, thresholds),
-      fasterClassApproaching: fasterClassBehind(s, behind, thresholds),
+      fasterClassApproaching: fasterClassBehind(s, thresholds),
     },
     timing: {
       lastLap: num(p.lastLapS, 1, 's'),

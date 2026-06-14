@@ -1,5 +1,6 @@
 import {
   lowFuelState,
+  makeCarState,
   midStintState,
   multiClassTrafficState,
   raceStartState,
@@ -113,6 +114,60 @@ describe('flags, timing, aids', () => {
     expect(m.aids.tc).toEqual({ value: '5', severity: 'neutral' });
     expect(m.aids.brakeBias).toEqual({ value: '54.0%', severity: 'neutral' });
     expect(m.aids.engineMap).toEqual({ value: '3', severity: 'neutral' });
+  });
+});
+
+describe('regression (pre-push review)', () => {
+  it('faster-class strip scans the whole field, not just the nearest car behind', () => {
+    // Nearest behind is same-class & slow; a different-class car closing fast is farther back.
+    const state: RaceState = {
+      ...raceStartState, // player is Hypercar
+      cars: [
+        raceStartState.player,
+        makeCarState({
+          id: 50,
+          position: 6,
+          className: 'Hypercar',
+          gapToPlayerS: 0.5,
+          closingRateMps: 1,
+        }),
+        makeCarState({
+          id: 51,
+          position: 7,
+          className: 'LMP2',
+          gapToPlayerS: 3.0,
+          closingRateMps: 12,
+        }),
+      ],
+    };
+    expect(buildDashboardModel(snap(state)).standings.fasterClassApproaching).toBe(true);
+  });
+
+  it('never renders a misleading "-0.0" gap for a car rounding to alongside', () => {
+    const state: RaceState = {
+      ...raceStartState,
+      cars: [
+        raceStartState.player,
+        makeCarState({ id: 60, position: 6, className: 'LMP2', gapToPlayerS: -0.04 }),
+      ],
+    };
+    expect(buildDashboardModel(snap(state)).standings.ahead?.gap.value).toBe('0.0s');
+  });
+
+  it('never renders a "-0.0" delta-to-best; a clearly faster lap shows the negative', () => {
+    const justUnder: RaceState = {
+      ...midStintState,
+      player: { ...midStintState.player, lastLapS: 208.87, bestLapS: 208.9 }, // −0.03 → rounds to 0
+    };
+    expect(buildDashboardModel(snap(justUnder)).timing.deltaToBest.value).toBe('0.0s');
+    const faster: RaceState = {
+      ...midStintState,
+      player: { ...midStintState.player, lastLapS: 208.4, bestLapS: 208.9 }, // −0.5
+    };
+    expect(buildDashboardModel(snap(faster)).timing.deltaToBest).toEqual({
+      value: '-0.5s',
+      severity: 'good',
+    });
   });
 });
 
