@@ -11,7 +11,7 @@
     "pnpm": ">=9"
   },
   "scripts": {
-    "dev": "echo \"[dev] The Electron shell is wired in build-plan task T6.1; there is no app to run yet.\"",
+    "dev": "pnpm --filter @race-engineer/desktop dev",
     "build": "pnpm -r --if-present build",
     "typecheck": "pnpm -r --if-present typecheck && tsc --noEmit -p tools/tsconfig.json",
     "test": "vitest run",
@@ -37,5 +37,14 @@
     "typescript": "^5.7.2",
     "typescript-eslint": "^8.19.0",
     "vitest": "^3.0.0"
+  },
+  "pnpm": {
+    "//": "pnpm v9 blocks dependency install scripts by default; allow the ones that fetch a binary so `pnpm install` produces a runnable app (electron downloads its platform binary; better-sqlite3/koffi fetch their prebuilt native addon; esbuild its platform package).",
+    "onlyBuiltDependencies": [
+      "electron",
+      "esbuild",
+      "better-sqlite3",
+      "koffi"
+    ]
   }
 }
