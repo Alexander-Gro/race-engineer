@@ -168,9 +168,15 @@ buffer).
 Verify: ✅ off-Windows unit tests (capabilities, poll→emit, skip-when-no-scoring, stop/close).
 _Human:_ run against a live session on the rig to confirm the wrapper end-to-end.
 
-**T2.2 — REST client (read-only, cached)** · _Claude Code_ · deps: T1.2, T2.1
-Build: polling client (1–5 Hz) merged into the adapter; feature-detected; graceful when absent.
-Verify: replay/fixture tests; live check (human).
+**T2.2 — REST client (read-only, cached)** · _Claude Code_ · deps: T1.2 (desk-researched; live pending), T2.1 · **done (transport; mapping pending live payloads)**
+Build: `LmuRestClient` — **GET-only** read-only client (writes structurally impossible: hard-coded
+GET + frozen endpoint allow-list, per docs/03 §S2). Base `http://localhost:6397` with IPv4→IPv6
+fallback, feature-detection, TTL cache, throttled re-probe + shared in-flight detect; localhost
+only. Endpoints: sessions / getAllVehicles / weather / strategy/usage (Virtual Energy) /
+garage / RepairAndRefuel. Returns raw payloads.
+Verify: ✅ mocked-fetch tests (detect, IPv6 fallback, cache+expiry, graceful-absent, throttle,
+GET-only). **Pending live (Task B):** capture real payloads (Swagger) → map Virtual Energy +
+pit/refuel into `RaceState` in the Normalizer; live connectivity check on the rig.
 
 **T2.3 — Normalizer: real fields → `RaceState`** · _Claude Code_ · deps: T2.1 · **done (SHM; REST merge with T2.2)**
 Build: `createLmuNormalizer()` maps `LmuRawFrame` → canonical `RaceState` — units (K→°C), wheel

@@ -11,3 +11,4 @@ export * from './types';
 export * from './capabilities';
 export * from './adapter';
 export * from './normalizer';
+export * from './rest/client';
