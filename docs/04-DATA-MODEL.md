@@ -98,7 +98,10 @@ type CarState = {
   lastLapS: number | null;
   bestLapS: number | null;
   worldPos: { x: number; y: number; z: number } | null; // spotter geometry
-  lateralPos: number | null;    // signed offset from racing line
+  lateralPos: number | null;    // signed offset from racing line; +right / -left of the
+                                // driver (spotter convention — Normalizer T2.3 must honor
+                                // this sign; confirm against live LMU data, else flip via
+                                // spotterRule({ rightIsPositive: false }))
   pit: { inPitLane: boolean; inPitStall: boolean; stops: number; state: PitState };
   // Relative-to-player (computed by Normalizer):
   gapToPlayerS: number | null;  // + = behind player, - = ahead
