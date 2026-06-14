@@ -19,6 +19,14 @@ export default tseslint.config(
     files: ['**/*.{ts,tsx,mts,cts}'],
     extends: [js.configs.recommended, ...tseslint.configs.recommended],
     languageOptions: { globals: { ...globals.node } },
+    rules: {
+      // Allow intentionally-unused args/vars marked with a leading underscore
+      // (e.g. interface-faithful params a given impl ignores).
+      '@typescript-eslint/no-unused-vars': [
+        'error',
+        { argsIgnorePattern: '^_', varsIgnorePattern: '^_', caughtErrorsIgnorePattern: '^_' },
+      ],
+    },
   },
   // Must come last: turns off rules that conflict with Prettier formatting.
   prettier,

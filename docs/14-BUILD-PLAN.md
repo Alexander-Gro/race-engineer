@@ -43,12 +43,16 @@ in a small, reviewable, green-tested change.
   **`OllamaProvider`**. No key needed to pass tests),
   T4.1 (input reader + PTT mapping — backend-agnostic edge/debounce/binding/press-to-map
   logic, mock-device tested; Windows-only `Sdl2Backend` scaffold via koffi, live-mapping
-  half flagged for the rig).
-- **Next up — Track A (offline, no game needed):** voice plumbing **M4** so the live radio
-  loop (T5.2) can close — T4.2 (TTS + audio + priority queue + Tier-0 pre-render),
-  T4.6 (local-model manager). Provider follow-ups behind the AI interface: **T5.1b** Claude
-  (`@anthropic-ai/sdk`, BYO-key) and a free cloud-tier (Groq/Gemini/OpenRouter) adapter.
-  M3 + the AI orchestration core are complete.
+  half flagged for the rig),
+  T4.2 (TTS + audio playback — `TtsProvider`/`AudioSink` interfaces, a preemptible
+  `VoicePlayer` priority queue (urgent spotter preempts, barge-in, FIFO-by-priority), Tier-0
+  pre-render, `FakeTtsProvider` + `MockAudioSink`; real cloud/local TTS + OS sink are the
+  live half).
+- **Next up — Track A (offline, no game needed):** **T4.3** (STT + PTT capture) — the last
+  piece before the **T5.2** live radio loop can close (it needs STT) — then **T5.4** (proactive
+  fuel-low + Tier-0 spotter audio wiring). Also available: **T4.6** (local-model manager),
+  **T5.1b** (Claude/free-cloud BYO-key providers behind the AI interface), **T6.1** (Electron
+  shell). M3, the AI orchestration core, and input+TTS plumbing are complete.
 - **Track B (needs the Windows rig + LMU):** T1.2–T1.5 (REST probe, aids/setup reads, record
   a real session). Optional next rig step: a moving, multi-class session to confirm dynamic
   fields + the real Hypercar/LMP2/GTE class strings for T2.3.
@@ -226,12 +230,16 @@ _Human (Windows rig):_ install/bundle `SDL2.dll`; map a real wheel button live; 
 re-enumeration — and confirm passive reads don't disturb the game's own input.
 Context: [08-INPUT-AND-CONTROLS](08-INPUT-AND-CONTROLS.md) §1.
 
-**T4.2 — TTS + audio playback + priority queue + Tier-0 pre-render** · _Claude Code_ · deps: T0.2
-Build: `TtsProvider` iface + one cloud provider (streaming); `VoicePlayer` priority queue
-(preempt/duck/barge-in); pre-render the fixed spotter phrase set.
-Verify: queue tests (urgent preempts chatter; barge-in stops playback); a spoken sample
-plays. _Human:_ provide a TTS API key; confirm audio.
-Context: [07-VOICE-IO](07-VOICE-IO.md).
+**T4.2 — TTS + audio playback + priority queue + Tier-0 pre-render** · _Claude Code_ · deps: T0.2 · **done (offline half)**
+Build: `TtsProvider` + `AudioSink` interfaces; `VoicePlayer` priority queue — urgent (≥WARNING)
+**preempts**, lower priorities **queue** in priority order, **barge-in** stops + clears on PTT;
+`prerenderTier0` for the fixed spotter/position phrase set; `FakeTtsProvider` + `MockAudioSink`
+for tests. Concrete streaming TTS providers (cloud BYO-key; local Piper/Kokoro) and the OS audio
+sink are the live half (T4.4 / T10.1 / runtime); per docs/15 the default stays free/local.
+Verify: ✅ queue tests (urgent preempts chatter; barge-in stops playback; priority order) +
+pre-render integrity (11 tests).
+_Human:_ provide a TTS key (premium) or run local TTS; confirm a spoken sample plays on the device.
+Context: [07-VOICE-IO](07-VOICE-IO.md), [15-COST-AND-FREE-OPERATION](15-COST-AND-FREE-OPERATION.md).
 
 **T4.3 — STT + PTT capture** · _Claude Code_ · deps: T4.1, T4.2
 Build: `SttProvider` iface + one cloud provider (streaming); capture mic while PTT held →

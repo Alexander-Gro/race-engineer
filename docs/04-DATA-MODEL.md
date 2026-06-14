@@ -164,6 +164,12 @@ The Event Detector owns **debounce, cooldown, and dedupe** so the engineer is no
 chatty. Example: `car_left` has a `dedupeKey` per adjacent car and a cooldown so it is
 announced once per pass, not every tick.
 
+> **Tier-0 pre-render set (voice layer, docs/07).** The voice package pre-renders a fixed
+> phrase set for near-zero-latency reflex playback: the four reflex spotter `EventType`s
+> (`car_left`/`car_right`/`three_wide`/`clear`) plus a couple of fixed call-out phrases that
+> are *not* event types — `position_up`/`position_down`. These extra phrases are voice assets,
+> not part of `EventType`; T5.4 wires events → cached clips.
+
 ## Derived / strategy types (see 05 for the math)
 
 ```ts
