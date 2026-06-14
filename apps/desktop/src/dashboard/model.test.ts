@@ -136,6 +136,27 @@ describe('flags, timing, aids', () => {
   });
 });
 
+describe('engineer alerts', () => {
+  it('formats snapshot events into alerts, dropping the lap_completed marker', () => {
+    const withEvents: EngineerSnapshot = {
+      ...snap(multiClassTrafficState),
+      events: [
+        { id: 'a', tick: 1, type: 'fuel_low', tier: 1, priority: 8, payload: {} },
+        { id: 'b', tick: 1, type: 'car_left', tier: 0, priority: 90, payload: {} },
+        { id: 'c', tick: 1, type: 'lap_completed', tier: 1, priority: 3, payload: {} },
+      ],
+    };
+    expect(buildDashboardModel(withEvents).alerts).toEqual([
+      { label: 'Fuel low', severity: 'caution' }, // Tier 1 → caution
+      { label: 'Car left', severity: 'critical' }, // Tier 0 reflex → act-now
+    ]);
+  });
+
+  it('has no alerts when the snapshot carries no events', () => {
+    expect(buildDashboardModel(snap(raceStartState)).alerts).toEqual([]);
+  });
+});
+
 describe('regression (pre-push review)', () => {
   it('faster-class strip scans the whole field, not just the nearest car behind', () => {
     // Nearest behind is same-class & slow; a different-class car closing fast is farther back.

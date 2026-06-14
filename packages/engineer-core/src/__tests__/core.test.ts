@@ -87,4 +87,32 @@ describe('EngineerCore', () => {
     expect(plan.confidence01).toBeGreaterThanOrEqual(0);
     expect(plan.confidence01).toBeLessThanOrEqual(1);
   });
+
+  it('runs the event detector and attaches fired events to snapshots (synthetic stint)', async () => {
+    const snaps: EngineerSnapshot[] = [];
+    const core = new EngineerCore({
+      adapter: syntheticAdapter(scriptedScenario()),
+      normalizer: createCanonicalNormalizer(),
+      transport: (s) => snaps.push(s),
+      snapshotHz: 12,
+    });
+    await core.start();
+
+    const types = new Set(snaps.flatMap((s) => s.events ?? []).map((e) => e.type));
+    expect(types.size).toBeGreaterThan(0);
+    expect(types.has('lap_completed')).toBe(true); // the stint completes multiple laps
+  });
+
+  it('emits no events when detection is disabled (eventRules: [])', async () => {
+    const snaps: EngineerSnapshot[] = [];
+    const core = new EngineerCore({
+      adapter: syntheticAdapter(scriptedScenario()),
+      normalizer: createCanonicalNormalizer(),
+      transport: (s) => snaps.push(s),
+      snapshotHz: 12,
+      eventRules: [],
+    });
+    await core.start();
+    expect(snaps.every((s) => s.events === undefined)).toBe(true);
+  });
 });

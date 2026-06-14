@@ -158,8 +158,12 @@ in a small, reviewable, green-tested change.
   `StrategyEngine` accumulates green-lap fuel deltas + lap times from the `RaceState` stream and
   recomputes a live **`FuelPlan`** into every snapshot (`EngineerSnapshot.strategy.fuelPlan`); the
   dashboard surfaces "add at stop". So the strategy models now compute at runtime in the app
-  (synthetic + live LMU). Feeding the same into the AI `ctx.fuelPlan`/`ctx.stintPlan` lands with the
-  radio loop; stint/undercut need the per-track calibration inputs (rig backlog).
+  (synthetic + live LMU). The Core also runs the **Event Detector** (`defaultEventRules`:
+  spotter/traffic/FCY/fuel-low/lap-completed) over the stream and attaches fired events to each
+  snapshot (`EngineerSnapshot.events`); the dashboard shows a rolling **alerts** feed. So the event
+  system runs live in the app now — the proactive *voice* routing of those events is still the radio
+  layer. Feeding strategy into the AI `ctx.fuelPlan`/`ctx.stintPlan` lands with the radio loop;
+  stint/undercut need the per-track calibration inputs (rig backlog).
 - **Track B (needs the Windows rig + LMU) — app can now drive it (2026-06-15):** the launchable app
   is the test harness. **`pnpm dev:lmu`** drives the dashboard from the **live LMU shared-memory
   source** (`apps/desktop/src/lmu-host.ts` — `LmuAdapter` + `createLmuNormalizer`, dynamically loaded

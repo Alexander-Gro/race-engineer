@@ -1,4 +1,4 @@
-import type { CarState, PlayerCar, RaceState, Tire } from '@race-engineer/core';
+import type { CarState, EventType, PlayerCar, RaceState, Tier, Tire } from '@race-engineer/core';
 import type { EngineerSnapshot } from '@race-engineer/engineer-core';
 
 /**
@@ -129,6 +129,37 @@ const FLAG_SEVERITY: Record<RaceState['flags']['global'], Severity> = {
   none: 'unknown',
 };
 
+// --- engineer alerts (from snapshot events) ---------------------------------------------------
+
+export interface AlertReading {
+  label: string;
+  severity: Severity;
+}
+
+/** Human labels for the event types the dashboard surfaces (lap_completed is a marker, not shown). */
+const EVENT_LABELS: Partial<Record<EventType, string>> = {
+  car_left: 'Car left',
+  car_right: 'Car right',
+  three_wide: 'Three wide',
+  clear: 'Clear',
+  fuel_low: 'Fuel low',
+  tire_temp_out_of_window: 'Tyres out of window',
+  pit_window_open: 'Pit window open',
+  box_this_lap: 'Box this lap',
+  blue_flag: 'Blue flag',
+  faster_class_approaching: 'Faster class approaching',
+  slower_class_ahead: 'Slower class ahead',
+  fcy_opportunity: 'Full-course yellow — box?',
+  strategy_update: 'Strategy update',
+  undercut_opportunity: 'Undercut on',
+  rival_pitted: 'Rival pitted',
+  incident_ahead: 'Incident ahead',
+};
+
+/** Tier-0 reflex calls are act-now; Tier-1 are caution; deliberative ones are neutral. */
+const alertSeverity = (tier: Tier): Severity =>
+  tier === 0 ? 'critical' : tier === 1 ? 'caution' : 'neutral';
+
 // --- corners / standings ----------------------------------------------------------------------
 
 export interface CornerTyre {
@@ -194,9 +225,17 @@ export interface DashboardModel {
     fasterClassApproaching: boolean;
   };
   timing: { lastLap: Reading; bestLap: Reading; deltaToBest: Reading };
+  /** Engineer events that fired this snapshot (most-recent feed; `lap_completed` markers excluded). */
+  alerts: AlertReading[];
   seq: number;
   elapsedS: number;
 }
+
+/** Format the snapshot's events into displayable alerts (drops the `lap_completed` tick marker). */
+const buildAlerts = (snapshot: EngineerSnapshot): AlertReading[] =>
+  (snapshot.events ?? [])
+    .filter((e) => e.type !== 'lap_completed')
+    .map((e) => ({ label: EVENT_LABELS[e.type] ?? e.type, severity: alertSeverity(e.tier) }));
 
 const aidValue = (v: number | null | undefined): Reading =>
   v === null || v === undefined || !Number.isFinite(v)
@@ -303,6 +342,7 @@ export const buildDashboardModel = (
       bestLap: num(p.bestLapS, 1, 's'),
       deltaToBest: deltaToBest(p),
     },
+    alerts: buildAlerts(snapshot),
     seq: snapshot.seq,
     elapsedS: s.session.elapsedS,
   };

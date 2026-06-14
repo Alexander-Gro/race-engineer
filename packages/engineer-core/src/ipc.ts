@@ -1,4 +1,4 @@
-import type { FuelPlan, RaceState } from '@race-engineer/core';
+import type { EngineerEvent, FuelPlan, RaceState } from '@race-engineer/core';
 
 /**
  * Typed IPC contract between the Engineer Core (worker / utility process) and the renderer
@@ -26,6 +26,8 @@ export interface EngineerSnapshot {
   raceState: RaceState;
   /** Derived strategy. Optional so existing snapshot consumers stay valid; the Core always sets it. */
   strategy?: StrategySummary;
+  /** Events the detector fired since the previous snapshot (advisory; absent when none). */
+  events?: EngineerEvent[];
 }
 
 /** The IPC channel the Core publishes snapshots on. */

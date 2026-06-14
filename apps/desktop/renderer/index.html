@@ -141,6 +141,26 @@
       .rival-empty {
         color: var(--muted);
       }
+      /* Engineer call-out feed (recent events). */
+      .alerts {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin-bottom: 12px;
+      }
+      .alert-chip {
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        padding: 3px 10px;
+        font-size: 12px;
+        background: var(--panel);
+      }
+      .alert-chip.sev-critical {
+        border-color: var(--critical);
+      }
+      .alert-chip.sev-caution {
+        border-color: var(--caution);
+      }
       .warn-strip {
         background: rgba(227, 179, 65, 0.12);
         border: 1px solid var(--caution);

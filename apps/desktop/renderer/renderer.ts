@@ -1,6 +1,7 @@
 import type { EngineerBridge } from '@race-engineer/engineer-core';
 import {
   buildDashboardModel,
+  type AlertReading,
   type DashboardModel,
   type Reading,
   type RivalReading,
@@ -161,9 +162,28 @@ const sessionCard = (m: DashboardModel['session']): HTMLElement => {
   return card('Session', grid);
 };
 
+// A short rolling feed of the engineer's most recent call-outs (events are transient per snapshot).
+const MAX_ALERTS = 6;
+let recentAlerts: AlertReading[] = [];
+
+const alertsStrip = (alerts: readonly AlertReading[]): HTMLElement => {
+  const strip = el('div', 'alerts');
+  for (const a of alerts) {
+    const chip = el('div', `alert-chip sev-${a.severity}`, a.label);
+    chip.dataset['severity'] = a.severity;
+    strip.append(chip);
+  }
+  return strip;
+};
+
 const render = (model: DashboardModel): void => {
   const app = document.getElementById('app');
   if (!app) return;
+  if (model.alerts.length > 0)
+    recentAlerts = [...model.alerts, ...recentAlerts].slice(0, MAX_ALERTS);
+
+  const root = el('div');
+  if (recentAlerts.length > 0) root.append(alertsStrip(recentAlerts));
   const cards = el('div', 'cards');
   cards.append(
     fuelCard(model.fuel),
@@ -174,7 +194,8 @@ const render = (model: DashboardModel): void => {
     timingCard(model.timing),
     sessionCard(model.session),
   );
-  app.replaceChildren(cards);
+  root.append(cards);
+  app.replaceChildren(root);
   const meta = document.getElementById('meta');
   if (meta) meta.textContent = `snapshot #${model.seq} · t=${model.elapsedS.toFixed(0)} s`;
 };

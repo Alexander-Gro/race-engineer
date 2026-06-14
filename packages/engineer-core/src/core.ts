@@ -1,9 +1,13 @@
 import {
+  EventDetector,
   runPipeline,
+  type EngineerEvent,
+  type EventRule,
   type GameAdapter,
   type Normalizer,
   type RaceState,
 } from '@race-engineer/core';
+import { defaultEventRules } from './event-rules';
 import type { EngineerSnapshot, SnapshotTransport } from './ipc';
 import { StrategyEngine } from './strategy';
 import { intervalForHz, Throttle } from './throttle';
@@ -27,6 +31,8 @@ export interface EngineerCoreOptions<TFrame> {
   snapshotHz?: number;
   /** Torn-read guard, forwarded to the pipeline (docs/03 §Reading correctly). */
   isFrameStable?: (frame: TFrame) => boolean;
+  /** Event Detector rules. Default {@link defaultEventRules}; pass `[]` to disable detection. */
+  eventRules?: readonly EventRule[];
 }
 
 const DEFAULT_SNAPSHOT_HZ = 12;
@@ -34,10 +40,14 @@ const DEFAULT_SNAPSHOT_HZ = 12;
 export class EngineerCore<TFrame> {
   readonly #options: EngineerCoreOptions<TFrame>;
   readonly #strategy = new StrategyEngine();
+  readonly #detector: EventDetector;
+  /** Events fired since the last emitted snapshot (drained on emit). */
+  #pendingEvents: EngineerEvent[] = [];
   #seq = 0;
 
   constructor(options: EngineerCoreOptions<TFrame>) {
     this.#options = options;
+    this.#detector = new EventDetector(options.eventRules ?? defaultEventRules());
   }
 
   /** Snapshots emitted so far. */
@@ -69,7 +79,11 @@ export class EngineerCore<TFrame> {
       isFrameStable,
       onState: (state) => {
         tail.state = state;
-        this.#strategy.observe(state); // accumulate every tick so a lap boundary is never missed
+        // Run per tick: strategy needs every lap boundary; the detector's cooldown/dedupe is
+        // measured on the full-rate clock. Events buffer until the next throttled snapshot.
+        this.#strategy.observe(state);
+        const events = this.#detector.process(state);
+        if (events.length > 0) this.#pendingEvents.push(...events);
         if (throttle.accept(state)) {
           this.#emit(state);
           tail.lastSentMs = state.monotonicMs;
@@ -87,11 +101,14 @@ export class EngineerCore<TFrame> {
   }
 
   #emit(state: RaceState): void {
+    const events = this.#pendingEvents;
+    this.#pendingEvents = [];
     const snapshot: EngineerSnapshot = {
       seq: this.#seq,
       monotonicMs: state.monotonicMs,
       raceState: state,
       strategy: this.#strategy.summary(state),
+      ...(events.length > 0 ? { events } : {}),
     };
     this.#seq += 1;
     this.#options.transport(snapshot);
