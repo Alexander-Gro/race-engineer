@@ -22,6 +22,24 @@ in a small, reviewable, green-tested change.
   bring-your-own-key, added behind the same interface later. Never commit a key or add a
   central server. See [15-COST-AND-FREE-OPERATION.md](15-COST-AND-FREE-OPERATION.md).
 
+## Build progress
+
+> Living status for session handoff. A fresh chat (no prior context) can resume by reading
+> this section, then running `/build-task` with no argument — which picks the lowest-numbered
+> unblocked task. Keep it updated as tasks land; cross-check against `git log` (commits are
+> tagged with task IDs, e.g. `feat: T3.2 …`).
+
+- **Done:** T0.1–T0.7 (M0 foundations: repo, monorepo, canonical schema, sim-replay +
+  synthetic source, pipeline/Normalizer + `inspect` CLI, CI, OSS/Apache-2.0 hygiene),
+  T1.1 (S1 raw shared-memory dump — **live-confirmed on the rig 2026-06-14**; see
+  [03-LMU-INTEGRATION](03-LMU-INTEGRATION.md) §"S1 — live confirmation"), T3.1 (fuel model),
+  T3.2 (event detector core + framework).
+- **Next up — Track A (offline, no game needed):** T3.3 (persistence + learning priors) or
+  T3.4 (spotter geometry) → then M5 (AI radio loop) toward the MVP gate.
+- **Track B (needs the Windows rig + LMU):** T1.2–T1.5 (REST probe, aids/setup reads, record
+  a real session). Optional next rig step: a moving, multi-class session to confirm dynamic
+  fields + the real Hypercar/LMP2/GTE class strings for T2.3.
+
 ## The central ordering idea
 
 ```
