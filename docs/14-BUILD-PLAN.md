@@ -33,9 +33,10 @@ in a small, reviewable, green-tested change.
   synthetic source, pipeline/Normalizer + `inspect` CLI, CI, OSS/Apache-2.0 hygiene),
   T1.1 (S1 raw shared-memory dump — **live-confirmed on the rig 2026-06-14**; see
   [03-LMU-INTEGRATION](03-LMU-INTEGRATION.md) §"S1 — live confirmation"), T3.1 (fuel model),
-  T3.2 (event detector core + framework).
-- **Next up — Track A (offline, no game needed):** T3.3 (persistence + learning priors) or
-  T3.4 (spotter geometry) → then M5 (AI radio loop) toward the MVP gate.
+  T3.2 (event detector core + framework), T3.3 (persistence: SQLite `sessions`/`laps`/
+  `fuel_models` via better-sqlite3 + learning-priors layer that seeds the fuel model).
+- **Next up — Track A (offline, no game needed):** T3.4 (spotter geometry — works on
+  synthetic positions) → then M5 (AI radio loop) toward the MVP gate.
 - **Track B (needs the Windows rig + LMU):** T1.2–T1.5 (REST probe, aids/setup reads, record
   a real session). Optional next rig step: a moving, multi-class session to confirm dynamic
   fields + the real Hypercar/LMP2/GTE class strings for T2.3.
