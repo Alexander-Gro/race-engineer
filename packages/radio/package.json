@@ -1,0 +1,21 @@
+{
+  "name": "@race-engineer/radio",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@race-engineer/ai": "workspace:*",
+    "@race-engineer/core": "workspace:*",
+    "@race-engineer/voice": "workspace:*"
+  },
+  "devDependencies": {
+    "@race-engineer/input": "workspace:*",
+    "@race-engineer/strategy": "workspace:*"
+  }
+}

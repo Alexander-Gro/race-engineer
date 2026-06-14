@@ -54,13 +54,19 @@ in a small, reviewable, green-tested change.
   **M2 LMU adapter (offline halves)** — T2.1 (`LmuAdapter` behind `GameAdapter`), T2.3
   (`LmuNormalizer`: raw rF2 → canonical `RaceState`, class strings `Hyper`/`LMP2`/`GT3` from
   the live rig capture), T2.4 (`Recorder` + `pnpm record`), T2.2 (read-only GET-only
-  `LmuRestClient`). All four merged to `main` (177 tests green together).
-- **Next up — Track A (offline, no game needed):** **T5.2** (reactive radio loop end-to-end)
-  — now unblocked + everything merged: wire PTT→STT→AI(tools)→TTS from the pieces above;
-  scripted-transcript tests on fixtures (live mic is human-assisted). Then **T5.3**
-  (hallucination guard + latency) and **T5.4** (proactive fuel-low + Tier-0 spotter audio).
-  Also available: **T4.6** (local-model manager), **T5.1b** (cloud BYO-key providers),
-  **T6.1** (Electron shell).
+  `LmuRestClient`). All four merged to `main` (177 tests green together),
+  T5.2 (reactive radio loop end-to-end — new **`@race-engineer/radio`** package: `ReactiveRadioLoop`
+  wires PTT→STT→AI(read-only tools)→sentence-streamed TTS, plus a `speak()` bridge in `voice` that
+  turns a reply into per-sentence clips on the `VoicePlayer` queue at CHATTER priority. Barge-in on
+  PTT, rolling dialogue history, and a supersede guard so a stale answer never talks over a re-keyed
+  question. Scripted-transcript tests answer "how's my fuel / last lap / who's behind me" from
+  fixtures — including one driven through an `InputReader` mock-wheel PTT edge; live mic/STT/TTS + a
+  mapped wheel button are the **human-assisted** half. 190 tests green).
+- **Next up — Track A (offline, no game needed):** **T5.3** (hallucination guard + latency harness)
+  — assert every spoken number came from a tool result that turn (the loop's `RadioTurnResult.toolCalls`
+  already carries the provenance) and time first-audio per tier. Then **T5.4** (proactive fuel-low +
+  Tier-0 spotter audio). Also available: **T4.6** (local-model manager), **T5.1b** (cloud BYO-key
+  providers), **T6.1** (Electron shell).
 - **Track B (needs the Windows rig + LMU):** **T1.5** — `pnpm record` a real stint → commit a
   trimmed fixture (recorder ready). **T2.2 live** — REST probe (Task B) → finish REST→`RaceState`
   mapping + settle S3 aids. **T1.3/T1.4** aids/setup reads. Confirm the spotter `lateralPos`
@@ -321,10 +327,16 @@ from OS secure storage, never embedded.
 Verify: provider-conformance tests (mocked transport); a live smoke test. _Human:_ provider key.
 Context: [06-AI-ENGINEER](06-AI-ENGINEER.md), [15-COST-AND-FREE-OPERATION](15-COST-AND-FREE-OPERATION.md).
 
-**T5.2 — Reactive radio loop end-to-end** · _Claude Code (live verify human-assisted)_ · deps: T5.1, T4.3
-Build: PTT → STT → Claude(tools) → streaming TTS; "how's my fuel / last lap / who's behind me".
-Verify: scripted-transcript tests (no mic) give correct spoken answers from fixtures; live
-push-to-talk works (human).
+**T5.2 — Reactive radio loop end-to-end** · _Claude Code (live verify human-assisted)_ · deps: T5.1, T4.3 · **done (offline half)**
+Build: new `@race-engineer/radio` package — `ReactiveRadioLoop` wires PTT → STT(`RadioCapture`) →
+AI(`runRadioTurn`, read-only tools) → sentence-streamed TTS; a `speak()` bridge in `voice` splits a
+reply into per-sentence clips on the `VoicePlayer` queue (CHATTER). Provider-agnostic and key-less
+by default; barge-in on PTT, rolling dialogue history, supersede guard. **Read-only/advisory — no
+path to the game.**
+Verify: ✅ scripted-transcript tests (no mic) answer "how's my fuel / last lap / who's behind me"
+from fixtures (spoken number == the tool's number), an `InputReader` mock-wheel PTT edge drives it
+end-to-end, plus barge-in / empty-transcript / history / supersede tests (13 tests).
+_Human:_ real mic + STT/TTS and a mapped wheel button — confirm live push-to-talk works on the rig.
 
 **T5.3 — Hallucination guard + latency harness** · _Claude Code_ · deps: T5.2
 Build: automated check that every spoken number came from a tool result that turn; end-to-end

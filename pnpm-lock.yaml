@@ -111,6 +111,25 @@ importers:
         specifier: ^22.10.5
         version: 22.19.21
 
+  packages/radio:
+    dependencies:
+      '@race-engineer/ai':
+        specifier: workspace:*
+        version: link:../ai
+      '@race-engineer/core':
+        specifier: workspace:*
+        version: link:../core
+      '@race-engineer/voice':
+        specifier: workspace:*
+        version: link:../voice
+    devDependencies:
+      '@race-engineer/input':
+        specifier: workspace:*
+        version: link:../input
+      '@race-engineer/strategy':
+        specifier: workspace:*
+        version: link:../strategy
+
   packages/strategy:
     dependencies:
       '@race-engineer/core':

@@ -20,6 +20,8 @@ export { VoicePriority } from './types';
 export { VoicePlayer } from './player';
 export type { VoicePlayerOptions, VoicePlayerEvents, EnqueueOptions } from './player';
 export { TIER0_PHRASES, prerenderTier0 } from './prerender';
+export { speak, splitSentences, synthesizeClip } from './speak';
+export type { SpeakOptions } from './speak';
 export { RadioCapture } from './capture';
 export type { RadioCaptureOptions, RadioCaptureEvents } from './capture';
 export { FakeTtsProvider } from './providers/fake-tts';
