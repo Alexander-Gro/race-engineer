@@ -6,3 +6,4 @@ export * from './synthetic';
 export * from './replay';
 export * from './replay-file';
 export * from './adapter';
+export * from './recorder';

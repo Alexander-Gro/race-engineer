@@ -150,10 +150,11 @@ Build: locate the setup directory; parse a setup file (read-only) into `SetupPar
 Verify: parsed values match the in-game garage. Never write.
 Output: location + format notes → doc 03.
 
-**T1.5 — Record a real session** · _human-assisted_ · deps: T1.1
-Build: dump a full short stint of raw frames to a replay file; commit a trimmed version as
-a test fixture.
-Verify: `pnpm replay <file>` runs it through the M0 pipeline.
+**T1.5 — Record a real session** · _human-assisted_ · deps: T1.1 → **tooling ready (T2.4)**
+Build: dump a full short stint to a replay file; commit a trimmed version as a test fixture.
+The recorder now exists — on the rig run `pnpm record [--frames N] [--hz H] [--out file]`
+(Adapter → Normalizer → Recorder → canonical-`RaceState` JSONL).
+Verify: `pnpm replay <file>` runs it through the M0 pipeline. _Human:_ capture on the rig + commit a trimmed fixture.
 
 ---
 
@@ -181,9 +182,13 @@ engine.map, inputs, worldPos, car.name, sectorYellows; brake-bias front/rear fla
 Verify: ✅ unit tests assert the mapping + **schema-validate the output** (`RaceStateSchema`);
 multi-class grid mirroring the live rig capture (6 tests).
 
-**T2.4 — Recorder (`pnpm record`)** · _Claude Code_ · deps: T2.1
-Build: capture live frames to replay files for fixtures/regression.
-Verify: record → replay round-trips identically.
+**T2.4 — Recorder (`pnpm record`)** · _Claude Code_ · deps: T2.1 · **done**
+Build: game-agnostic `Recorder` (sim-replay) captures the canonical `RaceState` stream and
+saves the JSON-Lines replay format (`maxFrames` cap, `truncated` flag — no silent loss);
+`pnpm record` CLI (`tools/record.ts`) wires LmuAdapter → Normalizer → Recorder, fail-fast if
+LMU isn't running. Reuses `serializeReplay`, so output replays via `pnpm replay`.
+Verify: ✅ record → serialize/save → `parseReplay`/`readReplayFile` round-trips identically +
+cap/truncation (3 tests). _Human:_ live capture on the rig.
 
 ---
 
