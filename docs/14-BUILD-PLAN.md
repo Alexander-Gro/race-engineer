@@ -98,10 +98,20 @@ in a small, reviewable, green-tested change.
   transit penalty from one measured pit pass = transit − service − on-track-equivalent, clamped ≥0).
   Pure/deterministic, depends on `core` only; feeds the stint planner (T7.3 — one fewer stop saves one
   `totalPitLossS`, weighed vs `degLossOverStintS`). Worked-example (47 s / 30 s / 62 s stops) + property
-  tests (refuel monotone in fuel; total ≥ pit-lane loss and ≥ service; no NaN/∞). 293 green).
+  tests (refuel monotone in fuel; total ≥ pit-lane loss and ≥ service; no NaN/∞). 293 green),
+  T7.3 (stint planner in `strategy` `stint.ts` — `planStints` composes the fuel (T3.1) + tyre-deg
+  (T7.1) + pit-loss (T7.2) models into a schema-valid `StintPlan`: bounds max stint length by fuel
+  (`maxStintLapsByFuel = floor((tank − reserve)/perLap)`) and tyre life, takes the fewest covering
+  stints (≥ `mandatoryStops + 1`), and — **only when both a pit-loss and a confident deg rate are
+  known** — `optimizeStintCount` checks whether extra stops save more deg than they cost (docs/05 §4
+  "prefer fewer stops unless deg cost > pit-loss savings"), else prefers fewer stops; `distributeLaps`
+  balances laps across stints. Emits stint boundaries, recommended fuel loads, `expectedDegradation01`,
+  and per-stop `[earliest, latest]` pit windows. Worked-example (fuel-bound 2×15, tyre-bound 4×10,
+  trade-off → 3 stints, mandatory-stop) + property (more tank ⇒ not more stints; contiguous/cover-exact;
+  schema-valid; no NaN/∞) tests. 312 green).
 - **Next up — Track A:** continue **M7** offline strategy depth (the main remaining pure-logic body):
-  **T7.3** (stint planner, consumes the fuel + tire-deg + pit-loss models), then **T7.4**
-  (undercut/overcut). The **GUI/runtime** tasks (**T6.2** dashboard, **T4.5** mic/audio)
+  **T7.4** (undercut/overcut: pit-now-vs-later vs a rival, docs/05 §5), then **T7.5** (multi-class
+  traffic forecasting). The **GUI/runtime** tasks (**T6.2** dashboard, **T4.5** mic/audio)
   need a machine with a screen + the Electron renderer toolchain. The 🚦 MVP gate needs the **live
   half** (Track B) + working voice I/O (T10.1 or cloud STT/TTS).
 - **Track B (needs the Windows rig + LMU):** **T1.5** — `pnpm record` a real stint → commit a
@@ -478,7 +488,7 @@ Verify: ✅ worked linear-fit + noisy-fit + prior-blend + silent-case unit tests
 (confidence monotonic in sample count ∈ [0,1]; steeper deg ⇒ slower late-stint pace; no NaN/∞)
 (13 tests; 276 green). Replay-eval on recorded stints lands with T1.5/T7.7.
 
-Remaining order: ~~T7.2 pit-loss model~~ (done) → T7.3 stint planner → T7.4
+Remaining order: ~~T7.2 pit-loss model~~ (done) → ~~T7.3 stint planner~~ (done) → T7.4
 undercut/overcut → T7.5 multi-class traffic forecasting → T7.6 FCY/SC opportunism → T7.7
 learning layer (priors per car/track/conditions) → T7.8 strategy UI + rival tracker → T7.9
 proactive strategy call-outs. Each pure-math task is unit-tested with doc-05 examples and
