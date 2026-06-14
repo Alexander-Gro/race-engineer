@@ -52,6 +52,8 @@ const printPlayerTelemetry = (tel: RawVehicleTelemetry): void => {
   }
 };
 
+const pad = (s: string | number, n: number): string => String(s).padEnd(n);
+
 const printFrame = (telemetry: TelemetryFrame | null, scoring: ScoringFrame | null): void => {
   if (!scoring) {
     console.log('  (no scoring frame this tick)');
@@ -60,18 +62,28 @@ const printFrame = (telemetry: TelemetryFrame | null, scoring: ScoringFrame | nu
   const { info } = scoring;
   console.log(
     `# ${info.trackName || '(track?)'}  ET=${info.currentET.toFixed(0)}s  cars=${info.numVehicles}` +
-      `  trackLen=${info.trackLengthM.toFixed(0)}m  air=${info.ambientTempC.toFixed(0)}°C track=${info.trackTempC.toFixed(0)}°C`,
+      `  trackLen=${info.trackLengthM.toFixed(0)}m  air=${info.ambientTempC.toFixed(0)}°C track=${info.trackTempC.toFixed(0)}°C` +
+      `  phase=${info.gamePhase} yellow=${info.yellowFlagState} sectorFlags=[${info.sectorFlag.join(',')}]`,
   );
+
+  // All vehicles, by position — captures the multi-class strings (T2.3), gaps, pit/flag
+  // enums, and per-car path-lateral (confirms the spotter sign assumed in T3.4).
+  const byPlace = [...scoring.vehicles].sort((a, b) => a.place - b.place);
+  for (const v of byPlace) {
+    console.log(
+      `  P${pad(v.place, 3)} [${pad(v.vehicleClass || '?', 10)}] ${pad(v.driverName || '?', 18)}` +
+        ` lap=${pad(v.totalLaps, 3)} dist=${pad(v.lapDistM.toFixed(0), 6)}m lat=${pad(v.pathLateral.toFixed(2), 6)}` +
+        ` gapLdr=${pad(v.timeBehindLeader.toFixed(1), 6)}s gapNext=${pad(v.timeBehindNext.toFixed(1), 6)}s` +
+        ` pit=${v.inPits ? 'Y' : 'N'}(${v.pitState}) uY=${v.underYellow ? 'Y' : 'N'} flag=${v.flag}` +
+        ` last=${v.lastLapTime.toFixed(3)} best=${v.bestLapTime.toFixed(3)}${v.isPlayer ? '  <= YOU' : ''}`,
+    );
+  }
+
   const player = scoring.vehicles.find((v) => v.isPlayer);
   if (!player) {
     console.log('  (no player vehicle in scoring yet)');
     return;
   }
-  console.log(
-    `  P${player.place} ${player.driverName || '(you)'} [${player.vehicleClass || '?'}]` +
-      `  lap=${player.totalLaps}  last=${player.lastLapTime.toFixed(3)}s best=${player.bestLapTime.toFixed(3)}s` +
-      `  pit=${player.inPits ? 'Y' : 'N'} stops=${player.numPitstops}`,
-  );
   const tel = telemetry?.vehicles.find((v) => v.id === player.id);
   if (tel) {
     printPlayerTelemetry(tel);
