@@ -139,18 +139,25 @@ in a small, reviewable, green-tested change.
   from T7.2. Reconciled the docs/05 §7 `fci_opportunity` typo → `fcy_opportunity` (the schema name).
   Edge/sustain/re-arm/in-pit event tests + worked-example + property (saved∈[0,green] decreasing in
   caution pace; confidence∈[0,1]; no NaN/∞) decision tests. 356 green).
-- **Next up — Track A:** continue **M7** offline strategy depth (the main remaining pure-logic body):
-  **T7.7** (learning layer: priors per car/track/conditions — persist `fuel_models`/`tire_models`,
-  seed the fuel/tyre fits), then **T7.8** (strategy UI + rival tracker). The **GUI/runtime** tasks
-  (**T6.2** dashboard, **T4.5** mic/audio)
-  need a machine with a screen + the Electron renderer toolchain. The 🚦 MVP gate needs the **live
-  half** (Track B) + working voice I/O (T10.1 or cloud STT/TTS).
-- **Track B (needs the Windows rig + LMU):** **T1.5** — `pnpm record` a real stint → commit a
-  trimmed fixture (recorder ready). **T2.2 live** — REST probe (Task B) → finish REST→`RaceState`
-  mapping + settle S3 aids. **T1.3/T1.4** aids/setup reads. Confirm the spotter `lateralPos`
-  sign + brake-bias front/rear against the HUD (docs/03). **Full actionable list:** see the
-  **Rig verification backlog (consolidated)** in [03-LMU-INTEGRATION.md](03-LMU-INTEGRATION.md)
-  — signs/conventions (gap sign, lateral, brake-bias, closing-rate), FCY/pit/sector enums, and the
+- **Next up — Track A (PIVOT 2026-06-14 → "launchable app first"):** build the runtime/shell so the
+  **app itself is the on-rig test harness** (decision: defer all rig testing until the app is
+  launchable — no more hand-running dumps in PowerShell). Key enabler: Electron + React + mic
+  (`getUserMedia`) + audio + cloud LLM/STT/TTS **all run on macOS**, so the whole UX (talk to it, hear
+  it answer, watch the dashboard) is buildable *and verifiable on the Mac* against the **synthetic
+  sim-replay adapter** — the rig only swaps synthetic→live-LMU adapter + keyboard→wheel PTT.
+  Order: finish the **T6.1** Electron boot (`pnpm add -D electron` + Vite renderer, `dev:electron`) →
+  **T6.2** dashboard → wire the reactive radio loop + proactive router into the shell → **T4.5** mic/
+  audio I/O → **T6.3** settings/secrets + PTT-mapping UI → **T10.1** real STT/TTS (or cloud BYO-key).
+  M7.7–M7.9 / M8 / M9 offline-strategy depth are paused until the app is launchable. (Also still
+  pending offline glue: wire the M7 strategy models into the AI tool surface — `get_stint_plan`,
+  `evaluate_undercut`, `project_pit_window` — so the engineer can actually call them.)
+- **Track B (needs the Windows rig + LMU) — DEFERRED until the app is launchable (2026-06-14):** by
+  decision, hold all rig testing until the Electron app can drive it (capture/validate via the app,
+  not PowerShell). When it resumes: **T1.5** `pnpm record` a real stint → trimmed fixture; **T2.2
+  live** REST probe → finish REST→`RaceState` mapping + settle S3 aids; **T1.3/T1.4** aids/setup reads;
+  confirm the gap/`lateralPos`/closing signs + brake-bias front/rear + FCY/pit enums. **Full
+  actionable list:** the **Rig verification backlog (consolidated)** in
+  [03-LMU-INTEGRATION.md](03-LMU-INTEGRATION.md) — signs/conventions, FCY/pit/sector enums, and the
   **strategy-model calibration inputs** (pit-loss, refuel rate, Virtual Energy, tyre life, mandatory
   stops) the T7.x models need real values for.
 
