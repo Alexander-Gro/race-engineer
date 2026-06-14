@@ -221,3 +221,37 @@ describe('properties', () => {
     }
   });
 });
+
+describe('degenerate inputs (regression)', () => {
+  it('never recommends a pit window after the chequered flag, even with a huge tank', () => {
+    // Tank good for ~199 laps over a 30-lap race: latest stop must stay inside the race.
+    const plan = planStints({
+      raceLaps: 30,
+      tankCapacityLiters: 200,
+      perLapFuelLiters: 1,
+      mandatoryStops: 1,
+    })!;
+    const raceEnd = plan.stints[plan.stints.length - 1]!.endLap; // 30
+    for (const w of plan.pitWindows) {
+      expect(w.latestLap).toBeLessThanOrEqual(raceEnd);
+      expect(w.earliestLap).toBeLessThanOrEqual(w.latestLap);
+    }
+  });
+
+  it('caps stints at raceLaps so more mandatory stops than laps cannot make a zero-lap stint', () => {
+    // 4 mandatory stops (→ 5 stints) is infeasible in 3 laps; cap at 3 one-lap stints.
+    const plan = planStints({
+      raceLaps: 3,
+      tankCapacityLiters: 200,
+      perLapFuelLiters: 1,
+      maxStintLapsByTire: 20,
+      mandatoryStops: 4,
+    })!;
+    expect(plan.stints.length).toBeLessThanOrEqual(3);
+    expect(plan.stints.every((s) => s.endLap - s.startLap >= 1)).toBe(true);
+    expect(() => StintPlanSchema.parse(plan)).not.toThrow();
+    for (const w of plan.pitWindows) {
+      expect(w.earliestLap).toBeLessThanOrEqual(w.latestLap);
+    }
+  });
+});

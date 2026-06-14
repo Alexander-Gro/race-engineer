@@ -84,6 +84,15 @@ export interface StintCountChoice {
   pitCostS: number;
   /** Comparable race time = degCost + pitCost (s). Green base lap time is constant across plans. */
   totalComparableS: number;
+  // Resolved constraints (exposed so `planStints` reuses them rather than recomputing):
+  /** Max stint laps by fuel. */
+  fuelCapLaps: number;
+  /** Max stint laps by tyre life (Infinity when unbounded). */
+  tireCapLaps: number;
+  /** `min(fuelCapLaps, tireCapLaps)` — the binding per-stint lap cap. */
+  maxStintLaps: number;
+  /** Fewest stints fuel+tyres alone require: `ceil(raceLaps / maxStintLaps)` (ignores mandatory stops). */
+  coverMinStints: number;
 }
 
 const degCostForSizes = (
@@ -101,16 +110,20 @@ export const optimizeStintCount = (input: StintPlannerInput): StintCountChoice |
   if (!(input.perLapFuelLiters > 0) || raceLaps < 1) return null;
 
   const reserve = input.reserveLiters ?? input.perLapFuelLiters;
-  const fuelCap = maxStintLapsByFuel(input.tankCapacityLiters, input.perLapFuelLiters, reserve);
-  const tireCap =
+  const fuelCapLaps = maxStintLapsByFuel(input.tankCapacityLiters, input.perLapFuelLiters, reserve);
+  const tireCapLaps =
     input.maxStintLapsByTire != null && input.maxStintLapsByTire > 0
       ? Math.floor(input.maxStintLapsByTire)
       : Infinity;
-  const maxStint = Math.min(fuelCap, tireCap);
-  if (!(maxStint >= 1)) return null; // can't complete a single lap within the fuel/tyre limit
+  const maxStintLaps = Math.min(fuelCapLaps, tireCapLaps);
+  if (!(maxStintLaps >= 1)) return null; // can't complete a single lap within the fuel/tyre limit
 
   const mandatoryStops = Math.max(0, Math.floor(input.mandatoryStops ?? 0));
-  const minStints = Math.max(Math.ceil(raceLaps / maxStint), mandatoryStops + 1);
+  const coverMinStints = Math.ceil(raceLaps / maxStintLaps);
+  // Never exceed raceLaps stints — each stint needs ≥1 lap, so a mandatory-stop count beyond what the
+  // race length allows is capped here (no zero-lap stints with broken pit windows).
+  const minStints = Math.min(raceLaps, Math.max(coverMinStints, mandatoryStops + 1));
+  const caps = { fuelCapLaps, tireCapLaps, maxStintLaps, coverMinStints };
 
   const pitLossS = input.pitLossS != null && input.pitLossS > 0 ? input.pitLossS : null;
   const canTradeoff =
@@ -124,14 +137,15 @@ export const optimizeStintCount = (input: StintPlannerInput): StintCountChoice |
     const sizes = distributeLaps(raceLaps, numStints);
     const degCostS = degCostForSizes(sizes, input.deg);
     const pitCostS = (numStints - 1) * (pitLossS ?? 0);
-    return { numStints, sizes, degCostS, pitCostS, totalComparableS: degCostS + pitCostS };
+    return { numStints, sizes, degCostS, pitCostS, totalComparableS: degCostS + pitCostS, ...caps };
   };
 
   if (!canTradeoff) return evaluate(minStints); // prefer fewer stops when the trade-off is unknown
 
   const maxExtra = Math.max(0, Math.floor(input.maxExtraStops ?? DEFAULT_MAX_EXTRA_STOPS));
   let best = evaluate(minStints);
-  for (let m = minStints + 1; m <= minStints + maxExtra; m += 1) {
+  // Extra stops never push past raceLaps stints (no zero-lap stints from the trade-off either).
+  for (let m = minStints + 1; m <= Math.min(raceLaps, minStints + maxExtra); m += 1) {
     const candidate = evaluate(m);
     // Strict improvement only ⇒ ties keep the *fewer* stops (we iterate ascending).
     if (candidate.totalComparableS < best.totalComparableS) best = candidate;
@@ -145,7 +159,8 @@ export const optimizeStintCount = (input: StintPlannerInput): StintCountChoice |
  * recommended starting fill (`laps·perLap + reserve`, capped at the tank), for later stints the
  * top-up to cover that stint (`laps·perLap`), assuming each stint is run to length and arrives at
  * the stop with ~reserve remaining. `pitWindows` give each stop a `[earliest, latest]` lap range:
- * latest = the fuel/tyre hard cap, earliest = as early as the *next* stint can still absorb.
+ * latest = the fuel/tyre hard cap, bounded so the remaining stints still fit before the flag;
+ * earliest = as early as the *next* stint can still absorb.
  */
 export const planStints = (input: StintPlannerInput): StintPlan | null => {
   const choice = optimizeStintCount(input);
@@ -156,13 +171,7 @@ export const planStints = (input: StintPlannerInput): StintPlan | null => {
   const reserve = input.reserveLiters ?? perLap;
   const tank = input.tankCapacityLiters;
   const tireCompound = input.tireCompound ?? null;
-
-  const fuelCap = maxStintLapsByFuel(tank, perLap, reserve);
-  const tireCapLaps =
-    input.maxStintLapsByTire != null && input.maxStintLapsByTire > 0
-      ? Math.floor(input.maxStintLapsByTire)
-      : Infinity;
-  const maxStint = Math.min(fuelCap, tireCapLaps);
+  const { fuelCapLaps, tireCapLaps, maxStintLaps, coverMinStints } = choice;
 
   let lap = startLap;
   const stints = choice.sizes.map((laps, index) => {
@@ -185,8 +194,9 @@ export const planStints = (input: StintPlannerInput): StintPlan | null => {
   });
 
   // One pit window per stop (between consecutive stints).
-  const fuelLimited = fuelCap <= tireCapLaps;
-  const tyreLimited = tireCapLaps <= fuelCap;
+  const raceEndLap = stints.length > 0 ? stints[stints.length - 1]!.endLap : startLap;
+  const fuelLimited = fuelCapLaps <= tireCapLaps;
+  const tyreLimited = tireCapLaps <= fuelCapLaps;
   const baseReason =
     fuelLimited && tyreLimited
       ? 'fuel and tyre-limited'
@@ -194,12 +204,15 @@ export const planStints = (input: StintPlannerInput): StintPlan | null => {
         ? 'fuel-limited'
         : 'tyre-limited';
   const mandatoryStops = Math.max(0, Math.floor(input.mandatoryStops ?? 0));
-  const mandatoryDriven = choice.numStints > Math.ceil(Math.floor(input.raceLaps) / maxStint);
+  // Mandatory-driven iff the rule needs more stops than fuel/tyres alone (not the deg/pit trade-off).
+  const mandatoryDriven = mandatoryStops + 1 > coverMinStints;
 
   const pitWindows = stints.slice(0, -1).map((stint, k) => {
     const nextLaps = choice.sizes[k + 1] ?? 0;
-    const latestLap = stint.startLap + maxStint; // run this stint to the fuel/tyre cap
-    const earliestLap = Math.max(stint.startLap + 1, stint.endLap - (maxStint - nextLaps));
+    // Run this stint to the fuel/tyre cap, but leave ≥1 lap for each remaining stint before the flag.
+    const remainingStintsAfter = stints.length - 1 - k;
+    const latestLap = Math.min(stint.startLap + maxStintLaps, raceEndLap - remainingStintsAfter);
+    const earliestLap = Math.max(stint.startLap + 1, stint.endLap - (maxStintLaps - nextLaps));
     const reason = mandatoryDriven ? `${baseReason} (mandatory stop)` : baseReason;
     return { earliestLap, latestLap, reason };
   });
