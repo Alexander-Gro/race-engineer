@@ -101,6 +101,30 @@ describe('ClaudeProvider', () => {
     });
   });
 
+  it('drops an empty assistant turn (no text, no tool calls) — Anthropic rejects empty content', async () => {
+    let captured: Anthropic.MessageCreateParams | null = null;
+    const client = fakeClient(
+      () => ({ content: [{ type: 'text', text: 'ok' }] }),
+      (p) => (captured = p),
+    );
+    // A prior refusal left an empty assistant answer in the rolling history; replaying it must
+    // not send `content: ''` (a 400). The empty turn is dropped; the rest is preserved.
+    await new ClaudeProvider({ client }).complete({
+      system: 's',
+      messages: [
+        { role: 'user', content: 'q1' },
+        { role: 'assistant', content: '' },
+        { role: 'user', content: 'q2' },
+      ],
+      tools: [],
+    });
+    expect(captured!.messages).toEqual([
+      { role: 'user', content: 'q1' },
+      { role: 'user', content: 'q2' },
+    ]);
+    for (const m of captured!.messages) expect(m.content).not.toBe('');
+  });
+
   it('drives a full radio turn through the orchestrator (tool → answer)', async () => {
     const ctx: RaceContext = {
       raceState: multiClassTrafficState,

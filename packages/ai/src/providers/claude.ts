@@ -34,15 +34,25 @@ export interface ClaudeOptions {
 const DEFAULT_MODEL = 'claude-haiku-4-5';
 const DEFAULT_MAX_TOKENS = 1024;
 
-/** Our neutral {@link ChatMessage}s → Anthropic Messages (tool_use / tool_result content blocks). */
-const toAnthropicMessages = (messages: readonly ChatMessage[]): Anthropic.MessageParam[] =>
-  messages.map((m): Anthropic.MessageParam => {
-    if (m.role === 'user') return { role: 'user', content: m.content };
+/**
+ * Our neutral {@link ChatMessage}s → Anthropic Messages (tool_use / tool_result content blocks).
+ * An assistant turn with neither text nor tool calls is **dropped**: it carries nothing, and the
+ * Anthropic API rejects empty assistant content (400). This happens when a prior turn produced no
+ * text — e.g. a refusal — and the empty answer was kept in the rolling dialogue history.
+ */
+const toAnthropicMessages = (messages: readonly ChatMessage[]): Anthropic.MessageParam[] => {
+  const out: Anthropic.MessageParam[] = [];
+  for (const m of messages) {
+    if (m.role === 'user') {
+      out.push({ role: 'user', content: m.content });
+      continue;
+    }
     if (m.role === 'tool') {
-      return {
+      out.push({
         role: 'user',
         content: [{ type: 'tool_result', tool_use_id: m.toolCallId, content: m.content }],
-      };
+      });
+      continue;
     }
     // assistant: optional text + any tool-call requests it made.
     const blocks: Anthropic.ContentBlockParam[] = [];
@@ -50,8 +60,10 @@ const toAnthropicMessages = (messages: readonly ChatMessage[]): Anthropic.Messag
     for (const tc of m.toolCalls ?? []) {
       blocks.push({ type: 'tool_use', id: tc.id, name: tc.name, input: tc.args });
     }
-    return { role: 'assistant', content: blocks.length > 0 ? blocks : m.content };
-  });
+    if (blocks.length > 0) out.push({ role: 'assistant', content: blocks });
+  }
+  return out;
+};
 
 const toAnthropicTools = (tools: readonly ToolSpec[]): Anthropic.Tool[] =>
   tools.map((t) => ({
