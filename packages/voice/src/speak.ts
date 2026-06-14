@@ -52,6 +52,8 @@ export interface SpeakOptions {
   priority?: number;
   /** Abort before enqueuing the next sentence (e.g. the driver keyed PTT again — barge-in). */
   shouldStop?: () => boolean;
+  /** Called once, when the first clip is enqueued — the "first audio" instant (latency harness). */
+  onFirstClip?: (clip: AudioClip) => void;
 }
 
 /**
@@ -66,6 +68,7 @@ export const speak = async (opts: SpeakOptions): Promise<AudioClip[]> => {
     const clip = await synthesizeClip(opts.tts, sentence, opts.voice);
     if (opts.shouldStop?.()) break;
     opts.player.enqueue(clip, priority);
+    if (spoken.length === 0) opts.onFirstClip?.(clip);
     spoken.push(clip);
   }
   return spoken;

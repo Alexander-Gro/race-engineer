@@ -1,6 +1,8 @@
 import {
+  checkSpokenNumbers,
   runRadioTurn,
   type ChatMessage,
+  type HallucinationReport,
   type LlmProvider,
   type Persona,
   type RaceContextProvider,
@@ -15,6 +17,7 @@ import {
   type VoiceId,
   type VoicePlayer,
 } from '@race-engineer/voice';
+import type { TurnLatency } from './latency';
 
 /**
  * The reactive radio loop (docs/06 §Reactive, docs/07 §PTT flow): push-to-talk wires
@@ -41,6 +44,10 @@ export interface ReactiveRadioLoopEvents {
   onSpoken?: (clips: AudioClip[], result: RadioTurnResult) => void;
   /** A turn was abandoned: `empty` (nothing said) or `superseded` (driver re-keyed PTT). */
   onSkipped?: (reason: 'empty' | 'superseded') => void;
+  /** Hallucination guard verdict for the spoken reply (docs/06 §Evaluation) — detection only. */
+  onHallucinationCheck?: (report: HallucinationReport, result: RadioTurnResult) => void;
+  /** Tier-2 first-audio latency for a voiced turn (docs/01 §Latency tiers). */
+  onLatency?: (latency: TurnLatency) => void;
   /** The LLM/STT/TTS chain threw; the loop stays alive for the next press. */
   onError?: (err: unknown) => void;
 }
@@ -61,15 +68,20 @@ export interface ReactiveRadioLoopOptions {
   tools?: readonly ToolDef[];
   /** Max prior exchanges (user+assistant pairs) kept as rolling dialogue history. Default 6. */
   historyLimit?: number;
+  /** Clock for the latency harness; defaults to `Date.now`. Injected in tests for determinism. */
+  now?: () => number;
   events?: ReactiveRadioLoopEvents;
 }
 
 const DEFAULT_HISTORY_LIMIT = 6;
+/** The reactive radio loop is the conversational path (docs/01 §Latency tiers). */
+const CONVERSATIONAL_TIER = 2;
 
 export class ReactiveRadioLoop {
   readonly #opts: ReactiveRadioLoopOptions;
   readonly #events: ReactiveRadioLoopEvents;
   readonly #historyLimit: number;
+  readonly #now: () => number;
   #history: ChatMessage[] = [];
   /** Bumped on every PTT-down; an in-flight turn aborts speaking if it's been superseded. */
   #generation = 0;
@@ -79,6 +91,7 @@ export class ReactiveRadioLoop {
     this.#opts = opts;
     this.#events = opts.events ?? {};
     this.#historyLimit = Math.max(0, opts.historyLimit ?? DEFAULT_HISTORY_LIMIT);
+    this.#now = opts.now ?? ((): number => Date.now());
   }
 
   /** Map an {@link InputReader} PTT edge straight in: `events: { onPtt: (d) => loop.onPtt(d) }`. */
@@ -114,6 +127,8 @@ export class ReactiveRadioLoop {
       this.#events.onSkipped?.('empty');
       return null;
     }
+    // Tier-2 latency starts when the final transcript is ready (docs/01 §Latency tiers).
+    const transcriptAtMs = this.#now();
     this.#events.onTranscript?.(text);
 
     try {
@@ -125,6 +140,7 @@ export class ReactiveRadioLoop {
         tools: this.#opts.tools,
         history: this.#history,
       });
+      const replyAtMs = this.#now();
 
       // Driver re-keyed PTT while we were thinking — don't talk over the new question.
       if (myGen !== this.#generation) {
@@ -133,15 +149,34 @@ export class ReactiveRadioLoop {
       }
 
       this.#events.onReply?.(result);
+      // Hallucination guard: flag any spoken number not traceable to a tool result (docs/06).
+      if (this.#events.onHallucinationCheck) {
+        this.#events.onHallucinationCheck(checkSpokenNumbers(result), result);
+      }
       this.#appendHistory(text, result.text);
+
+      let firstAudioAtMs: number | null = null;
       const clips = await speak({
         player: this.#opts.player,
         tts: this.#opts.tts,
         voice: this.#opts.voice,
         text: result.text,
         shouldStop: () => myGen !== this.#generation,
+        onFirstClip: () => {
+          firstAudioAtMs = this.#now();
+        },
       });
       this.#events.onSpoken?.(clips, result);
+
+      if (firstAudioAtMs !== null && this.#events.onLatency) {
+        const firstMs: number = firstAudioAtMs;
+        this.#events.onLatency({
+          tier: CONVERSATIONAL_TIER,
+          sttToReplyMs: replyAtMs - transcriptAtMs,
+          replyToFirstAudioMs: firstMs - replyAtMs,
+          toFirstAudioMs: firstMs - transcriptAtMs,
+        });
+      }
       return result;
     } catch (err) {
       this.#events.onError?.(err);

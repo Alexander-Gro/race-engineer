@@ -6,3 +6,5 @@
 // the Windows rig. Read-only/advisory throughout — no path from here to the game.
 export { ReactiveRadioLoop } from './loop';
 export type { ReactiveRadioLoopOptions, ReactiveRadioLoopEvents } from './loop';
+export { LATENCY_BUDGET_MS, LatencyAggregator, withinBudget } from './latency';
+export type { TurnLatency, LatencySummary } from './latency';

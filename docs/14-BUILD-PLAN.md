@@ -61,12 +61,16 @@ in a small, reviewable, green-tested change.
   PTT, rolling dialogue history, and a supersede guard so a stale answer never talks over a re-keyed
   question. Scripted-transcript tests answer "how's my fuel / last lap / who's behind me" from
   fixtures — including one driven through an `InputReader` mock-wheel PTT edge; live mic/STT/TTS + a
-  mapped wheel button are the **human-assisted** half. 190 tests green).
-- **Next up — Track A (offline, no game needed):** **T5.3** (hallucination guard + latency harness)
-  — assert every spoken number came from a tool result that turn (the loop's `RadioTurnResult.toolCalls`
-  already carries the provenance) and time first-audio per tier. Then **T5.4** (proactive fuel-low +
-  Tier-0 spotter audio). Also available: **T4.6** (local-model manager), **T5.1b** (cloud BYO-key
-  providers), **T6.1** (Electron shell).
+  mapped wheel button are the **human-assisted** half. 190 tests green),
+  T5.3 (hallucination guard + latency harness — `checkSpokenNumbers` in `ai` traces every spoken
+  number back to a tool result that turn (rounding-tolerant, sign-insensitive); a `radio` latency
+  harness times the Tier-2 path against the docs/01 budgets via an injectable clock. The loop emits
+  `onHallucinationCheck` + `onLatency` (detection-only). 208 tests green).
+- **Next up — Track A (offline, no game needed):** **T5.4** (proactive fuel-low call-out + Tier-0
+  spotter audio) — route `fuel_low` (LLM-phrased, via the radio voice queue) and `car_left/right`
+  (pre-rendered Tier-0 clips) to the `VoicePlayer` at the right priority/tier; synthetic arcs trigger
+  the right audio. This closes the M5 vertical slice up to the MVP gate. Also available: **T4.6**
+  (local-model manager), **T5.1b** (cloud BYO-key providers), **T6.1** (Electron shell).
 - **Track B (needs the Windows rig + LMU):** **T1.5** — `pnpm record` a real stint → commit a
   trimmed fixture (recorder ready). **T2.2 live** — REST probe (Task B) → finish REST→`RaceState`
   mapping + settle S3 aids. **T1.3/T1.4** aids/setup reads. Confirm the spotter `lateralPos`
@@ -338,10 +342,18 @@ from fixtures (spoken number == the tool's number), an `InputReader` mock-wheel 
 end-to-end, plus barge-in / empty-transcript / history / supersede tests (13 tests).
 _Human:_ real mic + STT/TTS and a mapped wheel button — confirm live push-to-talk works on the rig.
 
-**T5.3 — Hallucination guard + latency harness** · _Claude Code_ · deps: T5.2
-Build: automated check that every spoken number came from a tool result that turn; end-to-end
-latency timing per tier.
-Verify: guard fails a planted hallucination; Tier-2 first-audio measured.
+**T5.3 — Hallucination guard + latency harness** · _Claude Code_ · deps: T5.2 · **done**
+Build: `checkSpokenNumbers` in `ai` — a pure, provider-agnostic guard that traces every digit-form
+number the model **spoke** back to a tool result that turn (rounding-tolerant + sign-insensitive,
+walks nested JSON); reports the ungrounded figures. A latency harness in `radio` — per-tier
+first-audio budgets (`LATENCY_BUDGET_MS`, reusing core `Tier`), `TurnLatency`, `withinBudget`, and a
+`LatencyAggregator` (min/mean/max/p95 vs budget). The loop is instrumented with an injectable clock:
+it times the Tier-2 path (transcript→reply→first-audio via a `speak()` `onFirstClip` hook) and emits
+`onLatency` + `onHallucinationCheck` — **detection/observability only, no write path.**
+Verify: ✅ guard fails a planted hallucination (direct + over a real `runRadioTurn` result) and
+passes a verbatim quote; Tier-2 first-audio measured with an injected clock; aggregator/budget unit
+tests (18 tests; 208 green). Runtime enforcement *policy* (suppress vs. log on `grounded:false`) is
+a later concern — this wires the check + emit-only callback.
 
 **T5.4 — Proactive fuel-low call-out + Tier-0 spotter audio** · _Claude Code_ · deps: T3.2, T3.4, T4.2
 Build: route `fuel_low` (LLM-phrased) and `car_left/right` (pre-rendered) to the voice queue.
