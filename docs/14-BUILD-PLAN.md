@@ -159,18 +159,27 @@ Verify: `pnpm replay <file>` runs it through the M0 pipeline.
 
 ## M2 — Real LMU adapter + Normalizer (real fields)
 
-**T2.1 — `adapters/lmu` SharedMemoryReader** · _Claude Code (verify human-assisted)_ · deps: T1.1, T0.5
-Build: production reader behind `GameAdapter`; struct decoders mirroring the plugin headers;
-`capabilities()` (`hasSharedMemory`, `readsCurrentAids`, `readsSetup`, populated `fields`).
-Verify: against the T1.5 recording (Claude Code) and a live session (human).
+**T2.1 — `adapters/lmu` SharedMemoryReader** · _Claude Code (verify human-assisted)_ · deps: T1.1, T0.5 · **done**
+Build: `LmuAdapter implements GameAdapter<LmuRawFrame>` — wraps the S1 torn-read-guarded reader
++ struct decoders, polls at a configurable Hz, `capabilities()`. Reader/clock injectable →
+unit-tested off-Windows with a fake (5 tests). Read-only (FILE_MAP_READ only; no write/control
+buffer).
+Verify: ✅ off-Windows unit tests (capabilities, poll→emit, skip-when-no-scoring, stop/close).
+_Human:_ run against a live session on the rig to confirm the wrapper end-to-end.
 
 **T2.2 — REST client (read-only, cached)** · _Claude Code_ · deps: T1.2, T2.1
 Build: polling client (1–5 Hz) merged into the adapter; feature-detected; graceful when absent.
 Verify: replay/fixture tests; live check (human).
 
-**T2.3 — Normalizer: real fields → `RaceState`** · _Claude Code_ · deps: T2.1
-Build: full mapping (units, wheel order, gaps, class, derived fuel-per-lap), merging SHM+REST.
-Verify: recording → canonical `RaceState` matches hand-checked expectations; unit tests.
+**T2.3 — Normalizer: real fields → `RaceState`** · _Claude Code_ · deps: T2.1 · **done (SHM; REST merge with T2.2)**
+Build: `createLmuNormalizer()` maps `LmuRawFrame` → canonical `RaceState` — units (K→°C), wheel
+order [FL,FR,RL,RR], class strings (`Hyper`/`LMP2`/`GT3` → className + lowercased classId), gaps
+relative to player, stateful closing-rate + rolling fuel-per-lap, gamePhase/yellow → flags,
+lap-time sentinels → null. The single rF2→canonical crossing point.
+Unmapped-in-SHM (null/0 placeholders, filled by T2.2/decoder follow-ups): aids.tc/abs,
+engine.map, inputs, worldPos, car.name, sectorYellows; brake-bias front/rear flagged (docs/03).
+Verify: ✅ unit tests assert the mapping + **schema-validate the output** (`RaceStateSchema`);
+multi-class grid mirroring the live rig capture (6 tests).
 
 **T2.4 — Recorder (`pnpm record`)** · _Claude Code_ · deps: T2.1
 Build: capture live frames to replay files for fixtures/regression.

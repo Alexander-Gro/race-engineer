@@ -10,3 +10,4 @@ export * from './shm/reader';
 export * from './types';
 export * from './capabilities';
 export * from './adapter';
+export * from './normalizer';
