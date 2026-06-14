@@ -63,3 +63,38 @@ export const VoicePriority = {
   /** Conversational replies / low-priority chatter. */
   CHATTER: 20,
 } as const;
+
+// --- Speech-to-text (driver radio in) ------------------------------------------------
+
+/** A finalized transcription. */
+export interface SttResult {
+  transcript: string;
+  confidence01?: number;
+}
+
+/** A streaming STT session: push mic audio, get partials, finalize on release. */
+export interface SttStream {
+  /** Push a captured audio frame (mic PCM/opus bytes). */
+  pushAudio(frame: Uint8Array): void;
+  /** Subscribe to streaming partial transcripts (low-latency, non-final). */
+  onPartial(cb: (text: string) => void): void;
+  /** Stop capture and resolve the final transcript. */
+  finish(): Promise<SttResult>;
+  /** Abort without producing a result. */
+  cancel(): void;
+}
+
+/** STT provider (docs/07 §interfaces). Cloud (BYO-key) and local (faster-whisper) impls slot in here. */
+export interface SttProvider {
+  readonly name: string;
+  startStream(opts?: { sampleRate?: number; hints?: readonly string[] }): SttStream;
+}
+
+/**
+ * A microphone audio source. The production impl wraps `getUserMedia`/native capture; tests
+ * use a mock. Read-only — it only observes the mic (push-to-talk gates when it's live).
+ */
+export interface MicSource {
+  start(onFrame: (frame: Uint8Array) => void): void;
+  stop(): void;
+}

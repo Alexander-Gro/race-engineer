@@ -11,10 +11,18 @@ export type {
   PlaybackHandle,
   AudioSink,
   TtsProvider,
+  SttProvider,
+  SttStream,
+  SttResult,
+  MicSource,
 } from './types';
 export { VoicePriority } from './types';
 export { VoicePlayer } from './player';
 export type { VoicePlayerOptions, VoicePlayerEvents, EnqueueOptions } from './player';
 export { TIER0_PHRASES, prerenderTier0 } from './prerender';
+export { RadioCapture } from './capture';
+export type { RadioCaptureOptions, RadioCaptureEvents } from './capture';
 export { FakeTtsProvider } from './providers/fake-tts';
+export { FakeSttProvider } from './providers/fake-stt';
 export { MockAudioSink } from './backends/mock-sink';
+export { MockMicSource } from './backends/mock-mic';

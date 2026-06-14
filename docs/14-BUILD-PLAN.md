@@ -47,12 +47,16 @@ in a small, reviewable, green-tested change.
   T4.2 (TTS + audio playback — `TtsProvider`/`AudioSink` interfaces, a preemptible
   `VoicePlayer` priority queue (urgent spotter preempts, barge-in, FIFO-by-priority), Tier-0
   pre-render, `FakeTtsProvider` + `MockAudioSink`; real cloud/local TTS + OS sink are the
-  live half).
-- **Next up — Track A (offline, no game needed):** **T4.3** (STT + PTT capture) — the last
-  piece before the **T5.2** live radio loop can close (it needs STT) — then **T5.4** (proactive
-  fuel-low + Tier-0 spotter audio wiring). Also available: **T4.6** (local-model manager),
-  **T5.1b** (Claude/free-cloud BYO-key providers behind the AI interface), **T6.1** (Electron
-  shell). M3, the AI orchestration core, and input+TTS plumbing are complete.
+  live half),
+  T4.3 (STT + PTT capture — `SttProvider`/`SttStream`/`MicSource` interfaces + `RadioCapture`
+  (PTT begin/end → partials + final transcript), `FakeSttProvider` + `MockMicSource`; real
+  cloud/local STT + the OS mic are the live half).
+- **Next up — Track A (offline, no game needed):** **T5.2** (reactive radio loop end-to-end)
+  — now unblocked: wire PTT→STT→AI(tools)→TTS from the pieces above; scripted-transcript tests
+  on fixtures (live mic is human-assisted). Then **T5.3** (hallucination guard + latency) and
+  **T5.4** (proactive fuel-low + Tier-0 spotter audio). Also available: **T4.6** (local-model
+  manager), **T5.1b** (cloud BYO-key providers), **T6.1** (Electron shell). M3, the AI core,
+  and the full M4 voice/input plumbing are complete.
 - **Track B (needs the Windows rig + LMU):** T1.2–T1.5 (REST probe, aids/setup reads, record
   a real session). Optional next rig step: a moving, multi-class session to confirm dynamic
   fields + the real Hypercar/LMP2/GTE class strings for T2.3.
@@ -241,11 +245,15 @@ pre-render integrity (11 tests).
 _Human:_ provide a TTS key (premium) or run local TTS; confirm a spoken sample plays on the device.
 Context: [07-VOICE-IO](07-VOICE-IO.md), [15-COST-AND-FREE-OPERATION](15-COST-AND-FREE-OPERATION.md).
 
-**T4.3 — STT + PTT capture** · _Claude Code_ · deps: T4.1, T4.2
-Build: `SttProvider` iface + one cloud provider (streaming); capture mic while PTT held →
-final transcript.
-Verify: a held-button utterance transcribes. _Human:_ STT key + mic.
-Context: [07-VOICE-IO](07-VOICE-IO.md).
+**T4.3 — STT + PTT capture** · _Claude Code_ · deps: T4.1, T4.2 · **done (offline half)**
+Build: `SttProvider` + `SttStream` + `MicSource` interfaces; `RadioCapture` — PTT `begin` opens
+a stream and feeds mic audio, `end` finalizes → transcript (with streaming partials), `cancel`
+aborts; capture only runs while held (gated). `FakeSttProvider` + `MockMicSource` for tests.
+Real streaming STT (cloud BYO-key Deepgram/OpenAI; local faster-whisper) and the OS mic are the
+live half; per docs/15 the default stays free/local.
+Verify: ✅ a held-button utterance transcribes; partials stream; gating + cancel (5 tests).
+_Human:_ STT key (premium) or local STT; a real mic; confirm a held-button utterance transcribes.
+Context: [07-VOICE-IO](07-VOICE-IO.md), [15-COST-AND-FREE-OPERATION](15-COST-AND-FREE-OPERATION.md).
 
 **T4.4 — Local fallback interfaces (stubs)** · _Claude Code_ · deps: T4.2, T4.3
 Build: Piper/whisper.cpp provider shells behind the same ifaces (impl can be deferred to M10).
