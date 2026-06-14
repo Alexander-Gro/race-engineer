@@ -39,4 +39,21 @@ describe('SimReplayAdapter', () => {
 
     expect(received).toHaveLength(0);
   });
+
+  it('loops past the sequence with a strictly-climbing monotonicMs, until stop()', async () => {
+    const frames = synthesizeFrames(scriptedScenario());
+    const adapter = new SimReplayAdapter({ frames, loop: true });
+    const seen: number[] = [];
+    adapter.onFrame((f) => {
+      seen.push(f.monotonicMs);
+      if (seen.length >= frames.length + 3) void adapter.stop(); // run past one full lap
+    });
+
+    await adapter.start();
+
+    expect(seen.length).toBeGreaterThan(frames.length); // it kept going (didn't end after one pass)
+    for (let i = 1; i < seen.length; i += 1) {
+      expect(seen[i]!).toBeGreaterThan(seen[i - 1]!); // the app clock never reverses on loop
+    }
+  });
 });

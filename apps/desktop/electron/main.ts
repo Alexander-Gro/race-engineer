@@ -18,6 +18,9 @@ import { requestSingleInstanceLock } from '../src/single-instance';
  */
 
 let worker: UtilityProcess | null = null;
+// The most recent snapshot, replayed to any window once it finishes loading so a freshly-opened or
+// reloaded window paints immediately instead of waiting for the next throttled tick.
+let lastSnapshot: EngineerSnapshot | null = null;
 
 const createWindow = (): BrowserWindow => {
   const window = new BrowserWindow({
@@ -36,6 +39,13 @@ const createWindow = (): BrowserWindow => {
   const devUrl = process.env['ELECTRON_RENDERER_URL'];
   if (devUrl) void window.loadURL(devUrl);
   else void window.loadFile(path.join(__dirname, '../renderer/index.html'));
+  // The renderer subscribes during load; the worker may already be mid-stream, so paint the latest
+  // snapshot the moment the page is ready (and again after an HMR reload).
+  window.webContents.on('did-finish-load', () => {
+    if (lastSnapshot && !window.isDestroyed()) {
+      window.webContents.send(SNAPSHOT_CHANNEL, lastSnapshot);
+    }
+  });
   return window;
 };
 
@@ -44,6 +54,7 @@ const startEngineerWorker = (): void => {
   // The worker runs the tick pipeline; the bundler emits `engineer-worker.js` alongside main.
   worker = utilityProcess.fork(path.join(__dirname, 'engineer-worker.js'));
   worker.on('message', (snapshot: EngineerSnapshot) => {
+    lastSnapshot = snapshot;
     // Broadcast to all live windows so a re-opened window (macOS dock re-open) keeps receiving.
     for (const window of BrowserWindow.getAllWindows()) {
       if (!window.isDestroyed()) window.webContents.send(SNAPSHOT_CHANNEL, snapshot);

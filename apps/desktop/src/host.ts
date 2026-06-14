@@ -15,6 +15,13 @@ import { EngineerCore, type SnapshotTransport } from '@race-engineer/engineer-co
 export interface EngineerHostOptions {
   /** Snapshot rate to the UI. Default is the Core's (12 Hz). */
   snapshotHz?: number;
+  /**
+   * Real-time pacing between synthetic frames (ms). Default 0 = as-fast-as-possible (tests run the
+   * finite scenario to completion). The app sets this so the dashboard shows live, evolving values.
+   */
+  frameIntervalMs?: number;
+  /** Loop the synthetic scenario forever (the app). Off by default so `start()` resolves in tests. */
+  loop?: boolean;
 }
 
 export const createSyntheticEngineerCore = (
@@ -22,7 +29,10 @@ export const createSyntheticEngineerCore = (
   options: EngineerHostOptions = {},
 ): EngineerCore<RaceState> =>
   new EngineerCore({
-    adapter: syntheticAdapter(scriptedScenario()),
+    adapter: syntheticAdapter(scriptedScenario(), {
+      frameIntervalMs: options.frameIntervalMs,
+      loop: options.loop,
+    }),
     normalizer: createCanonicalNormalizer(),
     transport,
     snapshotHz: options.snapshotHz,
