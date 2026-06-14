@@ -9,10 +9,12 @@ import { requestSingleInstanceLock } from '../src/single-instance';
  * over the typed IPC channel. Read-only/advisory: snapshots flow Core → main → renderer only;
  * there is no channel from the renderer toward the game.
  *
- * NOTE (T6.1 live half): this is the Electron entry. It runs on a dev machine once `electron`
- * (and a renderer bundler — see README) are installed; it is not exercised by the offline test
- * suite. The pipeline/throttle/snapshot logic it hosts lives in `@race-engineer/engineer-core`
- * and `../src/host`, which ARE unit-tested with no Electron and no game.
+ * NOTE (T6.1 live half): this is the Electron entry, built by electron-vite (see
+ * `electron.vite.config.ts`). It runs on a dev machine once `electron` is installed; it is not
+ * exercised by the offline test suite. The pipeline/throttle/snapshot logic it hosts lives in
+ * `@race-engineer/engineer-core` and `../src/host`, which ARE unit-tested with no Electron and no
+ * game. Paths below match electron-vite's `out/` layout (main + worker in `out/main`, preload in
+ * `out/preload`, renderer in `out/renderer`).
  */
 
 let worker: UtilityProcess | null = null;
@@ -23,13 +25,17 @@ const createWindow = (): BrowserWindow => {
     height: 720,
     title: 'Race Engineer',
     webPreferences: {
-      preload: path.join(__dirname, 'preload.js'),
+      preload: path.join(__dirname, '../preload/index.js'),
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
     },
   });
-  void window.loadFile(path.join(__dirname, '../renderer/index.html'));
+  // Dev: electron-vite serves the renderer with HMR and sets ELECTRON_RENDERER_URL.
+  // Prod: load the bundled renderer from disk.
+  const devUrl = process.env['ELECTRON_RENDERER_URL'];
+  if (devUrl) void window.loadURL(devUrl);
+  else void window.loadFile(path.join(__dirname, '../renderer/index.html'));
   return window;
 };
 

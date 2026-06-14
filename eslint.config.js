@@ -8,7 +8,7 @@ import globals from 'globals';
 // setup on the empty scaffold. Revisit if/when rules need type information.
 export default tseslint.config(
   {
-    ignores: ['**/dist/**', '**/build/**', '**/coverage/**', '**/*.tsbuildinfo'],
+    ignores: ['**/dist/**', '**/build/**', '**/out/**', '**/coverage/**', '**/*.tsbuildinfo'],
   },
   {
     files: ['**/*.{js,mjs,cjs}'],

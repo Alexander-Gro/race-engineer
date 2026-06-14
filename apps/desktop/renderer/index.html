@@ -45,7 +45,7 @@
     <h1>Race Engineer — live (synthetic source)</h1>
     <div class="grid" id="dash">Waiting for the Engineer Core…</div>
     <div class="meta" id="meta"></div>
-    <!-- The bundler (see README) builds renderer.ts → renderer.js -->
-    <script type="module" src="./renderer.js"></script>
+    <!-- electron-vite (Vite) bundles this TS entry; in dev it's served with HMR. -->
+    <script type="module" src="./renderer.ts"></script>
   </body>
 </html>

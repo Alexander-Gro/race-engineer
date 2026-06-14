@@ -35,6 +35,10 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+        # CI never boots Electron (it only typechecks/lints/tests the OS-agnostic packages),
+        # so skip the ~100 MB platform binary the `electron` postinstall would otherwise fetch.
+        env:
+          ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
 
       - name: Typecheck
         run: pnpm typecheck

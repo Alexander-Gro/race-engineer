@@ -145,9 +145,10 @@ in a small, reviewable, green-tested change.
   (`getUserMedia`) + audio + cloud LLM/STT/TTS **all run on macOS**, so the whole UX (talk to it, hear
   it answer, watch the dashboard) is buildable *and verifiable on the Mac* against the **synthetic
   sim-replay adapter** — the rig only swaps synthetic→live-LMU adapter + keyboard→wheel PTT.
-  Order: finish the **T6.1** Electron boot (`pnpm add -D electron` + Vite renderer, `dev:electron`) →
-  **T6.2** dashboard → wire the reactive radio loop + proactive router into the shell → **T4.5** mic/
-  audio I/O → **T6.3** settings/secrets + PTT-mapping UI → **T10.1** real STT/TTS (or cloud BYO-key).
+  Order: ~~**T6.1** Electron boot~~ (done — electron-vite wired; `build:electron` green, all four
+  entries bundle to `out/`; only the window-open visual check is the human step) → **T6.2** dashboard
+  (NEXT) → wire the reactive radio loop + proactive router into the shell → **T4.5** mic/audio I/O →
+  **T6.3** settings/secrets + PTT-mapping UI → **T10.1** real STT/TTS (or cloud BYO-key).
   M7.7–M7.9 / M8 / M9 offline-strategy depth are paused until the app is launchable. (Also still
   pending offline glue: wire the M7 strategy models into the AI tool surface — `get_stint_plan`,
   `evaluate_undercut`, `project_pit_window` — so the engineer can actually call them.)
@@ -487,7 +488,7 @@ TTS synth calls; reflex preempts chatter, `clear` queues (11 tests; 221 green).
 
 ## M6 — Desktop shell & dashboard
 
-**T6.1 — Electron shell + worker-hosted Engineer Core + typed IPC** · _Claude Code (boot verify human-assisted)_ · deps: T0.5 · **done (offline half)**
+**T6.1 — Electron shell + worker-hosted Engineer Core + typed IPC** · _Claude Code (window-open verify human-assisted)_ · deps: T0.5 · **done (boot wired)**
 Build: new `@race-engineer/engineer-core` package — `EngineerCore` drives the tick pipeline
 (Adapter → Normalizer → `RaceState`) and pushes **throttled** snapshots (~12 Hz, `Throttle` on the
 frame's `monotonicMs`, final-state flush) through an injected `SnapshotTransport`; a typed IPC
@@ -498,8 +499,12 @@ Electron-agnostic `createSyntheticEngineerCore` (the worker wiring), plus the El
 `renderer` (paints live values via `textContent`). **Read-only/advisory — IPC is Core→renderer only.**
 Verify: ✅ offline — `EngineerCore`/`Throttle` unit-tested driving the synthetic source (throttled
 cadence, dense seq, schema-valid `RaceState`, final flush); `createSyntheticEngineerCore` ships
-snapshots to a spy transport (7 tests; 228 green). _Human (dev machine):_ `pnpm add -D electron` +
-a renderer bundler, then `dev:electron` → window streams ~12 Hz synthetic values (README §Running).
+snapshots to a spy transport (7 tests; 228 green). **Boot wired (2026-06-15):** electron-vite
+bundles all four entries (`main`/`engineer-worker`/`preload`/`renderer`) — `build:electron` is green
+and verified to compile; `"type":"module"` dropped so main/preload emit CJS (sandboxed preload + `__dirname`),
+`out/` git/lint/prettier-ignored, CI skips the Electron binary. _Human (dev machine, macOS ok):_
+`pnpm install` then `pnpm --filter @race-engineer/desktop dev` → window streams ~12 Hz synthetic
+values (the only remaining verify; README §Running).
 
 **T6.2 — Live dashboard** · _Claude Code_ · deps: T6.1
 Build: fuel / 4-corner tires / brakes / aids / position+gaps(+class) / timing widgets
