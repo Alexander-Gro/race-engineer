@@ -141,9 +141,19 @@ This is a primary differentiator for LMU; budget real design time here.
 ## 7. Safety car / FCY opportunism
 
 Detect FCY/SC from `FlagState`. Pit-stop time loss under FCY/SC is much smaller (field
-slows/bunches), so a stop "for free" is often optimal. The engine flags
-`fci_opportunity` events with the projected position outcome, and the engineer prompts:
-"Full-course yellow — box now, we lose almost nothing and we're due in 2 laps anyway."
+slows/bunches), so a stop "for free" is often optimal. The core event rule edge-detects the
+green→caution transition and emits a `fcy_opportunity` event (the trigger); the strategy
+decision is:
+
+```
+cautionPitLossS ≈ greenPitLossS * cautionPaceFraction   // field caution pace ÷ green pace, ~0.5
+savedS          = greenPitLossS - cautionPitLossS
+recommend = box_now  if underCaution AND savedS ≥ minSaving AND (planned stop due soon OR mandatory due)
+            stay_out otherwise   // a cheap stop you don't need just buys a later one
+```
+
+The engineer prompts: "Full-course yellow — box now, we lose almost nothing and we're due in
+2 laps anyway." (`evaluateFcyStop` → `{ recommend, savedS, cautionPitLossS, reason, confidence01 }`.)
 
 ## 8. Confidence & honesty
 

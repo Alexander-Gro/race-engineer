@@ -128,10 +128,20 @@ in a small, reviewable, green-tested change.
   `isStuckBehindTraffic` (per-tick dirty-air predicate) + `lapTrafficWeight` (1−fraction) +
   `cleanLapValues` (drop laps too contaminated to feed the median fuel model, docs/05 §6 last bullet).
   Added `slower_class_ahead` to the core `EventType` enum (additive). Fixture-driven (live-rig
-  multi-class capture) + constructed-frame + cooldown + contamination tests. 340 green).
+  multi-class capture) + constructed-frame + cooldown + contamination tests. 340 green),
+  T7.6 (FCY/SC opportunism, docs/05 §7. Two pieces: (a) a **core event rule** `events/rules/fcy.ts` —
+  `fcyRule` edge-detects green→caution (`flags.global` = `fcy`/`safetyCar`) and emits one Tier-2
+  `fcy_opportunity` trigger per caution (suppressed while already pitting), `isUnderCaution` helper;
+  (b) **strategy decision** `strategy/fcy.ts` — `fcyPitLoss` (`cautionPitLoss ≈ greenPitLoss ·
+  cautionPaceFraction`, `saved = green − caution`) + `evaluateFcyStop` → `box_now` when under caution
+  AND the stop is meaningfully cheaper AND due soon (or a mandatory stop is outstanding), else
+  `stay_out` (a cheap stop you don't need just buys a later one). Pure/deterministic; `greenPitLossS`
+  from T7.2. Reconciled the docs/05 §7 `fci_opportunity` typo → `fcy_opportunity` (the schema name).
+  Edge/sustain/re-arm/in-pit event tests + worked-example + property (saved∈[0,green] decreasing in
+  caution pace; confidence∈[0,1]; no NaN/∞) decision tests. 356 green).
 - **Next up — Track A:** continue **M7** offline strategy depth (the main remaining pure-logic body):
-  **T7.6** (FCY/SC opportunism: `fci_opportunity` events — cheap stop under yellow, docs/05 §7), then
-  **T7.7** (learning layer: priors per car/track/conditions). The **GUI/runtime** tasks
+  **T7.7** (learning layer: priors per car/track/conditions — persist `fuel_models`/`tire_models`,
+  seed the fuel/tyre fits), then **T7.8** (strategy UI + rival tracker). The **GUI/runtime** tasks
   (**T6.2** dashboard, **T4.5** mic/audio)
   need a machine with a screen + the Electron renderer toolchain. The 🚦 MVP gate needs the **live
   half** (Track B) + working voice I/O (T10.1 or cloud STT/TTS).
@@ -514,7 +524,7 @@ Verify: ✅ worked linear-fit + noisy-fit + prior-blend + silent-case unit tests
 (13 tests; 276 green). Replay-eval on recorded stints lands with T1.5/T7.7.
 
 Remaining order: ~~T7.2 pit-loss model~~ (done) → ~~T7.3 stint planner~~ (done) → ~~T7.4
-undercut/overcut~~ (done) → ~~T7.5 multi-class traffic forecasting~~ (done) → T7.6 FCY/SC opportunism → T7.7
+undercut/overcut~~ (done) → ~~T7.5 multi-class traffic forecasting~~ (done) → ~~T7.6 FCY/SC opportunism~~ (done) → T7.7
 learning layer (priors per car/track/conditions) → T7.8 strategy UI + rival tracker → T7.9
 proactive strategy call-outs. Each pure-math task is unit-tested with doc-05 examples and
 validated on recorded endurance sessions (replay eval set).
