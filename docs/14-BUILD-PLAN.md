@@ -138,7 +138,11 @@ in a small, reviewable, green-tested change.
 - **Track B (needs the Windows rig + LMU):** **T1.5** — `pnpm record` a real stint → commit a
   trimmed fixture (recorder ready). **T2.2 live** — REST probe (Task B) → finish REST→`RaceState`
   mapping + settle S3 aids. **T1.3/T1.4** aids/setup reads. Confirm the spotter `lateralPos`
-  sign + brake-bias front/rear against the HUD (docs/03).
+  sign + brake-bias front/rear against the HUD (docs/03). **Full actionable list:** see the
+  **Rig verification backlog (consolidated)** in [03-LMU-INTEGRATION.md](03-LMU-INTEGRATION.md)
+  — signs/conventions (gap sign, lateral, brake-bias, closing-rate), FCY/pit/sector enums, and the
+  **strategy-model calibration inputs** (pit-loss, refuel rate, Virtual Energy, tyre life, mandatory
+  stops) the T7.x models need real values for.
 
 ## The central ordering idea
 

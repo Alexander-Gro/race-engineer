@@ -700,6 +700,57 @@ race green-flag start). Closes most of the "still to verify" list above.
   against the in-game HUD whether this is the front or rear figure so T2.3 maps
   `aids.brakeBias.frontPct` correctly.
 
+## Rig verification backlog (consolidated)
+
+> Single actionable list for the next rig session(s). Pulls together the still-open spike
+> items above plus the new dependencies introduced by the M7 strategy work (T7.2–T7.5).
+> Tick items here and write the result back into the relevant spike section. Track-B pointer
+> lives in [14-BUILD-PLAN.md](14-BUILD-PLAN.md).
+
+### A. Signs & conventions (cheap to confirm; high blast-radius if wrong)
+- [ ] **Gap sign** `gapToPlayerS` / `gapToPlayerM` is **+ = behind / − = ahead** — confirm
+  against one known car ahead and one behind. Underpins the undercut `rival: ahead|behind`
+  split (T7.4) and traffic approaching-behind-vs-slower-ahead (T7.5). The S1#2 capture saw
+  gaps *change* but did not annotate ahead/behind. (docs/04 documents the intended sign.)
+- [ ] **Spotter lateral sign** `+mPathLateral = driver's right` (T3.4 `rightIsPositive`) —
+  needs a capture where the user notes "car was on my left/right" (still open from S1#2).
+- [ ] **Brake-bias front/rear** — is `mRearBrakeBias` (~48–52%) the front or rear figure?
+  (T2.3 `aids.brakeBias.frontPct`; still open from S1#2.)
+- [ ] **Closing-rate end-to-end** — `closingRateMps` is Normalizer-derived
+  (`(|prevGap| − |gap|)/dt`, so **+ = closing** by construction, not an LMU field). Validate
+  on a recorded multi-class stint that a lapping car shows a clearly positive rate and an
+  escapee a negative one (T7.5). Lower risk — a recording check, not a HUD read.
+
+### B. Enums & sentinels (need the right session to occur)
+- [ ] **FCY / yellow / pit-state enums** `mGamePhase` / `mYellowFlagState` / `mPitState` /
+  `mUnderYellow` / `mFlag` — capture a session with a full-course yellow and a pit entry.
+  Gates the FCY/SC opportunism work (T7.6) and `flags.global` mapping (T2.3).
+- [ ] **Sector-flag enum** `mSectorFlag` (observed 1 and 11) — decode meanings.
+- [ ] **Lap-time population** — confirm `mLastLapTime`/`mBestLapTime` populate with real
+  values (only the `0.000`/`-1.000` sentinels seen so far; low risk, sentinels → null in T2.3).
+
+### C. Strategy-model calibration inputs (real values the pure models need to be *useful*)
+> The T7.x models are unit-tested with caller-supplied numbers; in production these inputs
+> must come from telemetry / REST / session rules per car·track·series. Source them on the rig.
+- [ ] **Pit-lane time loss per track** (T7.2 `pitLaneTimeLossS`) — measure pit entry→exit vs
+  the on-track equivalent (`estimatePitLaneTimeLossS`); store per track.
+- [ ] **Refuel rate (L/s) + tyre-change time (s)** (T7.2 `serviceTime`) — per car/series;
+  check the REST `RepairAndRefuel` / `strategy/usage` payloads (S2) or measure a stop.
+- [ ] **Virtual Energy** mapping (endurance fuel/energy) from REST `strategy/usage` (S2.2) —
+  whether fuel-to-finish should be energy-based for Hypercar.
+- [ ] **Tyre life / max-stint-laps** (T7.3 `maxStintLapsByTire`) and **fresh-vs-worn pace
+  delta** (T7.4 `freshTyreGainPerLapS`) — derive from a real green stint (feeds T7.1 fit;
+  needs the T1.5 recording).
+- [ ] **Mandatory stops / driver-change / min-drive-time rules** (T7.3 `mandatoryStops`) —
+  from the session rules / REST `sessions` payload.
+
+### D. Live end-to-end (already on Track B)
+- [ ] **T1.5** record a real green stint → commit a trimmed fixture (replaces synthetic;
+  unblocks C's tyre/pace items and replay-eval of T7.1/T7.3).
+- [ ] **T2.2 live** REST probe → capture Swagger payloads → finish Virtual-Energy + pit/refuel
+  mapping into `RaceState`.
+- [ ] **T1.3 / T1.4** current-aid (TC/ABS/engine-map index) + setup-file reads (S3/S4).
+
 ## S2 / S4 desk-research findings (verify live)
 
 > **Status:** transcribed from public community/tool sources as of 2026-06-14. Base
