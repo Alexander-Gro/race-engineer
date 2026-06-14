@@ -83,13 +83,19 @@ in a small, reviewable, green-tested change.
   T5.1b (cloud BYO-key LLM providers — `ClaudeProvider` on `@anthropic-ai/sdk` (default fast
   `claude-haiku-4-5`, docs/06 tiering) + `OpenAiCompatProvider` with Groq/Gemini/OpenRouter presets,
   both behind `LlmProvider`; key from OS secure storage, **never embedded**, no central server;
-  mocked-transport conformance tests. 245 green).
-- **Next up — Track A (offline, no game needed):** **T4.6** (local-model manager — first-run
-  download + checksum + version-pin into the user-data dir, GPU/VRAM detect to recommend the LLM
-  route, Ollama detect/guide, offline-bundle option; the filesystem/probe logic is testable with
-  injected fakes). Also: **T6.2** (live dashboard — needs the Electron renderer toolchain).
-  **T6.2** (live dashboard — needs the Electron renderer toolchain installed). The 🚦 MVP gate still
-  needs the **live half** (Track B).
+  mocked-transport conformance tests. 245 green),
+  T4.6 (local-model manager — new **`@race-engineer/platform`**: `ModelManager` (download/copy →
+  SHA-256 verify → version-pinned install; idempotent; offline-bundle; corrupt-file removal),
+  `recommendRoute` (CPU-vs-GPU + LLM route from VRAM headroom beside the sim), and Ollama
+  detect/guide/resolve — all pure over injectable ports; concrete Node/Windows impls are the runtime
+  half. 263 green).
+- **Next up — Track A (offline logic is largely exhausted):** the remaining Track-A tasks are
+  **GUI/runtime** and need a machine with a screen: **T6.2** (live dashboard — Tailwind+shadcn from
+  the `EngineerSnapshot` stream) and **T4.5** (mic permission + audio I/O, `getUserMedia`), both
+  gated on finishing T6.1's Electron renderer toolchain (`pnpm add -D electron electron-vite`).
+  The remaining big pure-logic body is **M7** (endurance strategy depth: tire-deg → pit-loss →
+  stint planner → undercut → traffic → FCY → learning). The 🚦 MVP gate needs the **live half**
+  (Track B) + working voice I/O (T10.1 or cloud STT/TTS).
 - **Track B (needs the Windows rig + LMU):** **T1.5** — `pnpm record` a real stint → commit a
   trimmed fixture (recorder ready). **T2.2 live** — REST probe (Task B) → finish REST→`RaceState`
   mapping + settle S3 aids. **T1.3/T1.4** aids/setup reads. Confirm the spotter `lateralPos`
@@ -328,10 +334,20 @@ output-device enumeration/selection; hot-plug + default-change handling; text-in
 Verify: denied-mic path shows guidance (no crash); voice routes to the chosen output device.
 Context: [16-PLATFORM-PREREQUISITES](16-PLATFORM-PREREQUISITES.md) §1.
 
-**T4.6 — Local-model manager** · _Claude Code_ · deps: T0.2 (underpins T4.2/T4.3 and the free LLM route)
-Build: first-run download + checksum + version-pin into user-data dir; GPU/CUDA + VRAM detection
-to choose CPU vs GPU and recommend the LLM route; Ollama detect/guide; offline-bundle option.
-Verify: cold start downloads + verifies models; CPU fallback works with no GPU stack.
+**T4.6 — Local-model manager** · _Claude Code (live impls human/T10.1)_ · deps: T0.2 (underpins T4.2/T4.3 and the free LLM route) · **done (logic)**
+Build: new `@race-engineer/platform` package — `ModelManager` does first-run **download** (or
+offline-bundle **copy**) → **SHA-256 verify** → **version-pinned** install (`<modelsDir>/<id>/
+<version>/<file>`) into the user-data dir; idempotent; a corrupt download is removed, not left
+half-written (`ModelChecksumError`). `recommendRoute` picks CPU vs GPU for voice and the LLM route
+from a `GpuInfo` snapshot — local LLM **only with VRAM headroom beside the sim** (docs/15 §contention),
+else the free cloud tier (template mode the universal offline fallback). `detectOllama` (injected
+HTTP, never throws) + `ollamaInstallGuide` + `resolveLlmRoute` bridge GPU + Ollama → final route/guide.
+All **pure over injectable ports** (download/hash/fs/GPU/HTTP); the concrete Node/Windows impls are
+the runtime half. **Read-only — writes only model files to user-data, nothing to the game.**
+Verify: ✅ cold start downloads → verifies → returns the pinned path; idempotent (no re-download);
+checksum mismatch removes the file + throws; offline-bundle copies (no network); **CPU-fallback route
+with no GPU stack**; Ollama detect/resolve table (18 tests; 263 green). Real model specs (URLs/SHA-256)
++ native download/GPU-probe wiring land with the bundles in T10.1.
 Context: [16-PLATFORM-PREREQUISITES](16-PLATFORM-PREREQUISITES.md) §2.
 
 ---

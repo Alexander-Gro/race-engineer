@@ -134,6 +134,8 @@ importers:
         specifier: ^22.10.5
         version: 22.19.21
 
+  packages/platform: {}
+
   packages/radio:
     dependencies:
       '@race-engineer/ai':
