@@ -71,11 +71,16 @@ in a small, reviewable, green-tested change.
   `fuel_low` → `templatePhraser` (free default) or `llmPhraser` (BYO-provider) spoken at
   WARNING/STRATEGY; synthetic fuel + spotter arcs through the real `EventDetector` assert the right
   audio at the right tier. 221 tests green). **This completes the M5 logic vertical slice.**
-- **Next up — Track A (offline, no game needed):** the M5 *offline* slice is done; the 🚦 MVP gate
-  now needs the **live half** (Track B). Logic work still available offline: **T6.1** (Electron shell
-  + worker-hosted Engineer Core + typed IPC — wires the pipeline/loop/router into the app),
-  **T4.6** (local-model manager), **T5.1b** (cloud BYO-key providers), **T4.4** (local STT/TTS
-  provider stubs).
+  T6.1 (Electron shell + worker-hosted Engineer Core — new **`@race-engineer/engineer-core`**:
+  `EngineerCore` drives the pipeline → throttled ~12 Hz `RaceState` snapshots over a typed,
+  read-only Core→renderer IPC contract; `apps/desktop` gains the Electron shell scaffold
+  (main/preload/utility-process worker/renderer). Core + throttle + worker wiring unit-tested
+  offline against the synthetic source; the Electron **boot is the human-verify half**. 228 green).
+- **Next up — Track A (offline, no game needed):** **T6.2** (live dashboard — Tailwind+shadcn
+  widgets for fuel / 4-corner tires / brakes / aids / position+gaps / timing, rendered from the
+  `EngineerSnapshot` stream + fixtures; needs the Electron renderer toolchain installed). Also
+  available without the GUI: **T4.6** (local-model manager), **T5.1b** (cloud BYO-key providers),
+  **T4.4** (local STT/TTS provider stubs). The 🚦 MVP gate still needs the **live half** (Track B).
 - **Track B (needs the Windows rig + LMU):** **T1.5** — `pnpm record` a real stint → commit a
   trimmed fixture (recorder ready). **T2.2 live** — REST probe (Task B) → finish REST→`RaceState`
   mapping + settle S3 aids. **T1.3/T1.4** aids/setup reads. Confirm the spotter `lateralPos`
@@ -380,10 +385,19 @@ TTS synth calls; reflex preempts chatter, `clear` queues (11 tests; 221 green).
 
 ## M6 — Desktop shell & dashboard
 
-**T6.1 — Electron shell + worker-hosted Engineer Core + typed IPC** · _Claude Code_ · deps: T0.5
-Build: Electron main/preload/renderer; run the tick pipeline in a worker/utility process;
-throttled `RaceState` snapshots over typed IPC (~10–15 Hz).
-Verify: app boots; renderer shows live values from a synthetic source.
+**T6.1 — Electron shell + worker-hosted Engineer Core + typed IPC** · _Claude Code (boot verify human-assisted)_ · deps: T0.5 · **done (offline half)**
+Build: new `@race-engineer/engineer-core` package — `EngineerCore` drives the tick pipeline
+(Adapter → Normalizer → `RaceState`) and pushes **throttled** snapshots (~12 Hz, `Throttle` on the
+frame's `monotonicMs`, final-state flush) through an injected `SnapshotTransport`; a typed IPC
+contract (`EngineerSnapshot`, `SNAPSHOT_CHANNEL`, read-only `EngineerBridge`). `apps/desktop`:
+Electron-agnostic `createSyntheticEngineerCore` (the worker wiring), plus the Electron shell —
+`main` (window + `utilityProcess` worker, contextIsolation/sandbox), `preload` (exposes the
+**read-only** subscribe bridge), `engineer-worker` (`postMessage`s snapshots), and a minimal
+`renderer` (paints live values via `textContent`). **Read-only/advisory — IPC is Core→renderer only.**
+Verify: ✅ offline — `EngineerCore`/`Throttle` unit-tested driving the synthetic source (throttled
+cadence, dense seq, schema-valid `RaceState`, final flush); `createSyntheticEngineerCore` ships
+snapshots to a spy transport (7 tests; 228 green). _Human (dev machine):_ `pnpm add -D electron` +
+a renderer bundler, then `dev:electron` → window streams ~12 Hz synthetic values (README §Running).
 
 **T6.2 — Live dashboard** · _Claude Code_ · deps: T6.1
 Build: fuel / 4-corner tires / brakes / aids / position+gaps(+class) / timing widgets
