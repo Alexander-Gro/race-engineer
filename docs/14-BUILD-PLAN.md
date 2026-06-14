@@ -40,12 +40,15 @@ in a small, reviewable, green-tested change.
   T5.1 (AI orchestration + read-only tools — **built provider-agnostic & local-first**:
   `LlmProvider` interface, 5 read-only tools wired to RaceState/fuel model, tool-loop
   orchestrator, system prompt/persona, a deterministic `FakeProvider`, and a real key-less
-  **`OllamaProvider`**. No key needed to pass tests).
+  **`OllamaProvider`**. No key needed to pass tests),
+  T4.1 (input reader + PTT mapping — backend-agnostic edge/debounce/binding/press-to-map
+  logic, mock-device tested; Windows-only `Sdl2Backend` scaffold via koffi, live-mapping
+  half flagged for the rig).
 - **Next up — Track A (offline, no game needed):** voice plumbing **M4** so the live radio
-  loop (T5.2) can close — T4.2 (TTS + audio + priority queue + Tier-0 pre-render), T4.1
-  (input/PTT, mock-device tested), T4.6 (local-model manager). Provider follow-ups behind the
-  same interface: **T5.1b** Claude (`@anthropic-ai/sdk`, BYO-key) and a free cloud-tier
-  (Groq/Gemini/OpenRouter) adapter. M3 + the AI orchestration core are complete.
+  loop (T5.2) can close — T4.2 (TTS + audio + priority queue + Tier-0 pre-render),
+  T4.6 (local-model manager). Provider follow-ups behind the AI interface: **T5.1b** Claude
+  (`@anthropic-ai/sdk`, BYO-key) and a free cloud-tier (Groq/Gemini/OpenRouter) adapter.
+  M3 + the AI orchestration core are complete.
 - **Track B (needs the Windows rig + LMU):** T1.2–T1.5 (REST probe, aids/setup reads, record
   a real session). Optional next rig step: a moving, multi-class session to confirm dynamic
   fields + the real Hypercar/LMP2/GTE class strings for T2.3.
@@ -211,10 +214,16 @@ Verify: synthetic side-by-side scenario produces correct, debounced events.
 
 ## M4 — Voice & input (the radio plumbing)
 
-**T4.1 — Input reader + PTT mapping** · _Claude Code (mapping verify human-assisted)_ · deps: T0.2
-Build: SDL2 (koffi/addon) device enumeration; passive (read-only) button edges; press-to-map
-flow; app-side quick actions. _Human:_ map a real wheel button.
-Verify: logic/debounce unit tests with a mock device; live mapping (human).
+**T4.1 — Input reader + PTT mapping** · _Claude Code (mapping verify human-assisted)_ · deps: T0.2 · **done (offline half)**
+Build: backend-agnostic `InputBackend` + `EdgeDetector` (lockout debounce), `BindingSet` +
+`ButtonCapture` (press-to-map), `InputReader` (PTT down/up + quick actions on press, own poll
+loop off the hot path), `MockBackend`. Windows-only `Sdl2Backend` (koffi, passive/non-exclusive
+joystick read) is a **scaffold** — loads `SDL2.dll` lazily, so it typechecks on macOS but is
+not run there.
+Verify: ✅ logic/debounce unit tests with a mock device (17 tests).
+_Human (Windows rig):_ install/bundle `SDL2.dll`; map a real wheel button live; complete the
+`Sdl2Backend` `TODO(rig)` items — stable device GUID (`SDL_JoystickGetGUIDString`) and hot-plug
+re-enumeration — and confirm passive reads don't disturb the game's own input.
 Context: [08-INPUT-AND-CONTROLS](08-INPUT-AND-CONTROLS.md) §1.
 
 **T4.2 — TTS + audio playback + priority queue + Tier-0 pre-render** · _Claude Code_ · deps: T0.2

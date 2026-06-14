@@ -83,7 +83,11 @@ importers:
         specifier: ^3.24.1
         version: 3.25.76
 
-  packages/input: {}
+  packages/input:
+    dependencies:
+      koffi:
+        specifier: ^3.0.0
+        version: 3.0.2
 
   packages/persistence:
     dependencies:
