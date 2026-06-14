@@ -67,7 +67,15 @@ importers:
         specifier: ^22.10.5
         version: 22.19.21
 
-  packages/ai: {}
+  packages/ai:
+    dependencies:
+      '@race-engineer/core':
+        specifier: workspace:*
+        version: link:../core
+    devDependencies:
+      '@race-engineer/strategy':
+        specifier: workspace:*
+        version: link:../strategy
 
   packages/core:
     dependencies:

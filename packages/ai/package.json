@@ -8,5 +8,11 @@
   },
   "scripts": {
     "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@race-engineer/core": "workspace:*"
+  },
+  "devDependencies": {
+    "@race-engineer/strategy": "workspace:*"
   }
 }

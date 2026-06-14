@@ -36,10 +36,16 @@ in a small, reviewable, green-tested change.
   T3.2 (event detector core + framework), T3.3 (persistence: SQLite `sessions`/`laps`/
   `fuel_models` via better-sqlite3 + learning-priors layer that seeds the fuel model),
   T3.4 (spotter geometry: `car_left`/`car_right`/`three_wide`/`clear` events from
-  lateral + along-track overlap; assumes +right lateralPos sign — see docs/04, confirm in T2.3).
-- **Next up — Track A (offline, no game needed):** M5 (AI radio loop) toward the MVP gate —
-  T5.1 (AI orchestration + read-only tools) needs an API key (human-assisted); its tool-call
-  tests run on fixtures. M3 strategy/events are now complete.
+  lateral + along-track overlap; assumes +right lateralPos sign — see docs/04, confirm in T2.3),
+  T5.1 (AI orchestration + read-only tools — **built provider-agnostic & local-first**:
+  `LlmProvider` interface, 5 read-only tools wired to RaceState/fuel model, tool-loop
+  orchestrator, system prompt/persona, a deterministic `FakeProvider`, and a real key-less
+  **`OllamaProvider`**. No key needed to pass tests).
+- **Next up — Track A (offline, no game needed):** voice plumbing **M4** so the live radio
+  loop (T5.2) can close — T4.2 (TTS + audio + priority queue + Tier-0 pre-render), T4.1
+  (input/PTT, mock-device tested), T4.6 (local-model manager). Provider follow-ups behind the
+  same interface: **T5.1b** Claude (`@anthropic-ai/sdk`, BYO-key) and a free cloud-tier
+  (Groq/Gemini/OpenRouter) adapter. M3 + the AI orchestration core are complete.
 - **Track B (needs the Windows rig + LMU):** T1.2–T1.5 (REST probe, aids/setup reads, record
   a real session). Optional next rig step: a moving, multi-class session to confirm dynamic
   fields + the real Hypercar/LMP2/GTE class strings for T2.3.
@@ -244,13 +250,26 @@ Context: [16-PLATFORM-PREREQUISITES](16-PLATFORM-PREREQUISITES.md) §2.
 
 ## M5 — AI Engineer + MVP vertical slice ("it talks")
 
-**T5.1 — AI orchestration + read-only tools** · _Claude Code_ · deps: T3.1, T3.4
-Build: Claude client (`@anthropic-ai/sdk`), system prompt + persona (cached), **read-only**
-tool defs (`get_race_state`, `get_fuel_plan`, `get_rivals`, `get_tire_status`,
-`get_current_aids`…) wired to strategy/race-state; streaming.
-Verify: tool-call tests with fixture `RaceState`; model quotes tool numbers (no invented
-figures). _Human:_ Claude API key.
-Context: [06-AI-ENGINEER](06-AI-ENGINEER.md).
+**T5.1 — AI orchestration + read-only tools** · _Claude Code_ · deps: T3.1, T3.4 · **done**
+Build: provider-agnostic `LlmProvider` interface, system prompt + persona (cache-friendly),
+**read-only** tool defs (`get_race_state`, `get_fuel_plan`, `get_rivals`, `get_tire_status`,
+`get_current_aids`) wired to strategy/race-state, and a tool-loop orchestrator (`runRadioTurn`).
+**Built local-first** (per the free-default architecture, docs/06 §swappable / docs/15): a
+deterministic `FakeProvider` (tests) and a real key-less `OllamaProvider` (Route B). The other
+docs/06 tools (`get_stint_plan`, `project_pit_window`, `evaluate_undercut`, `get_setup_summary`,
+`get_handling_diagnosis`, `verify_change`) ship with the strategy/setup features that back them
+(M7/M9). Streaming is deferred to the live loop (T5.2/T5.3).
+Verify: ✅ tool-call tests with fixture `RaceState`; orchestrator quotes tool numbers verbatim
+(no invented figures); Ollama request/response mapping unit-tested with an injected `fetch`.
+_Human (local-LLM route):_ install Ollama + `ollama pull qwen3`, run `ollama serve`.
+Context: [06-AI-ENGINEER](06-AI-ENGINEER.md), [15-COST-AND-FREE-OPERATION](15-COST-AND-FREE-OPERATION.md).
+
+**T5.1b — Cloud LLM providers behind `LlmProvider` (opt-in, BYO-key)** · _Claude Code_ · deps: T5.1
+Build: a Claude provider (`@anthropic-ai/sdk`, streaming + tool use) and a free cloud-tier
+provider (Groq/Gemini/OpenRouter, OpenAI-compatible), both behind the existing interface; key
+from OS secure storage, never embedded.
+Verify: provider-conformance tests (mocked transport); a live smoke test. _Human:_ provider key.
+Context: [06-AI-ENGINEER](06-AI-ENGINEER.md), [15-COST-AND-FREE-OPERATION](15-COST-AND-FREE-OPERATION.md).
 
 **T5.2 — Reactive radio loop end-to-end** · _Claude Code (live verify human-assisted)_ · deps: T5.1, T4.3
 Build: PTT → STT → Claude(tools) → streaming TTS; "how's my fuel / last lap / who's behind me".
