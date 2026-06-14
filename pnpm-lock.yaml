@@ -79,7 +79,11 @@ importers:
 
   packages/persistence: {}
 
-  packages/strategy: {}
+  packages/strategy:
+    dependencies:
+      '@race-engineer/core':
+        specifier: workspace:*
+        version: link:../core
 
   packages/voice: {}
 

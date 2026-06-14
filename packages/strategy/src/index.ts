@@ -1,4 +1,4 @@
 // @race-engineer/strategy
-// Pure, deterministic strategy math (depends on core only). See docs/05. Built in M3.
-// Scaffolded empty in build-plan task T0.2.
-export {};
+// Pure, deterministic strategy math (depends on core only). See docs/05.
+// The LLM calls these as tools and phrases results; it never reproduces the math.
+export * from './fuel';
