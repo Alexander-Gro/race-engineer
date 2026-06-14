@@ -50,16 +50,21 @@ in a small, reviewable, green-tested change.
   live half),
   T4.3 (STT + PTT capture — `SttProvider`/`SttStream`/`MicSource` interfaces + `RadioCapture`
   (PTT begin/end → partials + final transcript), `FakeSttProvider` + `MockMicSource`; real
-  cloud/local STT + the OS mic are the live half).
+  cloud/local STT + the OS mic are the live half),
+  **M2 LMU adapter (offline halves)** — T2.1 (`LmuAdapter` behind `GameAdapter`), T2.3
+  (`LmuNormalizer`: raw rF2 → canonical `RaceState`, class strings `Hyper`/`LMP2`/`GT3` from
+  the live rig capture), T2.4 (`Recorder` + `pnpm record`), T2.2 (read-only GET-only
+  `LmuRestClient`). All four merged to `main` (177 tests green together).
 - **Next up — Track A (offline, no game needed):** **T5.2** (reactive radio loop end-to-end)
-  — now unblocked: wire PTT→STT→AI(tools)→TTS from the pieces above; scripted-transcript tests
-  on fixtures (live mic is human-assisted). Then **T5.3** (hallucination guard + latency) and
-  **T5.4** (proactive fuel-low + Tier-0 spotter audio). Also available: **T4.6** (local-model
-  manager), **T5.1b** (cloud BYO-key providers), **T6.1** (Electron shell). M3, the AI core,
-  and the full M4 voice/input plumbing are complete.
-- **Track B (needs the Windows rig + LMU):** T1.2–T1.5 (REST probe, aids/setup reads, record
-  a real session). Optional next rig step: a moving, multi-class session to confirm dynamic
-  fields + the real Hypercar/LMP2/GTE class strings for T2.3.
+  — now unblocked + everything merged: wire PTT→STT→AI(tools)→TTS from the pieces above;
+  scripted-transcript tests on fixtures (live mic is human-assisted). Then **T5.3**
+  (hallucination guard + latency) and **T5.4** (proactive fuel-low + Tier-0 spotter audio).
+  Also available: **T4.6** (local-model manager), **T5.1b** (cloud BYO-key providers),
+  **T6.1** (Electron shell).
+- **Track B (needs the Windows rig + LMU):** **T1.5** — `pnpm record` a real stint → commit a
+  trimmed fixture (recorder ready). **T2.2 live** — REST probe (Task B) → finish REST→`RaceState`
+  mapping + settle S3 aids. **T1.3/T1.4** aids/setup reads. Confirm the spotter `lateralPos`
+  sign + brake-bias front/rear against the HUD (docs/03).
 
 ## The central ordering idea
 
