@@ -8,43 +8,181 @@
     />
     <title>Race Engineer</title>
     <style>
+      :root {
+        --bg: #0b0f14;
+        --panel: #11161d;
+        --line: #1e2731;
+        --text: #e6edf3;
+        --muted: #6e7681;
+        --good: #3fb950;
+        --caution: #e3b341;
+        --critical: #ff7b72;
+      }
+      * {
+        box-sizing: border-box;
+      }
       body {
         margin: 0;
         font:
           14px/1.4 ui-monospace,
           monospace;
-        background: #0b0f14;
-        color: #e6edf3;
-        padding: 24px;
+        background: var(--bg);
+        color: var(--text);
+        padding: 16px;
+      }
+      header {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        margin: 0 0 12px;
       }
       h1 {
-        font-size: 16px;
+        font-size: 15px;
         font-weight: 600;
-        color: #7ee787;
-        margin: 0 0 16px;
-      }
-      .grid {
-        display: grid;
-        grid-template-columns: max-content 1fr;
-        gap: 4px 24px;
-      }
-      .label {
-        color: #8b949e;
-      }
-      .value {
-        font-variant-numeric: tabular-nums;
+        color: var(--good);
+        margin: 0;
       }
       .meta {
-        margin-top: 16px;
-        color: #8b949e;
+        color: var(--muted);
         font-size: 12px;
+        font-variant-numeric: tabular-nums;
+      }
+      /* Responsive card grid — glanceable, calm (docs/09). */
+      .cards {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+        gap: 12px;
+      }
+      .card {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 12px;
+      }
+      .card-title {
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--muted);
+        margin: 0 0 10px;
+        font-weight: 600;
+      }
+      .grid-2 {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 8px 16px;
+      }
+      .metric-label {
+        color: var(--muted);
+        font-size: 11px;
+      }
+      .metric-value {
+        font-variant-numeric: tabular-nums;
+        font-size: 15px;
+      }
+      /* Fuel hero number (the value you read mid-drive — docs/09 typography). */
+      .fuel-big {
+        display: flex;
+        align-items: baseline;
+        gap: 8px;
+        margin-bottom: 10px;
+      }
+      .fuel-laps {
+        font-size: 40px;
+        font-weight: 700;
+        font-variant-numeric: tabular-nums;
+        line-height: 1;
+      }
+      .fuel-laps-label {
+        color: var(--muted);
+        font-size: 12px;
+      }
+      /* 4-corner tyre/brake cells. */
+      .corner {
+        background: #0d1219;
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        padding: 6px 8px;
+        text-align: center;
+      }
+      .corner-pos {
+        color: var(--muted);
+        font-size: 10px;
+      }
+      .corner-main {
+        font-size: 18px;
+        font-variant-numeric: tabular-nums;
+      }
+      .corner-sub {
+        font-size: 11px;
+        color: var(--muted);
+      }
+      .position {
+        font-size: 16px;
+        font-weight: 600;
+        margin-bottom: 8px;
+      }
+      .rival {
+        display: grid;
+        grid-template-columns: 52px 1fr auto;
+        gap: 8px;
+        align-items: baseline;
+        padding: 3px 0;
+        font-variant-numeric: tabular-nums;
+      }
+      .rival-label {
+        color: var(--muted);
+        font-size: 11px;
+      }
+      .rival-closing {
+        color: var(--caution);
+        font-size: 11px;
+      }
+      .rival-empty {
+        color: var(--muted);
+      }
+      .warn-strip {
+        background: rgba(227, 179, 65, 0.12);
+        border: 1px solid var(--caution);
+        color: var(--caution);
+        border-radius: 6px;
+        padding: 4px 8px;
+        font-size: 12px;
+        margin-bottom: 8px;
+      }
+      /* Colour language (docs/09): green = good, amber = caution, red = act-now. */
+      .sev-good {
+        color: var(--good);
+      }
+      .sev-caution {
+        color: var(--caution);
+      }
+      .sev-critical {
+        color: var(--critical);
+      }
+      .sev-neutral {
+        color: var(--text);
+      }
+      .sev-unknown {
+        color: var(--muted);
+      }
+      /* Non-colour reinforcement for colourblind drivers (docs/09 accessibility). */
+      [data-severity='caution']::before {
+        content: '▲ ';
+        font-size: 0.8em;
+      }
+      [data-severity='critical']::before {
+        content: '● ';
+        font-size: 0.8em;
       }
     </style>
   </head>
   <body>
-    <h1>Race Engineer — live (synthetic source)</h1>
-    <div class="grid" id="dash">Waiting for the Engineer Core…</div>
-    <div class="meta" id="meta"></div>
+    <header>
+      <h1>Race Engineer — live (synthetic source)</h1>
+      <div class="meta" id="meta"></div>
+    </header>
+    <div id="app">Waiting for the Engineer Core…</div>
     <!-- electron-vite (Vite) bundles this TS entry; in dev it's served with HMR. -->
     <script type="module" src="./renderer.ts"></script>
   </body>

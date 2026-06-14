@@ -145,10 +145,11 @@ in a small, reviewable, green-tested change.
   (`getUserMedia`) + audio + cloud LLM/STT/TTS **all run on macOS**, so the whole UX (talk to it, hear
   it answer, watch the dashboard) is buildable *and verifiable on the Mac* against the **synthetic
   sim-replay adapter** — the rig only swaps synthetic→live-LMU adapter + keyboard→wheel PTT.
-  Order: ~~**T6.1** Electron boot~~ (done — electron-vite wired; `build:electron` green, all four
-  entries bundle to `out/`; only the window-open visual check is the human step) → **T6.2** dashboard
-  (NEXT) → wire the reactive radio loop + proactive router into the shell → **T4.5** mic/audio I/O →
-  **T6.3** settings/secrets + PTT-mapping UI → **T10.1** real STT/TTS (or cloud BYO-key).
+  Order: ~~**T6.1** Electron boot~~ (done — electron-vite wired) → ~~**T6.2** dashboard~~ (done —
+  pure `buildDashboardModel` + structured renderer; all docs/09 §A widgets + state-honesty colours,
+  fixture-tested; Tailwind/shadcn reskin + Playwright deferred) → **wire the reactive radio loop +
+  proactive router into the shell** (NEXT) → **T4.5** mic/audio I/O → **T6.3** settings/secrets +
+  PTT-mapping UI → **T10.1** real STT/TTS (or cloud BYO-key).
   M7.7–M7.9 / M8 / M9 offline-strategy depth are paused until the app is launchable. (Also still
   pending offline glue: wire the M7 strategy models into the AI tool surface — `get_stint_plan`,
   `evaluate_undercut`, `project_pit_window` — so the engineer can actually call them.)
@@ -506,10 +507,22 @@ and verified to compile; `"type":"module"` dropped so main/preload emit CJS (san
 `pnpm install` then `pnpm --filter @race-engineer/desktop dev` → window streams ~12 Hz synthetic
 values (the only remaining verify; README §Running).
 
-**T6.2 — Live dashboard** · _Claude Code_ · deps: T6.1
-Build: fuel / 4-corner tires / brakes / aids / position+gaps(+class) / timing widgets
-(Tailwind+shadcn), color/state-honesty rules.
-Verify: renders from fixtures; redraw throttled; visual tests (Playwright) on fixture state.
+**T6.2 — Live dashboard** · _Claude Code_ · deps: T6.1 · **done (logic + renderer; reskin deferred)**
+Build: a **pure** `buildDashboardModel(snapshot)` view-model in `apps/desktop/src/dashboard` mapping
+the canonical `RaceState` to all docs/09 §A widgets — fuel (big laps-left), 4-corner tyres (temp vs
+window + wear% + pressure), 4-corner brakes, aids (TC/ABS/brake-bias/engine-map), position + nearest
+ahead/behind (name + class + gap + closing arrow) + faster-class strip, timing (last/best/Δ), session
+(phase/flag/remaining) — each value pre-formatted + classified by the docs/09 **colour language**
+(good/caution/critical + `neutral` for unjudged + `unknown` for null; **state honesty:** null → `—`,
+never a fabricated 0/colour). The renderer paints it into a glanceable card grid (severity colour +
+a non-colour glyph for colourblind a11y; `textContent` only). Redraw bounded by the Core's ~12 Hz
+snapshot throttle.
+Verify: ✅ `buildDashboardModel` unit-tested against the four canonical fixtures — fuel critical/good/
+unknown, cold-tyre + worn-tyre + null-brake honesty, multi-class standings + faster-class strip, flag
+severities, delta-to-best, neutral aids; property test (every reading has a valid severity, no `NaN`,
+unknown ⇒ `—`) (13 tests; 371 green). `electron-vite build` bundles the renderer. **Deferred** (need a
+display to iterate): the **Tailwind/shadcn reskin** of this same model and **Playwright** visual/
+screenshot tests; shadcn lands with the interactive settings UI (T6.3). _Human:_ `pnpm dev` → eyeball.
 Context: [09-UI-UX](09-UI-UX.md).
 
 **T6.3 — Settings + secrets** · _Claude Code_ · deps: T6.1, T4.x, T5.1
