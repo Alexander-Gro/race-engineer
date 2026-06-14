@@ -663,6 +663,213 @@ unchecked items below need a *moving, multi-class* session.
 > Capture artifact: `°`/`ø` shown as `┬░`/`├©` in the saved file is a console code-page
 > display issue (UTF-8 viewed as CP1252), not a decode error.
 
+## S2 / S4 desk-research findings (verify live)
+
+> **Status:** transcribed from public community/tool sources as of 2026-06-14. Base
+> URL/port, the *existence* and *paths* of several endpoints, and the `.svm` file location
+> + format below are **confirmed from public sources** (community tools that call them).
+> What is **NOT** confirmable by desk research — and is flagged `LIVE-VERIFY` — is the exact
+> JSON payload *shape/field names* of each endpoint on the current LMU build, the *full*
+> endpoint list (only the Swagger page on the running game is authoritative), and whether a
+> given endpoint exists/changed on the user's build. The REST API is **unofficial,
+> undocumented, and version-fragile** (it changed across game updates — see v1.3.3 note).
+> The user must run the probe commands at the end on the rig to confirm.
+>
+> **Sources (public):**
+> - LMU community "REST API documentation" thread (base URL, Swagger, `getAllVehicles`,
+>   IPv4-vs-IPv6 `[::1]` quirk):
+>   <https://community.lemansultimate.com/index.php?threads/rest-api-documentation.3278/>
+> - lmu-pitwall (Rust+React; SHM + REST; exact endpoints `/rest/strategy/usage`,
+>   `/rest/garage/UIScreen/RepairAndRefuel`): <https://github.com/Swizzjack/lmu-pitwall>
+> - TinyPedal (OSS overlay; LMU REST connector, `enable_restapi_access`, RepairAndRefuel as
+>   the "only" source for energy/brake-wear/damage/pit): <https://github.com/TinyPedal/TinyPedal>
+>   and User-Guide wiki <https://github.com/TinyPedal/TinyPedal/wiki/User-Guide>
+> - CrewChief V4 — uses LMU's REST API to read fuel level + fuel/damage multipliers **and
+>   to *set* the pit menu** (a WRITE path we avoid); property is off by default ("problematic
+>   REST API"): <https://github.com/mrbelowski/CrewChiefV4> and
+>   <https://mr_belowski.gitlab.io/CrewChiefV4/About_ChangeLog.html>
+> - DR Sim Manager LMU source notes (REST `:6397` + SHM):
+>   <https://docs.departedreality.com/dr-sim-manager/general/sources/le-mans-ultimate>
+> - LMUSessionTracker (live timing/standings via REST): <https://github.com/mbeader/LMUSessionTracker>
+> - LMUTools (REST-based tools): <https://github.com/JeGoBE8900/LMUTools>
+> - Setup `.svm` location: simracingsetup.com install guide
+>   <https://simracingsetup.com/le-mans-ultimate/how-to-install-lmu-setups/> and
+>   seralaci/Le-Mans-Ultimate-Setups <https://github.com/seralaci/Le-Mans-Ultimate-Setups>
+> - `.svm` internal format (text/INI, index-not-value storage, non-reconstructable UI
+>   numbers) — LMU community thread "Question about setup .svm files":
+>   <https://community.lemansultimate.com/index.php?threads/question-about-setup-svm-files-mapping-settings-to-in-game-options.14332/>
+
+### S2.1 — Base URL / port / discovery (confirmed from source)
+
+- **Base URL:** `http://localhost:6397` (confirmed by the community REST thread, lmu-pitwall,
+  TinyPedal, DR Sim Manager). The server is part of LMU's web-based UI and runs whenever the
+  game is running; **no extra plugin is required** for the REST API (unlike SHM). Community
+  tools "discover" it simply by hard-coding `:6397` — there is no advertised discovery
+  mechanism. **LIVE-VERIFY** the port on the current build (some builds/tools have differed).
+- **IPv4 vs IPv6 quirk (LIVE-VERIFY):** after a game update, some clients found IPv4
+  `localhost`/`127.0.0.1` refused the connection and had to use IPv6 `http://[::1]:6397`.
+  Probe **both** on the rig and record which the current build accepts (the adapter should
+  try `127.0.0.1` then fall back to `[::1]`).
+- **Access changed across versions (LIVE-VERIFY):** TinyPedal notes REST access behaviour
+  changed around **game v1.3.3** and that its client needs an explicit `enable_restapi_access`
+  toggle. So: (a) the API may require the game to be in a session/garage before endpoints
+  populate, and (b) endpoint paths/shapes are not stable across LMU updates. Treat every path
+  below as "observed on some build — confirm on yours."
+- **Swagger (authoritative on the running game):** `http://localhost:6397/swagger/index.html`
+  serves an interactive list of *all* endpoints for the **current** build. This is the
+  single best live source of truth for S2 — the rig step is to open it and capture the list.
+
+### S2.2 — Known endpoint paths (confirmed to exist from community tools; payloads LIVE-VERIFY)
+
+All are under the `/rest/` prefix and are **GET** (read) in community usage unless noted.
+Payload field names are **LIVE-VERIFY** (capture real JSON on the rig via Swagger / curl).
+
+| Endpoint (verbatim) | Method | What it returns (per tool usage) | Source |
+| --- | --- | --- | --- |
+| `/swagger/index.html` | GET | Interactive list of all endpoints for the current build | community thread |
+| `/rest/sessions` | GET | Session info (root of the sessions tree) | TinyPedal |
+| `/rest/sessions/getAllVehicles` | GET | List of installed cars/vehicles | community thread |
+| `/rest/sessions/weather` | GET | Track/weather conditions (and likely forecast) | TinyPedal |
+| `/rest/strategy/usage` | GET | **Virtual Energy (VE) consumption per lap** — key for LMU energy/fuel strategy | lmu-pitwall |
+| `/rest/garage/getPlayerGarageData` | GET | Player garage state (selected car/setup-level context) | TinyPedal |
+| `/rest/garage/UIScreen/RepairAndRefuel` | GET | **Pit/strategy menu state**: virtual energy, brake wear, per-area damage (aero/brakes/suspension), refuel/repair selections | lmu-pitwall, TinyPedal |
+
+TinyPedal explicitly calls `RepairAndRefuel` the **only** REST address for getting
+energy / brake-wear / vehicle-damage / pit-stop data out of LMU — so for S3-adjacent and
+strategy data this endpoint is the priority probe. The Swagger page will reveal the rest of
+the `/rest/garage/UIScreen/*` family (other UI screens) and any `/rest/watch/*`
+(standings/timing) endpoints — enumerate them live.
+
+> **Not yet pinned (LIVE-VERIFY via Swagger):** a dedicated rich-**standings** endpoint
+> (class + gaps) — LMUSessionTracker reads standings over REST but the exact path wasn't
+> captured in desk research; standings may also come straight from SHM scoring (already
+> live-confirmed in S1), so prefer SHM for standings/gaps and use REST only to fill gaps.
+> Also unpinned: an explicit **available tire sets/compounds** endpoint and a **current
+> setup state** endpoint (see S4.3). Capture these from the Swagger list on the rig.
+
+### S2.3 — Writes exist; we deliberately do not use them (read-only by design)
+
+**CrewChief uses the LMU REST API to *set the pit menu*** (fuel/repair selections), not just
+to read — so **write-capable endpoints exist** (the `/rest/garage/UIScreen/*` "set"
+operations and/or `POST`/`PUT` verbs on the garage tree). Per CLAUDE.md rule 5 and doc 03
+"We do not write", **we never issue any POST/PUT/mutating REST call.** We only **GET**.
+When enumerating Swagger on the rig, **note every non-GET operation and add it to an
+avoid-list** in the adapter; the `RestClient` must be hard-restricted to GET. CrewChief
+itself ships this behind an off-by-default toggle and calls the API "problematic", which
+reinforces: poll gently, GET-only, tolerate failure.
+
+### S2.4 — REST vs shared memory (which source wins)
+
+- **Prefer SHM** (already S1-live-confirmed) for: telemetry physics, positions/gaps,
+  class names, lap/sector times, brake bias (`mRearBrakeBias`), and the **current tire
+  compound name** (live-confirmed `Medium` from SHM).
+- **Prefer REST** for LMU-specific higher-level concepts not in the rF2 struct:
+  **Virtual Energy per lap** (`/rest/strategy/usage`) and the **pit/refuel/repair + damage
+  + brake-wear menu state** (`/rest/garage/UIScreen/RepairAndRefuel`). VE is an LMU concept
+  absent from the rF2 SHM layout, so REST is the primary VE source.
+- **For S3 (current TC / ABS / engine-map *index*):** **LIVE-VERIFY** whether
+  `/rest/garage/getPlayerGarageData` or a `/rest/garage/UIScreen/*` screen exposes the
+  current aid indices. SHM does **not** carry these (S1 finding). If REST also does not,
+  fall back to the setup file (S4) for the baseline. This is the open S3 question.
+- **For available tire sets/compounds:** SHM gives the *current* compound name; **REST is
+  the likely source for the list of available sets** — confirm via Swagger.
+
+### S4.1 — Setup file location (confirmed from source; exact-path LIVE-VERIFY)
+
+LMU inherits rF2's setup storage. **Confirmed from community install guides:**
+
+- **Directory:** `…\steamapps\common\Le Mans Ultimate\UserData\player\Settings\`
+  with a **per-track subfolder**, i.e. `…\UserData\player\Settings\<TrackFolder>\`.
+  (This differs from the older rF2 `…\Settings\<vehicle>\<track>\` nesting cited in CLAUDE.md
+  — for LMU the observed layout is `Settings\<track>\` with the car encoded in the filename.
+  **LIVE-VERIFY** the exact nesting on the current build.)
+- **Extension:** **`.svm`** (the rF2 setup format).
+- **Filename convention (informational, not load-bearing):** community setups use names like
+  `Author_Q_COTA_Nat_V2_296_GT3.svm` (author / session use / track-layout / version / car).
+  Filenames are author-chosen — **do not parse meaning out of them**; read the file contents
+  and cross-reference the car/track from SHM/REST instead.
+
+### S4.2 — `.svm` file format (confirmed from source; semantics LIVE-VERIFY)
+
+The `.svm` is a **human-readable text / INI-style** file (rF2 heritage), safe to open
+**read-only**. Confirmed structure from the LMU community format thread:
+
+- **Sections** in square brackets, e.g. `[REARLEFT]`, `[FRONTLEFT]`, `[BODYAERO]`,
+  `[GENERAL]`, `[SUSPENSION]`, … (rF2 section names; **LIVE-VERIFY** the exact LMU set).
+- **Entries** as `Key=<value>//<trailing comment/display text>` — i.e. a numeric value
+  followed by `//` and a human-readable note.
+- **CRITICAL — values are indices, not physical numbers.** The file stores a **0-based
+  setting index** (or a differential from the default setup), not the degrees/clicks/psi the
+  garage UI shows. The in-game value is conceptually `base + (index × step)`, but base/step
+  are **per-entry, possibly nonlinear, rounded, and unit-shifted**, and they live in the
+  car's data — **not in the `.svm`**. Consequence per the source: *you cannot reliably
+  reconstruct the UI numbers from the `.svm` alone.*
+
+**Design implication for `SetupParams` (read-only):**
+- The `.svm` parser can reliably extract the **section/key structure and the stored index
+  per setting**, and detect **deltas vs. a reference setup** (which index changed).
+- It **cannot**, from the file alone, emit "brake bias = 54.5%" or "front wing = 6°"
+  reliably. For *current absolute values* prefer the **live sources**: brake bias from SHM
+  (`mRearBrakeBias`, S1-confirmed), and TC/ABS/engine-map/tire from **REST/SHM** if exposed.
+  Use the `.svm` mainly to know *what setting fields exist* and to express advice as
+  **relative clicks** ("TC up one", "brake bias back two clicks") — which matches the
+  read-only/advisory model (the driver applies the change in the garage).
+- **LIVE-VERIFY on the rig:** the exact section/key names LMU emits, which keys map to
+  **TC / ABS / brake bias / engine map / mixture** and to mechanical (springs, ARB, dampers,
+  ride height) and aero (wing) settings, and whether any entry stores an absolute value.
+
+### S4.3 — Setup state via REST (alternative read source — LIVE-VERIFY)
+
+`/rest/garage/getPlayerGarageData` and the `/rest/garage/UIScreen/*` screens are the
+candidate REST sources for the **currently loaded** setup/aid state (as opposed to the
+on-disk `.svm`). Because the REST garage tree is what the in-game garage UI itself binds to,
+it is **more likely to expose UI-accurate current values** (including possibly the current
+TC/ABS/engine-map index) than the `.svm` file. **This is the most promising route for S3 and
+for "current setup" reads — confirm via the Swagger list and capture the JSON on the rig.**
+
+### S2 / S4 live-rig probe list (paste into rig instructions)
+
+Run in **PowerShell** with LMU **running and sitting in the garage / an active session**
+(many endpoints only populate in-session). `Invoke-RestMethod` auto-parses JSON; pipe to
+`ConvertTo-Json -Depth 8` to see the full shape, and to a file to capture a fixture.
+
+```powershell
+# 0. Connectivity — try IPv4 first, then IPv6 fallback. Record which works.
+curl.exe -s -o NUL -w "%{http_code}`n" http://127.0.0.1:6397/rest/sessions
+curl.exe -s -o NUL -w "%{http_code}`n" "http://[::1]:6397/rest/sessions"
+$BASE = "http://localhost:6397"   # swap to http://[::1]:6397 if only IPv6 answered
+
+# 1. AUTHORITATIVE endpoint list for THIS build — open in a browser and copy every path:
+Start-Process "$BASE/swagger/index.html"
+#    (also grab the machine-readable spec if present:)
+Invoke-RestMethod "$BASE/swagger/v1/swagger.json" | ConvertTo-Json -Depth 12 > $env:USERPROFILE\Desktop\lmu_swagger.json
+
+# 2. Capture each known endpoint's real payload (these become test fixtures):
+Invoke-RestMethod "$BASE/rest/sessions"                         | ConvertTo-Json -Depth 8 > $env:USERPROFILE\Desktop\lmu_sessions.json
+Invoke-RestMethod "$BASE/rest/sessions/getAllVehicles"         | ConvertTo-Json -Depth 8 > $env:USERPROFILE\Desktop\lmu_vehicles.json
+Invoke-RestMethod "$BASE/rest/sessions/weather"                | ConvertTo-Json -Depth 8 > $env:USERPROFILE\Desktop\lmu_weather.json
+Invoke-RestMethod "$BASE/rest/strategy/usage"                  | ConvertTo-Json -Depth 8 > $env:USERPROFILE\Desktop\lmu_strategy_usage.json
+Invoke-RestMethod "$BASE/rest/garage/getPlayerGarageData"      | ConvertTo-Json -Depth 8 > $env:USERPROFILE\Desktop\lmu_garage.json
+Invoke-RestMethod "$BASE/rest/garage/UIScreen/RepairAndRefuel" | ConvertTo-Json -Depth 8 > $env:USERPROFILE\Desktop\lmu_repairrefuel.json
+
+# 3. S3 hunt — in the captured garage / RepairAndRefuel JSON, search for the current
+#    aid indices and tire sets (field names are unknown; grep broadly):
+Select-String -Path $env:USERPROFILE\Desktop\lmu_garage.json,$env:USERPROFILE\Desktop\lmu_repairrefuel.json `
+  -Pattern "(?i)traction|TC|ABS|antilock|brakebias|brake.?bias|enginemap|engine.?map|mixture|map|compound|tireset|tyre|fuel|energy"
+
+# 4. S4 setup file — confirm location, extension, and dump one file's text:
+$SET = "$env:ProgramFiles(x86)\Steam\steamapps\common\Le Mans Ultimate\UserData\player\Settings"
+Get-ChildItem -Path $SET -Recurse -Filter *.svm | Select-Object FullName, Length, LastWriteTime
+#    Open the most-recent .svm and inspect sections/keys (look for TC/ABS/brake-bias/map):
+Get-ChildItem -Path $SET -Recurse -Filter *.svm | Sort-Object LastWriteTime -desc |
+  Select-Object -First 1 | Get-Content | Select-Object -First 120
+```
+
+> READ-ONLY contract for the probe: every command above is a **GET** (or a file read). Do
+> **not** add `-Method Post/Put` to any `/rest/garage/...` call — those mutate the pit menu
+> (the CrewChief write path) and are out of scope by design. If a path 404s, the build
+> renamed/removed it — fall back to the Swagger list from step 1.
+
 ## Open questions for the spikes (track here)
 
 - [x] **S1** Plugin install path + enable flags for current LMU build; populated fields.
@@ -695,6 +902,22 @@ unchecked items below need a *moving, multi-class* session.
     **NEEDS LIVE VERIFICATION:** that LMU populates `mRearBrakeBias`, and whether any
     extended/REST field exposes the current TC/ABS/map index in LMU. See S3.
 - [ ] **S2** REST base URL/port, endpoint list, payload schemas, read-only?
+  - *desk-research (confirmed from public tool sources — see "S2 / S4 desk-research
+    findings"):* **Base URL `http://localhost:6397`** (corroborated by the LMU community REST
+    thread, lmu-pitwall, TinyPedal, DR Sim Manager); **no extra plugin needed** for REST.
+    **IPv4-vs-IPv6 quirk:** some builds refuse `127.0.0.1` and need `http://[::1]:6397`.
+    **Endpoints confirmed to exist:** `/rest/sessions`, `/rest/sessions/getAllVehicles`,
+    `/rest/sessions/weather`, `/rest/strategy/usage` (Virtual Energy per lap),
+    `/rest/garage/getPlayerGarageData`, `/rest/garage/UIScreen/RepairAndRefuel`
+    (energy/brake-wear/damage/pit menu — TinyPedal's "only" source for that data), plus
+    `/swagger/index.html` (authoritative full list on the running game).
+    **Read-only?** Mostly GET, BUT **write-capable endpoints exist** — CrewChief uses REST to
+    *set the pit menu* (POST/PUT on the garage tree). **We never call those; RestClient is
+    GET-only.** **NEEDS LIVE VERIFICATION:** the *full* endpoint list (open Swagger on the
+    rig), the **payload field names/shapes** of each endpoint, the working IP form, the port
+    on the current build, and whether endpoints populate only in-session (REST access changed
+    around game v1.3.3). Probe list provided in the findings section. Sources: LMU community
+    REST thread; lmu-pitwall; TinyPedal; CrewChief; DR Sim Manager.
 - [ ] **S2** Best source for tire compound + available tire sets (SHM vs REST).
   - *desk-research (confirmed from source):* SHM telemetry declares compound fields —
     `mFront/RearTireCompoundIndex` (`unsigned char`) and `mFront/RearTireCompoundName[18]`
@@ -702,13 +925,42 @@ unchecked items below need a *moving, multi-class* session.
     LMU *does* populate the compound name strings (read `Medium` front/rear on a GT3), so
     SHM is a viable source for the *current* compound; REST may still be better for
     *available* tire sets. Source: `rF2State.h`.
+    - *S2 desk-research addendum:* SHM = best for the **current** compound (live-confirmed).
+      For the **list of available tire sets/compounds**, REST is the likely source but **no
+      specific endpoint was pinned in desk research** — `/rest/garage/getPlayerGarageData`
+      or a `/rest/garage/UIScreen/*` screen are the candidates. **NEEDS LIVE VERIFICATION:**
+      find the available-sets endpoint in the Swagger list and capture its payload. Source:
+      TinyPedal (RepairAndRefuel/garage usage); LMU community REST thread.
 - [ ] **S3** Are current TC/ABS/brake-bias/engine-map values *readable* (telemetry/extended buffer or setup file)? (Read-only — we never write them.)
   - *desk-research (confirmed from source):* see the second S1 item above. Summary: brake
     bias = telemetry (`rF2VehicleTelemetry.mRearBrakeBias`); TC/ABS *difficulty* flags =
     `rF2Extended.mPhysics`; in-cockpit TC/ABS/engine-map *index* = not found in SHM,
     therefore route to REST (S2) or setup file (S4). All LIVE-VERIFY on the rig (population +
     semantics). Source: `rF2State.h`.
+    - *S2/S4 desk-research addendum:* **Brake bias is solved via SHM (live-confirmed).** For
+      the **TC / ABS / engine-map *index***, the best desk-research candidate is the **REST
+      garage tree** — `/rest/garage/getPlayerGarageData` and `/rest/garage/UIScreen/*` bind to
+      the same data the in-game garage UI shows, so they are more likely than SHM or the
+      `.svm` to expose UI-accurate current aid indices. The `.svm` stores only *indices*, not
+      reconstructable UI values (see S4.2), so it is a weaker fallback. **NEEDS LIVE
+      VERIFICATION:** capture `getPlayerGarageData` + `RepairAndRefuel` JSON and grep for
+      traction/abs/enginemap/mixture fields (probe step 3). If absent everywhere, advise in
+      *relative clicks* only. Sources: TinyPedal; lmu-pitwall; LMU `.svm` format thread.
 - [ ] **S4** Setup file location + format for **read-only** parsing (and/or REST setup read).
+  - *desk-research (confirmed from public sources — see "S2 / S4 desk-research findings"):*
+    **Location:** `…\steamapps\common\Le Mans Ultimate\UserData\player\Settings\<track>\`,
+    **extension `.svm`** (rF2 format). **Format:** human-readable **text / INI** — `[SECTION]`
+    headers (e.g. `[REARLEFT]`, `[BODYAERO]`) and `Key=<value>//<comment>` entries. **CRITICAL
+    caveat:** values are stored as **0-based indices / deltas from default, not physical UI
+    numbers**, and base/step live in the car data (not the file), so *you cannot reliably
+    reconstruct the UI values (degrees/psi/clicks) from the `.svm` alone* — use it for
+    structure/which-index-changed and express advice in **relative clicks**; get absolute
+    current values from SHM (brake bias) / REST (garage tree) instead. **REST alternative:**
+    `/rest/garage/getPlayerGarageData` likely exposes current setup/aid state more usefully.
+    **NEEDS LIVE VERIFICATION:** exact folder nesting on the current build, the real
+    section/key names and which map to TC/ABS/brake-bias/engine-map + mechanical/aero, and
+    whether REST exposes a cleaner current-setup read (probe step 4). Sources: simracingsetup
+    install guide; seralaci setup repo; LMU `.svm` format community thread.
 - [ ] Multi-class specifics: class names/IDs for Hypercar / LMP2 / GTE-GT3 as reported.
   - *desk-research:* class name is per-vehicle `rF2VehicleScoring.mVehicleClass[32]` (ANSI
     string). The exact strings LMU emits (e.g. "Hypercar"/"LMP2"/"GTE") are LIVE-VERIFY from
