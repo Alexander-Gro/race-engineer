@@ -79,10 +79,15 @@ in a small, reviewable, green-tested change.
   T4.4 (local provider shells in `voice` — `piperTts`/`kokoroTts`, `fasterWhisperStt`/`whisperCppStt`
   behind the existing TTS/STT ifaces with an injected native backend deferred to T10.1; a config-only
   `selectTts/SttProvider` selector + the free/local `DEFAULT_VOICE_PROFILE`; `available?` + a
-  `ProviderNotReadyError` fallback seam. 236 green).
-- **Next up — Track A (offline, no game needed):** **T5.1b** (cloud BYO-key LLM providers — Claude
-  via `@anthropic-ai/sdk` + a free cloud tier behind `LlmProvider`, key from OS secure storage,
-  mocked-transport conformance tests like the Ollama provider). Also: **T4.6** (local-model manager),
+  `ProviderNotReadyError` fallback seam. 236 green),
+  T5.1b (cloud BYO-key LLM providers — `ClaudeProvider` on `@anthropic-ai/sdk` (default fast
+  `claude-haiku-4-5`, docs/06 tiering) + `OpenAiCompatProvider` with Groq/Gemini/OpenRouter presets,
+  both behind `LlmProvider`; key from OS secure storage, **never embedded**, no central server;
+  mocked-transport conformance tests. 245 green).
+- **Next up — Track A (offline, no game needed):** **T4.6** (local-model manager — first-run
+  download + checksum + version-pin into the user-data dir, GPU/VRAM detect to recommend the LLM
+  route, Ollama detect/guide, offline-bundle option; the filesystem/probe logic is testable with
+  injected fakes). Also: **T6.2** (live dashboard — needs the Electron renderer toolchain).
   **T6.2** (live dashboard — needs the Electron renderer toolchain installed). The 🚦 MVP gate still
   needs the **live half** (Track B).
 - **Track B (needs the Windows rig + LMU):** **T1.5** — `pnpm record` a real stint → commit a
@@ -347,11 +352,19 @@ Verify: ✅ tool-call tests with fixture `RaceState`; orchestrator quotes tool n
 _Human (local-LLM route):_ install Ollama + `ollama pull qwen3`, run `ollama serve`.
 Context: [06-AI-ENGINEER](06-AI-ENGINEER.md), [15-COST-AND-FREE-OPERATION](15-COST-AND-FREE-OPERATION.md).
 
-**T5.1b — Cloud LLM providers behind `LlmProvider` (opt-in, BYO-key)** · _Claude Code_ · deps: T5.1
-Build: a Claude provider (`@anthropic-ai/sdk`, streaming + tool use) and a free cloud-tier
-provider (Groq/Gemini/OpenRouter, OpenAI-compatible), both behind the existing interface; key
-from OS secure storage, never embedded.
-Verify: provider-conformance tests (mocked transport); a live smoke test. _Human:_ provider key.
+**T5.1b — Cloud LLM providers behind `LlmProvider` (opt-in, BYO-key)** · _Claude Code (live smoke human-assisted)_ · deps: T5.1 · **done**
+Build: `ClaudeProvider` on `@anthropic-ai/sdk` (Messages API + tool use; injectable client) and
+`OpenAiCompatProvider` (Groq/Gemini/OpenRouter via the injectable `FetchLike`, `groqProvider`/
+`openRouterProvider`/`geminiProvider` presets), both behind the existing `LlmProvider` + read-only
+tool surface. Maps the neutral `ChatMessage`/`ToolSpec` ↔ each wire format (tool_use/tool_result vs
+tool_calls), preserving tool-call ids. Default Claude model = **fast `claude-haiku-4-5`** (docs/06
+§Model tiering — overridable to `claude-opus-4-8` for deliberative). **Key from OS secure storage,
+never embedded; no central server — each provider calls the vendor directly with the user's own key
+(docs/15).** Streaming deferred (the `LlmProvider` contract is non-streaming, as for Ollama).
+Verify: ✅ provider-conformance tests with **mocked transport** (Claude via a fake SDK client,
+OpenAI-compat via a fake `fetch`): request mapping, tool_use/tool_call response mapping, multi-turn
+tool-result mapping, `Bearer` auth uses the injected key (no embedded key), full `runRadioTurn`
+tool→answer (9 tests; 245 green). _Human:_ a live smoke test with a real provider key.
 Context: [06-AI-ENGINEER](06-AI-ENGINEER.md), [15-COST-AND-FREE-OPERATION](15-COST-AND-FREE-OPERATION.md).
 
 **T5.2 — Reactive radio loop end-to-end** · _Claude Code (live verify human-assisted)_ · deps: T5.1, T4.3 · **done (offline half)**

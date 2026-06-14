@@ -25,3 +25,13 @@ export { FakeProvider } from './providers/fake';
 export type { FakeStep } from './providers/fake';
 export { OllamaProvider } from './providers/ollama';
 export type { OllamaOptions } from './providers/ollama';
+// Cloud LLM routes (T5.1b) — opt-in, bring-your-own-key (docs/15 premium / free-cloud tiers).
+export { ClaudeProvider } from './providers/claude';
+export type { ClaudeOptions } from './providers/claude';
+export {
+  OpenAiCompatProvider,
+  groqProvider,
+  openRouterProvider,
+  geminiProvider,
+} from './providers/openai-compat';
+export type { OpenAiCompatOptions } from './providers/openai-compat';
