@@ -49,6 +49,9 @@ importers:
 
   packages/adapters/lmu:
     dependencies:
+      '@race-engineer/core':
+        specifier: workspace:*
+        version: link:../../core
       koffi:
         specifier: ^3.0.0
         version: 3.0.2

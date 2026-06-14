@@ -7,3 +7,6 @@ export * from './shm/structs';
 export * from './shm/torn-read';
 export * from './shm/win32';
 export * from './shm/reader';
+export * from './types';
+export * from './capabilities';
+export * from './adapter';

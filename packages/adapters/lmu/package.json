@@ -10,6 +10,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@race-engineer/core": "workspace:*",
     "koffi": "^3.0.0"
   },
   "devDependencies": {
