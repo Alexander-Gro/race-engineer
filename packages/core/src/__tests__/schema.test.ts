@@ -14,6 +14,14 @@ describe('RaceState validators', () => {
     expect(safeParseRaceState(raceStartState).success).toBe(true);
   });
 
+  it('accepts a negative lapDistanceM (just behind the S/F line — docs/03 §S1#2)', () => {
+    // rF2/LMU reports a small negative lap distance on the out/formation lap and at the moment of
+    // crossing the line. Found replaying a live capture: a `>= 0` constraint rejected real frames.
+    const behindLine = clone(raceStartState);
+    behindLine.player.lapDistanceM = -42.5;
+    expect(safeParseRaceState(behindLine).success).toBe(true);
+  });
+
   it('rejects non-objects and empty objects', () => {
     expect(isRaceState(null)).toBe(false);
     expect(isRaceState(42)).toBe(false);

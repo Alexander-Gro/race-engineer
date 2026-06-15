@@ -69,7 +69,11 @@ export const CarStateSchema = z.object({
   classId: z.string().nullable(),
   className: z.string().nullable(), // "Hypercar" | "LMP2" | "GTE"/"GT3" ...
   driverName: z.string().nullable(),
-  lapDistanceM: z.number().nonnegative(), // distance around the lap (gaps + spotter)
+  // Distance around the lap (gaps + spotter). **Signed:** rF2/LMU reports a small *negative*
+  // value just behind the start/finish line (formation/out-lap and the moment of crossing) — see
+  // docs/03 §S1#2. Must not be constrained `>= 0` or real near-S/F frames fail validation (found
+  // replaying a live capture, S1#4-era). Magnitude is bounded by the track length downstream.
+  lapDistanceM: z.number(),
   lapsCompleted: z.number().int().nonnegative(),
   lastLapS: z.number().positive().nullable(),
   bestLapS: z.number().positive().nullable(),
