@@ -432,12 +432,19 @@ Run on the Windows rig with LMU. Goal: prove the assumptions in
 [03-LMU-INTEGRATION](03-LMU-INTEGRATION.md) and **produce a real recording** to replace
 synthetic fixtures. Write every finding back into doc 03's open-questions list.
 
-**T1.1 — S1: raw shared-memory dump** · _human-assisted_ · deps: T0.2
+**T1.1 — S1: raw shared-memory dump** · _human-assisted_ · deps: T0.2 · **done**
 Build: standalone koffi script: `OpenFileMapping`/`MapViewOfFile` on the rF2 SMMP buffers,
 torn-read guard, dump key telemetry/scoring fields. _Human:_ install the plugin into LMU,
 run a session.
-Verify: live fuel/tire/position values print and match the in-game HUD.
-Output: confirm install path, enable flags, populated fields → doc 03.
+Verify: ✅ live fuel/tire/position values print and match the in-game HUD — confirmed across four
+live captures (docs/03 §S1 #1–#4): plugin loads on the current LMU build, `pack=4` decode correct,
+all key fuel/tyre/brake/position/gap/lap-time fields populate. **S1#4 (2026-06-16)** re-confirmed on
+the installed build (`C:\SteamLibrary\…\Le Mans Ultimate`) and fixed a real decode bug — driver-name
+strings are **UTF-8**, were read as `latin1` (mojibake on accented names); `readChars` now decodes
+UTF-8 (regression-tested, 615 green). New observations logged for T2.3: `mPlace` is **not unique**
+(player seen in two scoring slots → dedupe `cars[]` by `mID`); raw `mTimeBehindLeader/Next` read `0.0`
+for trailing cars (derive gaps, already handled canonical).
+Output: ✅ install path, enable flags, populated fields, decode fix + open items → doc 03 §S1 #1–#4.
 
 **T1.2 — S2: REST API probe** · _human-assisted_ · deps: T0.2
 Build: probe `localhost` (≈`:6397`), enumerate endpoints, capture sample payloads.

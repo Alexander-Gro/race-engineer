@@ -267,7 +267,11 @@ export const extendedLayout: StructLayout = layoutStruct([
 const readChars = (b: Buffer, offset: number, length: number): string => {
   const nul = b.indexOf(0, offset);
   const end = nul >= 0 && nul < offset + length ? nul : offset + length;
-  return b.toString('latin1', offset, end);
+  // The rF2 SMMP plugin emits name strings (driver/class/track/compound) as UTF-8, so
+  // accented names (`Sébastien`, `Loïc`) must be decoded as UTF-8 — reading them as latin1
+  // corrupts every non-ASCII byte (`é` → `Ã©`). Confirmed live S1#4 (docs/03). ASCII is a
+  // UTF-8 subset, so the all-ASCII strings (`GT3`, `Medium`) are unaffected.
+  return b.toString('utf8', offset, end);
 };
 
 const vecMag = (b: Buffer, base: number): number => {

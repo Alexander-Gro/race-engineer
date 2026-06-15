@@ -749,6 +749,44 @@ toggled TC/ABS/brake-bias on the fly. (164 MB raw — git-ignored, never committ
   `packages/adapters/sim-replay/fixtures/lemans-multiclass.replay.jsonl`, replay-tested (schema + the
   spotter on real traffic).
 
+## S1 — live confirmation #4 (re-confirm on current build + UTF-8 fix — 2026-06-16)
+
+Re-ran `pnpm shm-dump` against a live mid-race session (GT3, **53-car** `Hyper`/`LMP2`/`GT3` grid at
+Circuit de la Sarthe, green, ~lap 5–6) on the build installed at
+`C:\SteamLibrary\steamapps\common\Le Mans Ultimate`. Plugin
+(`rFactor2SharedMemoryMapPlugin64.dll`) present + `" Enabled": 1` in
+`Plugins\CustomPluginVariables.JSON`. Purpose: confirm the decode still holds on the current LMU build
+and shake out anything the earlier (mostly stationary / short) captures missed.
+
+**Re-confirmed (live, current build)**
+- Both maps open (`telemetry=true scoring=true`); `pack=4` decode still correct — every field sane,
+  no shift/garbage/NaN. Player telemetry: fuel **84.0/117 L**, RPM 6911/9400, gear, speed,
+  **brake bias 52.8%**, water 74 °C, 3-zone tyre temps (FL 66/72/70 … RR 87/87/70 °C), pressures
+  164–174 kPa, wear 0.84–0.95, brake temps 168–207 °C, **compound `Medium`/`Medium`**. Scoring:
+  track + length, ambient/track temp (16/44 °C), `mGamePhase=5`, multi-class strings, per-car place /
+  class / laps / dist / lateral / gaps / lap times.
+
+**Fixed (this session)**
+- 🐛 **Driver-name strings were decoded as `latin1` → mojibake on any accented name** (`Sébastien
+  Buemi` printed as `SÃ©bastien Buemi`; also `António Félix da Costa`, `Loïc Duval`, `José María
+  López`). The plugin emits these as **UTF-8**. `readChars` (`shm/structs.ts`) now decodes **UTF-8**;
+  re-running the dump renders all accents correctly. ASCII strings (`GT3`, `Medium`) are a UTF-8
+  subset, so nothing else changed. Regression test added (`structs.test.ts`); 30 LMU tests green.
+  (Distinct from the earlier S1#1 note about `°`→`┬░`, which was console-codepage *display* only.)
+
+**New observations (for T2.3 — recorded, not yet actioned)**
+- ⚠️ **The player can appear in two scoring slots at once.** This capture showed **two `place=53`
+  rows for the player** and a **skipped place (`P15` absent)** — i.e. `mPlace` is **not a unique key**.
+  The Normalizer already resolves the *player* safely (`scoring.vehicles.find(v => v.isPlayer)`), but
+  it builds the standings `cars[]` straight from `scoring.vehicles` **without deduping by `mID`**
+  (`normalizer.ts`), so a duplicated slot would double-count in standings/rival lists. **Action:** key
+  `cars[]` by `mID` (drop duplicates, keep the freshest) in T2.3. Unconfirmed whether the duplicate is
+  persistent or a transient — worth a longer capture to characterise.
+- ⚠️ **Raw `mTimeBehindLeader`/`mTimeBehindNext` read `0.0` for trailing GT3 cars** (the back of the
+  field). Consistent with the known rF2 behaviour that these raw gap fields aren't populated for every
+  car; the canonical gap sign/magnitude was already validated downstream (S1#3), so this only
+  reaffirms: **derive gaps in the Normalizer, don't trust the raw per-car field for all cars.**
+
 ## Rig verification backlog (consolidated)
 
 > Single actionable list for the next rig session(s). Pulls together the still-open spike

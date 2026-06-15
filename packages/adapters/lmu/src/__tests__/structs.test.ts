@@ -114,4 +114,19 @@ describe('scoring round-trip', () => {
     expect(v.lapDistM).toBeCloseTo(5200);
     expect(v.lastLapTime).toBeCloseTo(204.123);
   });
+
+  // S1#4 (docs/03): the plugin emits name strings as UTF-8, so accented driver names must
+  // round-trip intact. A latin1 decode corrupts every multi-byte char (`é` → `Ã©`).
+  it('decodes UTF-8 driver names (accents) without corruption', () => {
+    const buf = Buffer.alloc(scoringLayout.size);
+    const si = (name: string): number =>
+      offsetOf(scoringLayout, 'mScoringInfo') + offsetOf(scoringInfoLayout, name);
+    buf.writeInt32LE(1, si('mNumVehicles'));
+    const vBase = offsetOf(scoringLayout, 'mVehicles');
+    const vs = (name: string): number => vBase + offsetOf(vehicleScoringLayout, name);
+    buf.write('Sébastien Buemi', vs('mDriverName'), 'utf8');
+
+    const v = at(readScoring(buf).vehicles, 0);
+    expect(v.driverName).toBe('Sébastien Buemi');
+  });
 });
