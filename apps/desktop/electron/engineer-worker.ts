@@ -96,8 +96,11 @@ void (async (): Promise<void> => {
   if (process.env['ENGINEER_VOICE'] === '1') {
     const workerVoice = await (
       await import('./worker-voice')
-    ).createWorkerVoice((audio) =>
-      process.parentPort.postMessage({ type: 'audio', audio } satisfies WorkerMessage),
+    ).createWorkerVoice(
+      (audio) => process.parentPort.postMessage({ type: 'audio', audio } satisfies WorkerMessage),
+      // The reactive reply uses the same provider-aware brain as the text-ask (template or the
+      // configured LLM, hallucination-guarded) — voiced instead of typed.
+      (question) => responder.answer(question),
     );
     voice = workerVoice.voice;
     handleAudioEnded = workerVoice.handleAudioEnded;

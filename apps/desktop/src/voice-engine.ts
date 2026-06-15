@@ -12,7 +12,9 @@ import {
   type RoutedOutcome,
 } from '@race-engineer/radio';
 import {
+  speak,
   VoicePlayer,
+  VoicePriority,
   type AudioClip,
   type AudioSink,
   type RadioCapture,
@@ -74,10 +76,14 @@ export class EngineerVoice {
   /** The PTT conversational loop, or `null` until a provider + capture are supplied. */
   readonly loop: ReactiveRadioLoop | null;
 
+  readonly #tts: TtsProvider;
+  readonly #voice: VoiceId;
   #latest: EngineerSnapshot | null = null;
   #proactivity: ProactivityLevel = 'normal';
 
   constructor(deps: EngineerVoiceDeps) {
+    this.#tts = deps.tts;
+    this.#voice = deps.voice;
     this.player = new VoicePlayer(deps.sink);
     this.router = new ProactiveVoiceRouter({
       player: this.player,
@@ -130,6 +136,23 @@ export class EngineerVoice {
   /** Forward a PTT edge to the reactive loop. No-op until the reactive half is wired (T4.5). */
   onPtt(down: boolean): void {
     this.loop?.onPtt(down);
+  }
+
+  /**
+   * Speak a conversational reply as sentence-streamed TTS on the shared queue (CHATTER by default, so
+   * a spotter/strategy call-out still preempts it). This is the free/provider-agnostic reactive path
+   * (transcript → {@link AskResponder} → here), distinct from the loop's own provider-driven TTS.
+   */
+  speakReply(text: string, priority: number = VoicePriority.CHATTER): Promise<void> {
+    if (!text.trim()) return Promise.resolve();
+    return speak({ player: this.player, tts: this.#tts, voice: this.#voice, text, priority }).then(
+      () => undefined,
+    );
+  }
+
+  /** Driver keyed PTT: stop the engineer talking and clear pending chatter (barge-in). */
+  bargeIn(): void {
+    this.player.bargeInStop();
   }
 
   /** Await any in-flight reactive turn (tests / graceful shutdown). */

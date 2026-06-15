@@ -236,13 +236,25 @@ in a small, reviewable, green-tested change.
   real audio bytes — this slice proves the capture *plumbing* (PTT→mic→frames→STT-stream→transcript).
   _Verify split:_ the coordinator + worker gating are Node-tested; `getUserMedia`/`MediaRecorder`
   capture verifies on the dev **Mac**; the OS mic device + the mapped **wheel** PTT are a Windows verify.)
-  **Remaining T10.1 (slice 3/3):** **provider-wiring** — a real TTS/STT into the reactive loop
-  (`selectTtsProvider` + the configured provider) so the engineer *hears, understands, and answers*:
-  feed the captured transcript → `runRadioTurn` (read-only tools) → sentence-streamed TTS out the
-  audio-out bridge (slice 1), with PTT barge-in. **cloud BYO-key** is the fastest audible path on the
-  dev Mac; **local Piper/Kokoro + faster-whisper** is the free default (native binaries — the rig/native
-  half). Once it lands, the premium voice path supersedes the free Web-Speech call-outs the renderer
-  uses today.
+  ~~**reactive reply** (slice 3a/3)~~ (done 2026-06-15 — push-to-talk question → **spoken answer**. New
+  pure **`apps/desktop/src/radio-reply.ts`** `createRadioReply({ capture, answer, speak, bargeIn })`:
+  PTT-down → barge-in + open capture; PTT-up → finalize → `answer(transcript)` → speak the reply out
+  the audio-out bridge (slice 1), chaining turns so `whenIdle()` is deterministic and a provider error
+  never breaks the chain. The answer reuses the **provider-aware `AskResponder`** (the *same* grounded
+  brain as the text-ask — free template by default, the configured LLM when set, **hallucination-guarded
+  either way**: an ungrounded LLM number falls back to the template, rule 1). `EngineerVoice` gained
+  `speakReply` (sentence-streamed TTS at CHATTER, so a spotter/strategy call-out still preempts) +
+  `bargeIn`. Worker wires capture → reply → `speakReply`; `engineer-worker` passes `responder.answer`.
+  Pure orchestrator unit-tested (PTT flow, empty-transcript/empty-reply no-ops, reject-safe chain,
+  RadioCapture round-trip) — 5 tests, 591 green; compliance PASS (rules 1/5/2/6). So the engineer now
+  **answers a push-to-talk question aloud**, free/no-key (template) or via the configured LLM. **Still
+  silent/scripted** with the fake STT/TTS — slice 3b makes it real.) **Remaining T10.1 (slice 3b/3):**
+  swap the **real STT/TTS providers** in (`selectStt/TtsProvider` + a resolved voice route in the
+  `configure` message, key from secure storage → worker, never the renderer) so it *understands real
+  speech* and is *audible*. **cloud BYO-key** is the fastest audible path on the dev Mac; **local
+  Piper/Kokoro + faster-whisper** is the free default (native binaries — the rig/native half). This is
+  the **human-verify** half (you + mic + speakers, a key for the cloud route). Once it lands, the
+  premium voice path supersedes the free Web-Speech call-outs the renderer uses today.
   M7.7–M7.9 / M8 / M9 offline-strategy depth are paused until the app is launchable. (Offline glue
   done: `get_stint_plan` + `project_pit_window` are now wired into the AI read-only tool surface,
   reading a precomputed `ctx.stintPlan` (T7.3) like `get_fuel_plan` reads `ctx.fuelPlan`; 373 green.
