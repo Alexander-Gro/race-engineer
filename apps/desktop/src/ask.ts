@@ -1,4 +1,11 @@
-import { askEngineer, type RaceContext } from '@race-engineer/ai';
+import {
+  askEngineer,
+  checkSpokenNumbers,
+  runRadioTurn,
+  type LlmProvider,
+  type LlmRouteConfig,
+  type RaceContext,
+} from '@race-engineer/ai';
 import type { EngineerSnapshot } from '@race-engineer/engineer-core';
 
 /**
@@ -24,36 +31,71 @@ export const NO_TELEMETRY_ANSWER =
   "I'm not reading any telemetry yet — once a session is live, ask me again.";
 
 /**
- * Holds the latest snapshot and answers text questions from it. A tiny stateful holder so the worker
- * can answer a request against the freshest context (not the context at subscribe time).
+ * Holds the latest snapshot and answers text questions from it against the freshest context. Free
+ * template mode by default (no key); when the user has configured an LLM "engineer" (T6.3 settings →
+ * {@link AskResponder.setProvider}), it routes through the read-only tool loop instead — but only
+ * speaks the LLM's answer if **every number traces to a tool result** (hallucination guard, docs/06);
+ * otherwise it falls back to the grounded template answer. Any provider error also falls back, so the
+ * driver is never left hanging (docs/15 §fallback). Read-only/advisory throughout.
  */
 export class AskResponder {
   #latest: EngineerSnapshot | null = null;
+  #provider: LlmProvider | null = null;
 
   /** Feed every snapshot in (the worker calls this from the snapshot transport). */
   update(snapshot: EngineerSnapshot): void {
     this.#latest = snapshot;
   }
 
+  /** Set the configured LLM engineer, or null for free template mode. */
+  setProvider(provider: LlmProvider | null): void {
+    this.#provider = provider;
+  }
+
   /** Answer a question against the latest snapshot, or guide the driver if none has arrived yet. */
-  answer(question: string): string {
+  async answer(question: string): Promise<string> {
     if (this.#latest === null) return NO_TELEMETRY_ANSWER;
-    return askEngineer(question, snapshotToRaceContext(this.#latest));
+    const ctx = snapshotToRaceContext(this.#latest);
+    if (this.#provider === null) return askEngineer(question, ctx);
+    try {
+      const result = await runRadioTurn({
+        provider: this.#provider,
+        context: () => ctx,
+        userMessage: question,
+      });
+      const text = result.text.trim();
+      // Speak the LLM only if grounded; otherwise the template answer (numbers straight from tools).
+      if (text && checkSpokenNumbers(result).grounded) return text;
+      return askEngineer(question, ctx);
+    } catch {
+      return askEngineer(question, ctx); // provider/network failure → grounded fallback, never hang
+    }
   }
 }
 
 /**
  * Worker → main messages over the Electron utility-process channel. Tagged so `main` can dispatch
- * snapshots to the renderer and correlate ask-replies. Kept here so both Electron entries share one
- * type. (Plain data — no Electron/Node types — so this file typechecks under the src-only config.)
+ * snapshots to the renderer, correlate ask-replies, and learn when the worker is ready for its
+ * provider config. Kept here so both Electron entries share one type. (Plain data — no Electron/Node
+ * types — so this file typechecks under the src-only config.)
  */
 export type WorkerMessage =
   | { type: 'snapshot'; snapshot: EngineerSnapshot }
-  | { type: 'ask-reply'; id: number; answer: string };
+  | { type: 'ask-reply'; id: number; answer: string }
+  | { type: 'ready' };
 
-/** Main → worker messages: a renderer ask relayed to the Core, correlated by `id`. */
+/** A renderer ask relayed to the Core, correlated by `id`. */
 export interface AskRequestMessage {
   type: 'ask';
   id: number;
   question: string;
 }
+
+/** Main → worker: apply the resolved engineer route (LLM provider + key, or template). */
+export interface ConfigureMessage {
+  type: 'configure';
+  llmRoute: LlmRouteConfig;
+}
+
+/** Everything main can send the worker. */
+export type MainToWorkerMessage = AskRequestMessage | ConfigureMessage;

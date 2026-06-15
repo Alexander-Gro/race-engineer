@@ -1,6 +1,7 @@
+import { selectLlmProvider } from '@race-engineer/ai';
 import type { EngineerEvent } from '@race-engineer/core';
 import type { SnapshotTransport } from '@race-engineer/engineer-core';
-import { AskResponder, type AskRequestMessage, type WorkerMessage } from '../src/ask';
+import { AskResponder, type MainToWorkerMessage, type WorkerMessage } from '../src/ask';
 import { createSyntheticEngineerCore } from '../src/host';
 
 /**
@@ -24,18 +25,42 @@ import { createSyntheticEngineerCore } from '../src/host';
  */
 const responder = new AskResponder();
 
-// Renderer questions arrive (relayed by main) on the parent port; answer from the latest snapshot.
-process.parentPort.on('message', (event: { data: AskRequestMessage }): void => {
+// Main-relayed messages on the parent port: text questions, and the engineer-route config.
+process.parentPort.on('message', (event: { data: MainToWorkerMessage }): void => {
   const msg = event.data;
   if (msg?.type === 'ask') {
-    const reply: WorkerMessage = {
-      type: 'ask-reply',
-      id: msg.id,
-      answer: responder.answer(msg.question),
-    };
-    process.parentPort.postMessage(reply);
+    void responder
+      .answer(msg.question)
+      .then((answer) => {
+        process.parentPort.postMessage({
+          type: 'ask-reply',
+          id: msg.id,
+          answer,
+        } satisfies WorkerMessage);
+      })
+      .catch((err) => {
+        // Never leave the renderer's invoke hanging — reply with a safe message and log.
+        console.error('[ask] answering failed', err);
+        process.parentPort.postMessage({
+          type: 'ask-reply',
+          id: msg.id,
+          answer: "Sorry — I couldn't answer that just now.",
+        } satisfies WorkerMessage);
+      });
+  } else if (msg?.type === 'configure') {
+    // Apply the saved engineer route. A bad/keyless cloud route throws — fall back to template mode
+    // rather than crash (docs/15 §fallback); the renderer never sent us the key, main did.
+    try {
+      responder.setProvider(selectLlmProvider(msg.llmRoute));
+    } catch (err) {
+      console.error('[configure] invalid LLM route — using free template mode', err);
+      responder.setProvider(null);
+    }
   }
 });
+
+// Tell main we're listening, so it sends the engineer-route config (avoids a fork/postMessage race).
+process.parentPort.postMessage({ type: 'ready' } satisfies WorkerMessage);
 
 void (async (): Promise<void> => {
   const source = process.env['ENGINEER_SOURCE'] === 'lmu' ? 'lmu' : 'synthetic';

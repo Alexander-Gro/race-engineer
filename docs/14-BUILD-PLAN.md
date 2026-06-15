@@ -152,12 +152,15 @@ in a small, reviewable, green-tested change.
   shell~~ (done, see below — offline half) → ~~**T4.5** mic/audio I/O~~ (done — mic permission +
   device picker + text fallback in the shell; real mic→STT / TTS→speaker streaming is T10.1) →
   ~~**T6.3** settings/secrets~~ (done — settings + BYO-key secure storage + a settings panel) →
-  ~~LLM-route selector~~ (done — `selectLlmProvider` in `ai` + `resolveLlmRouteConfig` glue: the saved
-  "engineer" setting + BYO-key now resolves to a provider, offline-tested; the **PTT-mapping UI** +
-  **the worker actually instantiating + using** that provider/voice on startup/change are the remaining
-  T6.3 slices) → **T10.1** real STT/TTS (or cloud BYO-key) + the renderer↔worker audio path that makes
-  the voice loop audible end-to-end, wiring `selectLlmProvider`/`selectTtsProvider` into the worker from
-  settings (NEXT focus).
+  ~~LLM-route selector~~ (done) → ~~worker applies the engineer setting (text path)~~ (done — the
+  `AskResponder` is now provider-aware: free template mode by default, or the configured LLM via
+  `runRadioTurn`, **but only speaks the LLM answer when the hallucination guard passes**, else the
+  grounded template; main resolves the route + decrypted key and pushes a `configure` message to the
+  worker on a `ready` handshake and on every settings/secret change — key crosses main→worker only,
+  never to the renderer; degrades to template on a keyless/invalid route or any provider error. So
+  switching the engineer in Settings now takes effect for the text-ask.) → **T10.1** real STT/TTS +
+  the renderer↔worker audio path that makes the **voice** loop audible end-to-end (wiring the same
+  provider + `selectTtsProvider` into the reactive loop) + the **PTT-mapping UI** (NEXT focus).
   M7.7–M7.9 / M8 / M9 offline-strategy depth are paused until the app is launchable. (Offline glue
   done: `get_stint_plan` + `project_pit_window` are now wired into the AI read-only tool surface,
   reading a precomputed `ctx.stintPlan` (T7.3) like `get_fuel_plan` reads `ctx.fuelPlan`; 373 green.

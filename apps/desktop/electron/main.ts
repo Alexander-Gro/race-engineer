@@ -14,8 +14,9 @@ import {
   SNAPSHOT_CHANNEL,
   type EngineerSnapshot,
 } from '@race-engineer/engineer-core';
-import type { AskRequestMessage, WorkerMessage } from '../src/ask';
+import type { AskRequestMessage, ConfigureMessage, WorkerMessage } from '../src/ask';
 import { MIC_SETTINGS_DEEPLINK } from '../src/audio-io';
+import { resolveLlmRouteConfig } from '../src/llm-route';
 import { isSecretSlot, SettingsStore, type AppSettings } from '../src/settings';
 import {
   SECRET_DELETE_CHANNEL,
@@ -50,6 +51,12 @@ let lastSnapshot: EngineerSnapshot | null = null;
 let askSeq = 0;
 const pendingAsks = new Map<number, (answer: string) => void>();
 const ASK_TIMEOUT_MS = 5000;
+
+// Push the saved engineer route (LLM provider + decrypted key, or template) to the worker. Assigned
+// in `whenReady` once the stores exist; called when the worker signals ready and on every settings/
+// secret change so a "mode switch" takes effect live. The key crosses only main→worker, never to the
+// renderer.
+let pushEngineerConfig: (() => void) | null = null;
 
 const createWindow = (): BrowserWindow => {
   const window = new BrowserWindow({
@@ -102,6 +109,9 @@ const startEngineerWorker = (): void => {
         pendingAsks.delete(message.id);
         resolve(message.answer);
       }
+    } else if (message.type === 'ready') {
+      // The worker attached its listener — safe to send the engineer route now (no fork race).
+      pushEngineerConfig?.();
     }
   });
 };
@@ -149,14 +159,28 @@ const main = (): void => {
     const secretStore = new SafeStorageSecretStore(
       path.join(app.getPath('userData'), 'secrets.json'),
     );
+    // Resolve the saved route (reads the decrypted key) and hand it to the worker, which builds the
+    // provider. Re-pushed on every settings/secret change so switching the engineer takes effect live.
+    pushEngineerConfig = (): void => {
+      if (!worker) return;
+      const llmRoute = resolveLlmRouteConfig(settingsStore.load().llm, secretStore);
+      worker.postMessage({ type: 'configure', llmRoute } satisfies ConfigureMessage);
+    };
+
     ipcMain.handle(SETTINGS_LOAD_CHANNEL, () => settingsStore.load());
-    ipcMain.handle(SETTINGS_SAVE_CHANNEL, (_event, next: AppSettings) => settingsStore.save(next));
+    ipcMain.handle(SETTINGS_SAVE_CHANNEL, (_event, next: AppSettings) => {
+      const saved = settingsStore.save(next);
+      pushEngineerConfig?.(); // a changed engineer/provider takes effect immediately
+      return saved;
+    });
     ipcMain.handle(SECRET_SET_CHANNEL, (_event, slot: unknown, value: unknown) => {
       if (isSecretSlot(slot) && typeof value === 'string') secretStore.setKey(slot, value);
+      pushEngineerConfig?.(); // a newly-added key may activate the configured cloud route
       return secretStore.listSetKeys();
     });
     ipcMain.handle(SECRET_DELETE_CHANNEL, (_event, slot: unknown) => {
       if (isSecretSlot(slot)) secretStore.deleteKey(slot);
+      pushEngineerConfig?.();
       return secretStore.listSetKeys();
     });
     ipcMain.handle(SECRET_LIST_CHANNEL, () => secretStore.listSetKeys());

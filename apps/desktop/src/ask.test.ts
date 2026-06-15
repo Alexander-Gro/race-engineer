@@ -1,4 +1,4 @@
-import { ASK_FALLBACK } from '@race-engineer/ai';
+import { ASK_FALLBACK, FakeProvider } from '@race-engineer/ai';
 import { multiClassTrafficState } from '@race-engineer/core/fixtures';
 import type { EngineerSnapshot } from '@race-engineer/engineer-core';
 import { computeFuelPlan, estimatePerLapConsumption } from '@race-engineer/strategy';
@@ -37,30 +37,78 @@ describe('snapshotToRaceContext', () => {
   });
 });
 
-describe('AskResponder', () => {
-  it('guides the driver until the first snapshot arrives (no null-context read)', () => {
-    expect(new AskResponder().answer("how's my fuel?")).toBe(NO_TELEMETRY_ANSWER);
+describe('AskResponder (free template mode)', () => {
+  it('guides the driver until the first snapshot arrives (no null-context read)', async () => {
+    expect(await new AskResponder().answer("how's my fuel?")).toBe(NO_TELEMETRY_ANSWER);
   });
 
-  it('answers from the latest snapshot, quoting the strategy numbers verbatim', () => {
+  it('answers from the latest snapshot, quoting the strategy numbers verbatim', async () => {
     const responder = new AskResponder();
     responder.update(snapshot);
-    const a = responder.answer("how's my fuel?");
+    const a = await responder.answer("how's my fuel?");
     expect(a).toMatch(/8 laps of fuel left/);
     expect(a).toContain(fuelPlan!.perLapLiters.toFixed(2));
   });
 
-  it('answers against the freshest snapshot, not the one at first update', () => {
+  it('answers against the freshest snapshot, not the one at first update', async () => {
     const responder = new AskResponder();
     responder.update(snapshot);
     responder.update({ seq: 4, monotonicMs: 13_000, raceState: multiClassTrafficState });
     // Latest snapshot has no fuel plan → the honest "still learning" answer, not the stale one.
-    expect(responder.answer('fuel?')).toMatch(/[Ss]till learning/);
+    expect(await responder.answer('fuel?')).toMatch(/[Ss]till learning/);
   });
 
-  it('falls back gracefully for an unrecognised question', () => {
+  it('falls back gracefully for an unrecognised question', async () => {
     const responder = new AskResponder();
     responder.update(snapshot);
-    expect(responder.answer('tell me a joke')).toBe(ASK_FALLBACK);
+    expect(await responder.answer('tell me a joke')).toBe(ASK_FALLBACK);
+  });
+});
+
+describe('AskResponder (configured LLM engineer)', () => {
+  it('routes through the LLM and speaks its answer when every number is grounded in a tool result', async () => {
+    const responder = new AskResponder();
+    responder.update(snapshot);
+    responder.setProvider(
+      new FakeProvider([
+        { tools: [{ name: 'get_fuel_plan' }] },
+        {
+          text: (r) => {
+            const plan = r.get_fuel_plan as { lapsRemainingOnFuel: number };
+            return `You've got ${plan.lapsRemainingOnFuel.toFixed(1)} laps in the tank.`;
+          },
+        },
+      ]),
+    );
+    const a = await responder.answer("how's my fuel?");
+    expect(a).toContain(fuelPlan!.lapsRemainingOnFuel.toFixed(1));
+  });
+
+  it('rejects an ungrounded LLM number and falls back to the grounded template answer', async () => {
+    const responder = new AskResponder();
+    responder.update(snapshot);
+    // No tool call, but the reply states a figure → ungrounded → must not be spoken.
+    responder.setProvider(new FakeProvider([{ text: 'You are running P3, two seconds clear.' }]));
+    const a = await responder.answer('what position am I in?');
+    expect(a).not.toContain('two seconds');
+    expect(a).toMatch(/P8/); // the template answer from the fixture (grounded)
+  });
+
+  it('falls back to template mode when the provider throws (never leaves the driver hanging)', async () => {
+    const responder = new AskResponder();
+    responder.update(snapshot);
+    responder.setProvider({
+      name: 'boom',
+      complete: () => Promise.reject(new Error('network down')),
+    });
+    expect(await responder.answer("how's my fuel?")).toMatch(/8 laps of fuel left/);
+  });
+
+  it('setProvider(null) returns to free template mode', async () => {
+    const responder = new AskResponder();
+    responder.update(snapshot);
+    responder.setProvider(new FakeProvider([{ text: 'ignored' }]));
+    responder.setProvider(null);
+    expect(await responder.answer("how's my fuel?")).toMatch(/8 laps of fuel left/);
   });
 });
