@@ -186,10 +186,25 @@ in a small, reviewable, green-tested change.
   `null` → "depends on your model", never a guessed figure; the math is plain deterministic TS, the LLM
   never prices itself (rule 1). Imports are **type-only** so the renderer pulls no ai/voice runtime
   (build-verified: renderer stays lean, 9 modules, no AI graph); the settings panel shows the estimate,
-  live on provider change. 11 tests, 528 green; compliance PASS.) **Remaining T10.1 (native/rig):** real
-  Piper/Kokoro TTS + faster-whisper STT engines, the **mic→STT input** path, and the renderer↔worker
-  audio streaming for the tiered `VoicePlayer` pipeline (wiring the configured provider +
-  `selectTtsProvider` into the reactive loop).
+  live on provider change. 11 tests, 528 green; compliance PASS.) ~~**proactive call-outs spoken aloud**~~
+  (done 2026-06-15 — the engineer now **proactively talks** in the running app, free/no-key. New
+  **`apps/desktop/src/callout.ts`**: a pure `calloutForEvent(event)` maps a Tier ≥ 1 event to a terse
+  fixed phrase (`SPOKEN_PHRASES`) + the event's own `priority`, and a `CalloutSpeaker` (over an injected
+  `CalloutSpeechPort`) speaks the highest-priority pending call-out with **priority preemption** (a more
+  urgent one cuts in; a lower-or-equal one that can't preempt is dropped, not queued stale), an id-dedupe
+  (snapshot-replay safe), and a mute. The renderer feeds it the **same `snapshot.events` feed it already
+  paints as alert chips** and wraps `window.speechSynthesis` (the proactive sibling of the conversational
+  `SpeechController`); a 📢 Call-outs toggle mutes it. **Tier-0 reflex spotter calls
+  (`car_left`/`car_right`/`three_wide`) are excluded by a structural `tier === 0` guard** — those must be
+  pre-rendered clips on the `VoicePlayer` <300 ms safety path (docs/01/07), never live `speechSynthesis`;
+  Tier-2 events get a terse templated fallback here (a deliberate free-profile degraded mode, the richer
+  payload-number/LLM phrasing being the premium `templatePhraser`/native path). No number invented — the
+  Core already detected the event (rule 1). Imports are **type-only** so the renderer pulls no
+  ai/voice/radio/core runtime (build-verified: 10 modules, no AI graph). 12 tests, 540 green; compliance
+  PASS (rule 2 Tier-0 fix applied + re-reviewed).) **Remaining T10.1 (native/rig):** real Piper/Kokoro
+  TTS + faster-whisper STT engines, the **mic→STT input** path, and the renderer↔worker audio streaming
+  for the tiered `VoicePlayer` pipeline (wiring the configured provider + `selectTtsProvider` into the
+  reactive loop) — the premium/native voice path the free Web-Speech call-outs above stand in for.
   M7.7–M7.9 / M8 / M9 offline-strategy depth are paused until the app is launchable. (Offline glue
   done: `get_stint_plan` + `project_pit_window` are now wired into the AI read-only tool surface,
   reading a precomputed `ctx.stintPlan` (T7.3) like `get_fuel_plan` reads `ctx.fuelPlan`; 373 green.

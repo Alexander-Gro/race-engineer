@@ -18,6 +18,7 @@ import {
   type StrategyModel,
   type StrategyRivalRow,
 } from '../src/dashboard/strategy-model';
+import { CalloutSpeaker, type CalloutSpeechPort } from '../src/callout';
 import { estimateCloudCost } from '../src/cost';
 import type { PttApi } from '../src/ptt-mapping';
 import {
@@ -283,9 +284,14 @@ const render = (model: DashboardModel, strategy: StrategyModel): void => {
   if (meta) meta.textContent = `snapshot #${model.seq} · t=${model.elapsedS.toFixed(0)} s`;
 };
 
-window.engineer.onSnapshot((snapshot) =>
-  render(buildDashboardModel(snapshot), buildStrategyModel(snapshot)),
-);
+// The proactive call-out speaker (free Web-Speech path), assigned by wireCallouts() below. The snapshot
+// handler voices the same events the dashboard paints as alert chips.
+let calloutSpeaker: CalloutSpeaker | null = null;
+
+window.engineer.onSnapshot((snapshot) => {
+  render(buildDashboardModel(snapshot), buildStrategyModel(snapshot));
+  if (snapshot.events?.length) calloutSpeaker?.announce(snapshot.events);
+});
 
 /**
  * The free/no-key "ask the engineer" bar (Track A). Wired once — it lives outside `#app`, so the
@@ -328,6 +334,7 @@ const wireAskBar = (): void => {
     const question = input.value.trim();
     if (!question) return;
     speech.stop(); // don't talk over the previous answer while fetching the next
+    calloutSpeaker?.stop(); // a question takes the floor from a proactive call-out
     answer.textContent = '…';
     void window.engineer
       .ask(question)
@@ -341,6 +348,44 @@ const wireAskBar = (): void => {
   });
 };
 wireAskBar();
+
+/**
+ * Proactive call-outs spoken aloud (T10.1, free/no-key). The engineer voices the Tier ≥ 1 events the
+ * dashboard shows as alert chips — "box this lap", "fuel running low" — via the OS voice (Web Speech).
+ * (Tier-0 reflex spotter calls are excluded here — they stay on the pre-rendered `VoicePlayer` path,
+ * docs/01/07.) The pure {@link CalloutSpeaker} (priority preemption, mute) is fed `snapshot.events` in
+ * the subscription above; here we give it a `speechSynthesis` port and a mute toggle. Output-only.
+ */
+const wireCallouts = (): void => {
+  const toggle = document.getElementById('callout-toggle') as HTMLButtonElement | null;
+  const port: CalloutSpeechPort | null =
+    'speechSynthesis' in window
+      ? {
+          speak: (text, onDone) => {
+            const utterance = new SpeechSynthesisUtterance(text);
+            utterance.onend = () => onDone();
+            utterance.onerror = () => onDone(); // always release the speaker, even on a synth error
+            window.speechSynthesis.speak(utterance);
+          },
+          cancel: () => window.speechSynthesis.cancel(),
+        }
+      : null;
+  const speaker = new CalloutSpeaker(port);
+  calloutSpeaker = speaker; // wired into the snapshot handler above
+
+  if (!toggle) return;
+  const paintToggle = (): void => {
+    toggle.textContent = speaker.enabled ? '📢 Call-outs on' : '🔕 Call-outs off';
+    toggle.setAttribute('aria-pressed', String(speaker.enabled));
+  };
+  if (!speaker.available) toggle.hidden = true;
+  else paintToggle();
+  toggle.addEventListener('click', () => {
+    speaker.setEnabled(!speaker.enabled);
+    paintToggle();
+  });
+};
+wireCallouts();
 
 /**
  * The voice-I/O affordances (T4.5 / docs/16 §1): a mic check that surfaces clear guidance (and an
