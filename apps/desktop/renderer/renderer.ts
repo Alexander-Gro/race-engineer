@@ -13,6 +13,14 @@ import {
   type Reading,
   type RivalReading,
 } from '../src/dashboard/model';
+import {
+  LLM_PROVIDER_IDS,
+  PROACTIVITY_LEVELS,
+  PROFILES,
+  SECRET_SLOTS,
+  type AppSettings,
+} from '../src/settings';
+import type { SettingsApi } from '../src/settings-bridge';
 
 /**
  * Renderer (build-plan T6.2). Subscribes to throttled snapshots via the preload-exposed read-only
@@ -27,6 +35,7 @@ import {
 declare global {
   interface Window {
     engineer: EngineerBridge;
+    settings: SettingsApi;
   }
 }
 
@@ -298,3 +307,83 @@ const wireVoiceBar = (): void => {
   refreshOutputs();
 };
 wireVoiceBar();
+
+/**
+ * The settings panel (T6.3): profile / engineer (LLM) / proactivity persist via `window.settings`,
+ * and cloud API keys are stored in OS secure storage — the renderer only ever sends a key (once) and
+ * learns *which* slots are set, never a value (docs/15, rule 6). The free/template default needs no
+ * key; this is opt-in BYO-key.
+ */
+const wireSettingsPanel = (): void => {
+  const profile = document.getElementById('set-profile') as HTMLSelectElement | null;
+  const llm = document.getElementById('set-llm') as HTMLSelectElement | null;
+  const proactivity = document.getElementById('set-proactivity') as HTMLSelectElement | null;
+  const slot = document.getElementById('set-slot') as HTMLSelectElement | null;
+  const keyInput = document.getElementById('set-key') as HTMLInputElement | null;
+  const save = document.getElementById('set-key-save') as HTMLButtonElement | null;
+  const clear = document.getElementById('set-key-clear') as HTMLButtonElement | null;
+  const keysLabel = document.getElementById('set-keys');
+  if (!profile || !llm || !proactivity || !slot || !keyInput || !save || !clear || !keysLabel)
+    return;
+
+  const fill = (select: HTMLSelectElement, options: readonly string[]): void =>
+    select.replaceChildren(
+      ...options.map((value) => {
+        const opt = document.createElement('option');
+        opt.value = value;
+        opt.textContent = value;
+        return opt;
+      }),
+    );
+  fill(profile, PROFILES);
+  fill(llm, LLM_PROVIDER_IDS);
+  fill(proactivity, PROACTIVITY_LEVELS);
+  fill(slot, SECRET_SLOTS);
+
+  let current: AppSettings | null = null;
+
+  const persist = (): void => {
+    if (!current) return;
+    const next: AppSettings = {
+      ...current,
+      profile: profile.value as AppSettings['profile'],
+      llm: { ...current.llm, provider: llm.value as AppSettings['llm']['provider'] },
+      proactivity: proactivity.value as AppSettings['proactivity'],
+    };
+    void window.settings.save(next).then((saved) => {
+      current = saved;
+    });
+  };
+
+  const showKeys = (slots: readonly string[]): void => {
+    keysLabel.textContent = slots.length > 0 ? `keys set: ${slots.join(', ')}` : 'no keys set';
+  };
+
+  for (const control of [profile, llm, proactivity]) control.addEventListener('change', persist);
+
+  save.addEventListener('click', () => {
+    const value = keyInput.value.trim();
+    if (!value) return;
+    void window.settings
+      .setApiKey(slot.value as (typeof SECRET_SLOTS)[number], value)
+      .then((slots) => {
+        keyInput.value = ''; // never keep the plaintext key in the DOM after it's stored
+        showKeys(slots);
+      });
+  });
+
+  clear.addEventListener('click', () => {
+    void window.settings
+      .deleteApiKey(slot.value as (typeof SECRET_SLOTS)[number])
+      .then((slots) => showKeys(slots));
+  });
+
+  void window.settings.load().then((loaded) => {
+    current = loaded;
+    profile.value = loaded.profile;
+    llm.value = loaded.llm.provider;
+    proactivity.value = loaded.proactivity;
+  });
+  void window.settings.listApiKeys().then(showKeys);
+};
+wireSettingsPanel();

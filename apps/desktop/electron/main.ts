@@ -16,7 +16,16 @@ import {
 } from '@race-engineer/engineer-core';
 import type { AskRequestMessage, WorkerMessage } from '../src/ask';
 import { MIC_SETTINGS_DEEPLINK } from '../src/audio-io';
+import { isSecretSlot, SettingsStore, type AppSettings } from '../src/settings';
+import {
+  SECRET_DELETE_CHANNEL,
+  SECRET_LIST_CHANNEL,
+  SECRET_SET_CHANNEL,
+  SETTINGS_LOAD_CHANNEL,
+  SETTINGS_SAVE_CHANNEL,
+} from '../src/settings-bridge';
 import { requestSingleInstanceLock } from '../src/single-instance';
+import { fsSettingsStorage, SafeStorageSecretStore } from './stores';
 
 /**
  * Electron main process (build-plan T6.1). Hosts the **Engineer Core in a worker / utility
@@ -131,6 +140,27 @@ const main = (): void => {
   ipcMain.handle(OPEN_MIC_SETTINGS_CHANNEL, () => shell.openExternal(MIC_SETTINGS_DEEPLINK));
 
   void app.whenReady().then(() => {
+    // Settings + secrets (T6.3). Stores live in the user-data dir (resolved after `ready`); keys are
+    // encrypted via safeStorage and a key's plaintext is never returned to the renderer — only the
+    // set-slot list is.
+    const settingsStore = new SettingsStore(
+      fsSettingsStorage(path.join(app.getPath('userData'), 'settings.json')),
+    );
+    const secretStore = new SafeStorageSecretStore(
+      path.join(app.getPath('userData'), 'secrets.json'),
+    );
+    ipcMain.handle(SETTINGS_LOAD_CHANNEL, () => settingsStore.load());
+    ipcMain.handle(SETTINGS_SAVE_CHANNEL, (_event, next: AppSettings) => settingsStore.save(next));
+    ipcMain.handle(SECRET_SET_CHANNEL, (_event, slot: unknown, value: unknown) => {
+      if (isSecretSlot(slot) && typeof value === 'string') secretStore.setKey(slot, value);
+      return secretStore.listSetKeys();
+    });
+    ipcMain.handle(SECRET_DELETE_CHANNEL, (_event, slot: unknown) => {
+      if (isSecretSlot(slot)) secretStore.deleteKey(slot);
+      return secretStore.listSetKeys();
+    });
+    ipcMain.handle(SECRET_LIST_CHANNEL, () => secretStore.listSetKeys());
+
     // Grant the renderer's own microphone requests (Windows uses the standard getUserMedia flow;
     // docs/16 §1). Only read-only mic capture for push-to-talk is auto-approved; everything else denied.
     session.defaultSession.setPermissionRequestHandler((_wc, permission, callback) =>

@@ -65,6 +65,9 @@ importers:
       '@race-engineer/engineer-core':
         specifier: workspace:*
         version: link:../../packages/engineer-core
+      '@race-engineer/input':
+        specifier: workspace:*
+        version: link:../../packages/input
       '@race-engineer/radio':
         specifier: workspace:*
         version: link:../../packages/radio

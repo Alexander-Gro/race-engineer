@@ -6,12 +6,21 @@ import {
   type EngineerBridge,
   type EngineerSnapshot,
 } from '@race-engineer/engineer-core';
+import type { AppSettings, SecretSlot } from '../src/settings';
+import {
+  SECRET_DELETE_CHANNEL,
+  SECRET_LIST_CHANNEL,
+  SECRET_SET_CHANNEL,
+  SETTINGS_LOAD_CHANNEL,
+  SETTINGS_SAVE_CHANNEL,
+  type SettingsApi,
+} from '../src/settings-bridge';
 
 /**
- * Preload (build-plan T6.1 / Track A text-ask). Exposes a **read-only** {@link EngineerBridge} to
- * the renderer via `contextBridge` — the renderer can only *subscribe* to snapshots and *ask* the
- * engineer a text question (a query that reaches the read-only AI tools), never send anything toward
- * the game (CLAUDE.md rule 5). `contextIsolation` keeps Node out of the renderer.
+ * Preload (build-plan T6.1 / Track A text-ask + T6.3 settings). Exposes two read-only/advisory
+ * bridges via `contextBridge`: `window.engineer` (subscribe to snapshots, ask a text question, open
+ * the OS mic-settings page) and `window.settings` (config CRUD + BYO-key management). Neither can send
+ * anything toward the game (CLAUDE.md rule 5). `contextIsolation` keeps Node out of the renderer.
  */
 const bridge: EngineerBridge = {
   onSnapshot(listener: (snapshot: EngineerSnapshot) => void): () => void {
@@ -28,4 +37,17 @@ const bridge: EngineerBridge = {
   },
 };
 
+const settings: SettingsApi = {
+  load: () => ipcRenderer.invoke(SETTINGS_LOAD_CHANNEL) as Promise<AppSettings>,
+  save: (next: AppSettings) =>
+    ipcRenderer.invoke(SETTINGS_SAVE_CHANNEL, next) as Promise<AppSettings>,
+  // Plaintext crosses to main once here; main encrypts it and only ever returns the set-slot list.
+  setApiKey: (slot: SecretSlot, value: string) =>
+    ipcRenderer.invoke(SECRET_SET_CHANNEL, slot, value) as Promise<SecretSlot[]>,
+  deleteApiKey: (slot: SecretSlot) =>
+    ipcRenderer.invoke(SECRET_DELETE_CHANNEL, slot) as Promise<SecretSlot[]>,
+  listApiKeys: () => ipcRenderer.invoke(SECRET_LIST_CHANNEL) as Promise<SecretSlot[]>,
+};
+
 contextBridge.exposeInMainWorld('engineer', bridge);
+contextBridge.exposeInMainWorld('settings', settings);

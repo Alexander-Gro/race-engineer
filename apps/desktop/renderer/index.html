@@ -295,6 +295,28 @@
         <option value="">System default</option>
       </select>
     </section>
+    <section class="voice-bar settings-bar">
+      <label for="set-profile">Profile</label>
+      <select class="voice-select" id="set-profile"></select>
+      <label for="set-llm">Engineer</label>
+      <select class="voice-select" id="set-llm"></select>
+      <label for="set-proactivity">Chatter</label>
+      <select class="voice-select" id="set-proactivity"></select>
+      <span style="flex: 1"></span>
+      <label for="set-slot">API key</label>
+      <select class="voice-select" id="set-slot"></select>
+      <input
+        class="ask-input"
+        id="set-key"
+        type="password"
+        autocomplete="off"
+        placeholder="paste key…"
+        style="max-width: 180px"
+      />
+      <button class="ask-btn" id="set-key-save" type="button">Save</button>
+      <button class="ask-btn" id="set-key-clear" type="button">Clear</button>
+      <span class="voice-status" id="set-keys"></span>
+    </section>
     <!-- Future engineer-voice playback target; selecting an output routes it via setSinkId now. -->
     <audio id="engineer-audio" hidden></audio>
     <div id="app">Waiting for the Engineer Core…</div>

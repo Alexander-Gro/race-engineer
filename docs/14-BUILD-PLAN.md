@@ -151,8 +151,10 @@ in a small, reviewable, green-tested change.
   Q&A in the shell)~~ (done, see below) → ~~wire the reactive radio loop + proactive router into the
   shell~~ (done, see below — offline half) → ~~**T4.5** mic/audio I/O~~ (done — mic permission +
   device picker + text fallback in the shell; real mic→STT / TTS→speaker streaming is T10.1) →
-  **T6.3** settings/secrets + PTT-mapping UI (NEXT) → **T10.1** real STT/TTS (or cloud BYO-key)
-  + the renderer↔worker audio path that makes the voice loop audible end-to-end.
+  ~~**T6.3** settings/secrets~~ (done — settings + BYO-key secure storage + a settings panel; the
+  **PTT-mapping UI** + **worker-applies-settings** are the remaining T6.3 slices) → **T10.1** real
+  STT/TTS (or cloud BYO-key) + the renderer↔worker audio path that makes the voice loop audible
+  end-to-end, and the worker reconstructing providers from the saved profile/key (NEXT focus).
   M7.7–M7.9 / M8 / M9 offline-strategy depth are paused until the app is launchable. (Offline glue
   done: `get_stint_plan` + `project_pit_window` are now wired into the AI read-only tool surface,
   reading a precomputed `ctx.stintPlan` (T7.3) like `get_fuel_plan` reads `ctx.fuelPlan`; 373 green.
@@ -585,9 +587,29 @@ display to iterate): the **Tailwind/shadcn reskin** of this same model and **Pla
 screenshot tests; shadcn lands with the interactive settings UI (T6.3). _Human:_ `pnpm dev` → eyeball.
 Context: [09-UI-UX](09-UI-UX.md).
 
-**T6.3 — Settings + secrets** · _Claude Code_ · deps: T6.1, T4.x, T5.1
-Build: voice/mode pick, PTT mapping UI, API keys via Electron `safeStorage`, proactivity level.
-Verify: keys persist securely (never logged); mapping round-trips; mode switch takes effect.
+**T6.3 — Settings + secrets** · _Claude Code (live verify human-assisted)_ · deps: T6.1, T4.x, T5.1 · **done (data + secrets + persistence + panel); PTT-mapping UI + worker-apply deferred**
+Build: the **settings + secrets foundation**. `apps/desktop/src/settings.ts` — `AppSettings` (the
+**non-secret** config: profile / llm provider / voice engines / proactivity / output device / PTT
+binding), `DEFAULT_SETTINGS` (free/template, no key), tolerant `parseSettings` (old/partial/corrupt →
+defaults, **drops unknown fields incl. a stray "key"**), and a `SettingsStore` over an injected
+storage port (normalizes on save). `apps/desktop/src/secrets.ts` — a `SecretStore` interface +
+`InMemorySecretStore`; **keys live only in OS secure storage, never in the settings JSON, never logged,
+never returned to the renderer** (the renderer learns only *which* slots are set). Electron live half
+in `electron/stores.ts`: `fsSettingsStorage` + `SafeStorageSecretStore` (`safeStorage` encrypt →
+ciphertext file, refuses plaintext if encryption is unavailable). Wired through a separate
+`window.settings` bridge (load/save + set/delete/list keys) + main handlers (`whenReady`, slot-validated,
+return set-slot names only). A renderer settings panel: profile / engineer (LLM) / proactivity persist;
+an API-key slot+password control stores via `safeStorage` and shows which slots are set (never a value,
+input cleared after save). **Read-only/advisory — config + the user's own keys, no game path.**
+Verify: ✅ 12 unit tests — tolerant parse + per-field fallback, **no secret can reach the settings file**,
+SettingsStore round-trip, secret set/get/has/delete/list (names-only) (443 green); electron-vite build
+green (renderer stays lean; settings imports are type-erased); compliance PASS (rule 6 audited). _Human
+(dev machine, macOS ok):_ `pnpm dev` → flip profile/engineer/chatter (persists across restart), paste a
+key → "keys set: …", restart → still set; values never appear in logs. **Deferred (surface):** the
+**PTT-mapping UI** (`ButtonCapture` "press the button" — needs live input, docs/08) and **the worker
+*applying* settings** (reconstruct LLM/voice providers + the key from the chosen profile — the
+"mode switch takes effect" half) land next, with T10.1.
+Context: [15-COST-AND-FREE-OPERATION](15-COST-AND-FREE-OPERATION.md), [16-PLATFORM-PREREQUISITES](16-PLATFORM-PREREQUISITES.md), [08-INPUT-AND-CONTROLS](08-INPUT-AND-CONTROLS.md).
 
 **T6.4 — Overlay window** · _Claude Code_ · deps: T6.2
 Build: always-on-top transparent click-through overlay with a minimal widget set.
