@@ -16,12 +16,13 @@ export const resolveVoiceRoute = (
   voice: AppSettings['voice'],
   secrets: Pick<SecretStore, 'getKey'>,
 ): VoiceProviderConfig => {
-  // One OpenAI key covers cloud TTS (slice 3b-i) and, later, cloud STT (3b-iii).
+  // One OpenAI key covers cloud TTS (slice 3b-i) and cloud STT (3b-iii) — the full talk-to-it loop.
   const openaiKey = secrets.getKey('openai') ?? '';
   return {
     tts: voice.tts,
     stt: voice.stt,
     ...(voice.tts === 'openai' ? { cloudTtsConfig: { apiKey: openaiKey } } : {}),
+    ...(voice.stt === 'openai' ? { cloudSttConfig: { apiKey: openaiKey } } : {}),
   };
 };
 
@@ -31,4 +32,5 @@ export const resolveVoiceRoute = (
  * Settings turns the real voice on without an env flag. Local engines stay off until their native
  * backend is wired (else they'd just fall back to silence).
  */
-export const voiceRouteIsCloud = (route: VoiceProviderConfig): boolean => route.tts === 'openai';
+export const voiceRouteIsCloud = (route: VoiceProviderConfig): boolean =>
+  route.tts === 'openai' || route.stt === 'openai';

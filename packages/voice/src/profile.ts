@@ -1,3 +1,4 @@
+import { openAiStt, type CloudSttConfig } from './providers/cloud-stt';
 import { openAiTts, type CloudTtsConfig } from './providers/cloud-tts';
 import { FakeSttProvider } from './providers/fake-stt';
 import { FakeTtsProvider } from './providers/fake-tts';
@@ -27,7 +28,7 @@ import type { SttProvider, TtsProvider } from './types';
  * then the local shells are not-ready — see `local-tts.ts`/`local-stt.ts`).
  */
 export type TtsEngineId = 'fake' | 'piper' | 'kokoro' | 'openai';
-export type SttEngineId = 'fake' | 'whisper-cpp' | 'faster-whisper';
+export type SttEngineId = 'fake' | 'whisper-cpp' | 'faster-whisper' | 'openai';
 
 export interface VoiceProviderConfig {
   tts: TtsEngineId;
@@ -39,6 +40,8 @@ export interface VoiceProviderConfig {
   sttBackend?: LocalSttBackend;
   /** Cloud TTS (BYO-key) config for the `openai` engine; absent/empty key ⇒ reports not-ready. */
   cloudTtsConfig?: CloudTtsConfig;
+  /** Cloud STT (BYO-key) config for the `openai` engine; absent/empty key ⇒ reports not-ready. */
+  cloudSttConfig?: CloudSttConfig;
 }
 
 /** The free profile (docs/15, default, ships enabled): fully local, no signup, no key. */
@@ -69,6 +72,8 @@ export const selectSttProvider = (config: VoiceProviderConfig): SttProvider => {
       return whisperCppStt(config.sttConfig, config.sttBackend ?? null);
     case 'faster-whisper':
       return fasterWhisperStt(config.sttConfig, config.sttBackend ?? null);
+    case 'openai':
+      return openAiStt(config.cloudSttConfig ?? { apiKey: '' }); // no key ⇒ not-ready, caller falls back
     default: {
       const unknown: never = config.stt;
       throw new Error(`unknown STT engine: ${String(unknown)}`);

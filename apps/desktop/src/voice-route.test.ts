@@ -28,7 +28,18 @@ describe('resolveVoiceRoute', () => {
       secretsWith({ openai: 'sk-live' }),
     );
     expect(route.cloudTtsConfig).toBeUndefined();
+    expect(route.cloudSttConfig).toBeUndefined();
     expect(route.tts).toBe('kokoro');
+  });
+
+  it('attaches the OpenAI key to the cloud STT config when the cloud mic engine is selected', () => {
+    const route = resolveVoiceRoute(
+      { tts: 'openai', stt: 'openai' },
+      secretsWith({ openai: 'sk-x' }),
+    );
+    // One OpenAI key powers both directions of the loop.
+    expect(route.cloudTtsConfig).toEqual({ apiKey: 'sk-x' });
+    expect(route.cloudSttConfig).toEqual({ apiKey: 'sk-x' });
   });
 
   it('produces a serializable route — no fetch/backends that would break the worker postMessage', () => {
@@ -40,8 +51,9 @@ describe('resolveVoiceRoute', () => {
 });
 
 describe('voiceRouteIsCloud', () => {
-  it('is true for a cloud engine, false for local/fake', () => {
+  it('is true when either TTS or STT is cloud, false for local/fake', () => {
     expect(voiceRouteIsCloud({ tts: 'openai', stt: 'fake' })).toBe(true);
+    expect(voiceRouteIsCloud({ tts: 'fake', stt: 'openai' })).toBe(true); // cloud mic alone activates it
     expect(voiceRouteIsCloud({ tts: 'kokoro', stt: 'faster-whisper' })).toBe(false);
     expect(voiceRouteIsCloud({ tts: 'fake', stt: 'fake' })).toBe(false);
   });

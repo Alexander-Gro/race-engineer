@@ -275,11 +275,21 @@ in a small, reviewable, green-tested change.
   PASS (rule 6 key-handling verified clean — key never reaches the renderer, never logged; Tier-0 stays
   pre-rendered). **So: select Voice=openai + paste an OpenAI key → the engineer speaks text-ask replies +
   proactive call-outs in a real cloud voice.** _Human-verify (you + OpenAI key + speakers):_ confirm
-  audible.) **Remaining T10.1 (slice 3b-iii):** **cloud STT** (OpenAI transcription) for voice-in — so
-  hold-to-talk is *understood* (the on-screen 🎙 button works without SDL2; the wheel PTT needs SDL2.dll
-  on the rig, a packaging follow-up). Then the **local native backends** (Piper/Kokoro + faster-whisper
-  binaries — the free default, rig/native). Once STT lands, the full loop (talk → understand → real-voice
-  answer) is testable; it supersedes the free Web-Speech call-outs the renderer uses today.
+  audible.) ~~**cloud STT for voice-in** (slice 3b-iii)~~ (done 2026-06-16 — **the full talk-to-it loop
+  is now testable**. New **`packages/voice/src/providers/cloud-stt.ts`** `CloudSttProvider` (OpenAI-
+  compatible `POST /audio/transcriptions`, multipart): buffers the held-PTT mic frames and transcribes
+  on release (batch — no streaming partials); `fetch` injectable (mocked-transport tested), key from
+  config/secure storage **never embedded** (rule 6), available=key-present, non-OK throws. `'openai'`
+  added to `SttEngineId` + `cloudSttConfig`; `selectSttProvider` swaps to it config-only; cost estimator
+  prices it $0.02/h (docs/15). `resolveVoiceRoute` attaches `cloudSttConfig` (the **same OpenAI key** as
+  TTS) and `voiceRouteIsCloud` now activates on TTS **or** STT; Settings gained a **Mic** STT-engine
+  dropdown. 614 tests; typecheck (both) + lint + electron build green; compliance PASS (rule 6 key-
+  handling clean, never-crash fallbacks, reject-safe consumer). **So with one OpenAI key + Voice=openai
+  + Mic=openai: hold 🎙 Hold-to-talk → it transcribes your speech → answers (template or LLM, guarded) →
+  speaks back in a real cloud voice.** _Human-verify (you + OpenAI key + mic + speakers):_ confirm the
+  end-to-end loop.) **Remaining T10.1:** the **local native backends** (Piper/Kokoro + faster-whisper
+  binaries — the free, no-key default; rig/native) and the **wheel PTT** (SDL2.dll on the rig — the
+  on-screen 🎙 button needs no SDL2). The cloud loop already supersedes the free Web-Speech call-outs.
   M7.7–M7.9 / M8 / M9 offline-strategy depth are paused until the app is launchable. (Offline glue
   done: `get_stint_plan` + `project_pit_window` are now wired into the AI read-only tool surface,
   reading a precomputed `ctx.stintPlan` (T7.3) like `get_fuel_plan` reads `ctx.fuelPlan`; 373 green.

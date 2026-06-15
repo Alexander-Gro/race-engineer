@@ -33,6 +33,8 @@ export { MockMicSource } from './backends/mock-mic';
 export { ProviderNotReadyError } from './providers/errors';
 export { CloudTtsProvider, openAiTts } from './providers/cloud-tts';
 export type { CloudTtsConfig, CloudTtsFormat, TtsFetchLike } from './providers/cloud-tts';
+export { CloudSttProvider, openAiStt } from './providers/cloud-stt';
+export type { CloudSttConfig, SttFetchLike } from './providers/cloud-stt';
 export { LocalTtsProvider, piperTts, kokoroTts } from './providers/local-tts';
 export type { LocalTtsEngine, LocalTtsConfig, LocalTtsBackend } from './providers/local-tts';
 export { LocalSttProvider, fasterWhisperStt, whisperCppStt } from './providers/local-stt';

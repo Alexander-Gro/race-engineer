@@ -29,6 +29,7 @@ import {
   PROACTIVITY_LEVELS,
   PROFILES,
   SECRET_SLOTS,
+  STT_ENGINES,
   TTS_ENGINES,
   type AppSettings,
 } from '../src/settings';
@@ -635,6 +636,7 @@ const wireSettingsPanel = (): void => {
   const profile = document.getElementById('set-profile') as HTMLSelectElement | null;
   const llm = document.getElementById('set-llm') as HTMLSelectElement | null;
   const voiceTts = document.getElementById('set-voice-tts') as HTMLSelectElement | null;
+  const voiceStt = document.getElementById('set-voice-stt') as HTMLSelectElement | null;
   const proactivity = document.getElementById('set-proactivity') as HTMLSelectElement | null;
   const slot = document.getElementById('set-slot') as HTMLSelectElement | null;
   const keyInput = document.getElementById('set-key') as HTMLInputElement | null;
@@ -646,6 +648,7 @@ const wireSettingsPanel = (): void => {
     !profile ||
     !llm ||
     !voiceTts ||
+    !voiceStt ||
     !proactivity ||
     !slot ||
     !keyInput ||
@@ -668,6 +671,7 @@ const wireSettingsPanel = (): void => {
   fill(profile, PROFILES);
   fill(llm, LLM_PROVIDER_IDS);
   fill(voiceTts, TTS_ENGINES);
+  fill(voiceStt, STT_ENGINES);
   fill(proactivity, PROACTIVITY_LEVELS);
   fill(slot, SECRET_SLOTS);
 
@@ -685,7 +689,11 @@ const wireSettingsPanel = (): void => {
       ...current,
       profile: profile.value as AppSettings['profile'],
       llm: { ...current.llm, provider: llm.value as AppSettings['llm']['provider'] },
-      voice: { ...current.voice, tts: voiceTts.value as AppSettings['voice']['tts'] },
+      voice: {
+        ...current.voice,
+        tts: voiceTts.value as AppSettings['voice']['tts'],
+        stt: voiceStt.value as AppSettings['voice']['stt'],
+      },
       proactivity: proactivity.value as AppSettings['proactivity'],
     };
     paintCost(next); // reflect the new route immediately, before the async save resolves
@@ -698,7 +706,7 @@ const wireSettingsPanel = (): void => {
     keysLabel.textContent = slots.length > 0 ? `keys set: ${slots.join(', ')}` : 'no keys set';
   };
 
-  for (const control of [profile, llm, voiceTts, proactivity])
+  for (const control of [profile, llm, voiceTts, voiceStt, proactivity])
     control.addEventListener('change', persist);
 
   save.addEventListener('click', () => {
@@ -723,6 +731,7 @@ const wireSettingsPanel = (): void => {
     profile.value = loaded.profile;
     llm.value = loaded.llm.provider;
     voiceTts.value = loaded.voice.tts;
+    voiceStt.value = loaded.voice.stt;
     proactivity.value = loaded.proactivity;
     paintCost(loaded);
   });

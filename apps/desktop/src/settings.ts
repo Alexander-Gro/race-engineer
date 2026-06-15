@@ -22,7 +22,7 @@ export type { LlmProviderId, ProactivityLevel };
 // `satisfies` ties these literal lists to the voice package's engine ids — a drift there is a compile
 // error here, so the settings enum can't silently fall out of sync with what `selectTtsProvider` knows.
 // Exported so the settings panel renders the voice-engine pickers (T10.1 slice 3b). `openai` is the
-// BYO-key cloud TTS (slice 3b-i/ii); cloud STT joins STT_ENGINES with 3b-iii.
+// BYO-key cloud TTS + STT (one OpenAI key powers the full talk-to-it loop).
 export const TTS_ENGINES = [
   'fake',
   'piper',
@@ -33,6 +33,7 @@ export const STT_ENGINES = [
   'fake',
   'whisper-cpp',
   'faster-whisper',
+  'openai',
 ] as const satisfies readonly SttEngineId[];
 /** UI option lists (also the validation allow-lists). Exported so the settings panel renders them. */
 export const PROFILES = ['free', 'premium'] as const satisfies readonly Profile[];

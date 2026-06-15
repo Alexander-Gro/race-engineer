@@ -43,6 +43,7 @@ export const STT_HOURLY_USD: Readonly<Record<SttEngineId, number>> = {
   fake: 0,
   'whisper-cpp': 0,
   'faster-whisper': 0,
+  openai: 0.02, // cloud BYO-key STT ≈ $0.02/h (docs/15 §Cost scenarios, "Budget cloud" row)
 };
 export const TTS_HOURLY_USD: Readonly<Record<TtsEngineId, number>> = {
   fake: 0,
