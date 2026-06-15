@@ -20,6 +20,8 @@
     "@race-engineer/ai": "workspace:*",
     "@race-engineer/core": "workspace:*",
     "@race-engineer/engineer-core": "workspace:*",
+    "@race-engineer/radio": "workspace:*",
+    "@race-engineer/voice": "workspace:*",
     "koffi": "^3.0.0"
   },
   "devDependencies": {

@@ -148,9 +148,10 @@ in a small, reviewable, green-tested change.
   Order: ~~**T6.1** Electron boot~~ (done — electron-vite wired) → ~~**T6.2** dashboard~~ (done —
   pure `buildDashboardModel` + structured renderer; all docs/09 §A widgets + state-honesty colours,
   fixture-tested; Tailwind/shadcn reskin + Playwright deferred) → ~~text-ask the engineer (free/no-key
-  Q&A in the shell)~~ (done, see below) → **wire the reactive radio loop + proactive router into the
-  shell** (NEXT — the *voice* path; reuses the snapshot→`RaceContext` bridge) → **T4.5** mic/audio I/O
-  → **T6.3** settings/secrets + PTT-mapping UI → **T10.1** real STT/TTS (or cloud BYO-key).
+  Q&A in the shell)~~ (done, see below) → ~~wire the reactive radio loop + proactive router into the
+  shell~~ (done, see below — offline half) → **T4.5** mic/audio I/O (NEXT — turns the silent voice
+  wiring audible: real OS sink + `getUserMedia` mic + wheel PTT) → **T6.3** settings/secrets +
+  PTT-mapping UI → **T10.1** real STT/TTS (or cloud BYO-key).
   M7.7–M7.9 / M8 / M9 offline-strategy depth are paused until the app is launchable. (Offline glue
   done: `get_stint_plan` + `project_pit_window` are now wired into the AI read-only tool surface,
   reading a precomputed `ctx.stintPlan` (T7.3) like `get_fuel_plan` reads `ctx.fuelPlan`; 373 green.
@@ -179,6 +180,20 @@ in a small, reviewable, green-tested change.
   AI brain bundles only into the Node worker, never the renderer (build-verified: renderer stays 4
   modules). 411 green. _Human (dev machine, macOS ok):_ `pnpm dev` → type "how's my fuel?" → see the
   grounded answer (the live half).
+  **Voice layer wired into the shell done (2026-06-15) — offline half:** new
+  `apps/desktop/src/voice-engine.ts` `EngineerVoice` composes the radio layer (`ProactiveVoiceRouter`
+  + `ReactiveRadioLoop`) over one `VoicePlayer`: `routeEvents` (Core events → call-outs), `onSnapshot`
+  (freshest `RaceContext` via the shared `snapshotToRaceContext` bridge), `onPtt` (PTT → STT → AI →
+  streamed TTS). Proactive default is free/no-key (`templatePhraser`); the reactive loop is built only
+  when a provider + capture are supplied (else `onPtt` no-ops). `engineer-core` gained an immediate,
+  off-throttle `onEvent` hook (snapshots still carry events for the dashboard) so a Tier-0 spotter
+  call-out routes a snapshot-interval sooner; threaded through `host.ts`/`lmu-host.ts`. The worker
+  routes Core events to the voice layer behind `ENGINEER_VOICE=1` (free/offline, **audio silent until
+  the real OS sink lands in T4.5/T10.1** — routed call-outs are logged; the voice/radio/ai graph
+  dynamically imported only when enabled; default `pnpm dev` demo untouched). Read-only/advisory —
+  audio + mic only, no game path. 420 green; compliance PASS. **T4.5** makes it audible (OS sink +
+  `getUserMedia` mic + wheel PTT); the live reactive loop should also register the T5.3
+  `onHallucinationCheck` then.
 - **Track B (needs the Windows rig + LMU) — app can now drive it (2026-06-15):** the launchable app
   is the test harness. **`pnpm dev:lmu`** drives the dashboard from the **live LMU shared-memory
   source** (`apps/desktop/src/lmu-host.ts` — `LmuAdapter` + `createLmuNormalizer`, dynamically loaded

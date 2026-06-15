@@ -1,4 +1,5 @@
 import { createLmuNormalizer, LmuAdapter, type LmuRawFrame } from '@race-engineer/adapter-lmu';
+import type { EngineerEvent } from '@race-engineer/core';
 import { EngineerCore, type SnapshotTransport } from '@race-engineer/engineer-core';
 
 /**
@@ -18,6 +19,8 @@ export interface LmuHostOptions {
   snapshotHz?: number;
   /** Shared-memory poll rate (Hz). Default is the adapter's (50 Hz). */
   pollHz?: number;
+  /** Immediate (off-throttle) detected events, for the proactive voice layer (docs/01 Tier-0). */
+  onEvent?: (events: readonly EngineerEvent[]) => void;
 }
 
 export const createLmuEngineerCore = (
@@ -29,4 +32,5 @@ export const createLmuEngineerCore = (
     normalizer: createLmuNormalizer(),
     transport,
     snapshotHz: options.snapshotHz,
+    onEvent: options.onEvent,
   });

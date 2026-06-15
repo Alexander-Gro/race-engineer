@@ -1,4 +1,4 @@
-import { createCanonicalNormalizer, type RaceState } from '@race-engineer/core';
+import { createCanonicalNormalizer, type EngineerEvent, type RaceState } from '@race-engineer/core';
 import { scriptedScenario, syntheticAdapter } from '@race-engineer/adapter-sim-replay';
 import { EngineerCore, type SnapshotTransport } from '@race-engineer/engineer-core';
 
@@ -22,6 +22,8 @@ export interface EngineerHostOptions {
   frameIntervalMs?: number;
   /** Loop the synthetic scenario forever (the app). Off by default so `start()` resolves in tests. */
   loop?: boolean;
+  /** Immediate (off-throttle) detected events, for the proactive voice layer (docs/01 Tier-0). */
+  onEvent?: (events: readonly EngineerEvent[]) => void;
 }
 
 export const createSyntheticEngineerCore = (
@@ -36,4 +38,5 @@ export const createSyntheticEngineerCore = (
     normalizer: createCanonicalNormalizer(),
     transport,
     snapshotHz: options.snapshotHz,
+    onEvent: options.onEvent,
   });

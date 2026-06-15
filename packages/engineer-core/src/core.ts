@@ -33,6 +33,13 @@ export interface EngineerCoreOptions<TFrame> {
   isFrameStable?: (frame: TFrame) => boolean;
   /** Event Detector rules. Default {@link defaultEventRules}; pass `[]` to disable detection. */
   eventRules?: readonly EventRule[];
+  /**
+   * Fired the instant the detector produces events, **off the snapshot throttle** — so the
+   * proactive voice layer can route a Tier-0 spotter call-out immediately (docs/01 §Latency tiers)
+   * rather than waiting up to one snapshot interval. Snapshots still carry the same events for the
+   * dashboard's (visual, throttle-cadenced) alerts feed. Advisory only — no path to the game.
+   */
+  onEvent?: (events: readonly EngineerEvent[]) => void;
 }
 
 const DEFAULT_SNAPSHOT_HZ = 12;
@@ -83,7 +90,11 @@ export class EngineerCore<TFrame> {
         // measured on the full-rate clock. Events buffer until the next throttled snapshot.
         this.#strategy.observe(state);
         const events = this.#detector.process(state);
-        if (events.length > 0) this.#pendingEvents.push(...events);
+        if (events.length > 0) {
+          this.#pendingEvents.push(...events);
+          // Immediate, off-throttle delivery for the proactive voice layer (Tier-0 latency).
+          this.#options.onEvent?.(events);
+        }
         if (throttle.accept(state)) {
           this.#emit(state);
           tail.lastSentMs = state.monotonicMs;

@@ -105,6 +105,38 @@ describe('EngineerCore', () => {
     expect(types.has('lap_completed')).toBe(true); // the stint completes multiple laps
   });
 
+  it('delivers fired events immediately via onEvent (off the snapshot throttle, same events)', async () => {
+    const snaps: EngineerSnapshot[] = [];
+    const fromHook: string[] = [];
+    const core = new EngineerCore({
+      adapter: syntheticAdapter(scriptedScenario()),
+      normalizer: createCanonicalNormalizer(),
+      transport: (s) => snaps.push(s),
+      onEvent: (events) => fromHook.push(...events.map((e) => e.id)),
+      snapshotHz: 12,
+    });
+    await core.start();
+
+    // Every event the hook saw is exactly the set the snapshots carried (no loss, no duplication).
+    const fromSnaps = snaps.flatMap((s) => s.events ?? []).map((e) => e.id);
+    expect(fromHook.length).toBeGreaterThan(0);
+    expect([...fromHook].sort()).toEqual([...fromSnaps].sort());
+  });
+
+  it('does not call onEvent when detection is disabled (eventRules: [])', async () => {
+    let calls = 0;
+    const core = new EngineerCore({
+      adapter: syntheticAdapter(scriptedScenario()),
+      normalizer: createCanonicalNormalizer(),
+      transport: () => undefined,
+      onEvent: () => (calls += 1),
+      snapshotHz: 12,
+      eventRules: [],
+    });
+    await core.start();
+    expect(calls).toBe(0);
+  });
+
   it('emits no events when detection is disabled (eventRules: [])', async () => {
     const snaps: EngineerSnapshot[] = [];
     const core = new EngineerCore({
