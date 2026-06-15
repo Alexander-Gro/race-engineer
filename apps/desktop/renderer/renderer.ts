@@ -1,5 +1,12 @@
 import type { EngineerBridge } from '@race-engineer/engineer-core';
 import {
+  applyOutputDevice,
+  listOutputDevices,
+  releaseStream,
+  requestMicAccess,
+  watchDeviceChanges,
+} from '../src/audio-io';
+import {
   buildDashboardModel,
   type AlertReading,
   type DashboardModel,
@@ -229,3 +236,65 @@ const wireAskBar = (): void => {
   });
 };
 wireAskBar();
+
+/**
+ * The voice-I/O affordances (T4.5 / docs/16 §1): a mic check that surfaces clear guidance (and an
+ * "open settings" deep-link) when capture is denied — never a crash — and an output-device picker
+ * that routes the engineer voice to a chosen device. Mic capture is read-only and gated; the text
+ * box above is the always-available no-mic fallback.
+ */
+const wireVoiceBar = (): void => {
+  const testBtn = document.getElementById('mic-test') as HTMLButtonElement | null;
+  const status = document.getElementById('mic-status');
+  const settingsBtn = document.getElementById('mic-settings') as HTMLButtonElement | null;
+  const select = document.getElementById('output-device') as HTMLSelectElement | null;
+  const audio = document.getElementById('engineer-audio') as HTMLAudioElement | null;
+  if (!testBtn || !status || !settingsBtn || !select || !audio) return;
+
+  const setStatus = (text: string, cls: '' | 'ok' | 'bad'): void => {
+    status.textContent = text;
+    status.className = `voice-status${cls ? ` ${cls}` : ''}`;
+  };
+
+  testBtn.addEventListener('click', () => {
+    setStatus('Checking…', '');
+    settingsBtn.hidden = true;
+    void requestMicAccess(navigator.mediaDevices).then((access) => {
+      if (access.ok) {
+        releaseStream(access.stream); // PTT gates real capture; release the probe immediately
+        setStatus('Mic OK', 'ok');
+      } else {
+        setStatus(access.message, 'bad');
+        settingsBtn.hidden = !access.canOpenSettings;
+      }
+    });
+  });
+
+  settingsBtn.addEventListener('click', () => void window.engineer.openMicSettings());
+
+  const refreshOutputs = (): void => {
+    void listOutputDevices(navigator.mediaDevices).then((devices) => {
+      const chosen = select.value;
+      select.replaceChildren(
+        ...devices.map((d) => {
+          const opt = document.createElement('option');
+          opt.value = d.deviceId;
+          opt.textContent = d.label;
+          return opt;
+        }),
+      );
+      if (devices.some((d) => d.deviceId === chosen)) select.value = chosen;
+    });
+  };
+
+  select.addEventListener('change', () => {
+    if (!select.value) return; // ignore the placeholder before the real device list loads
+    void applyOutputDevice(audio, select.value).then((r) => {
+      if (!r.ok) setStatus(r.message, 'bad');
+    });
+  });
+
+  watchDeviceChanges(navigator.mediaDevices, refreshOutputs);
+  refreshOutputs();
+};
+wireVoiceBar();

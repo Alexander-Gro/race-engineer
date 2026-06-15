@@ -1,7 +1,21 @@
 import path from 'node:path';
-import { app, BrowserWindow, ipcMain, utilityProcess, type UtilityProcess } from 'electron';
-import { ASK_CHANNEL, SNAPSHOT_CHANNEL, type EngineerSnapshot } from '@race-engineer/engineer-core';
+import {
+  app,
+  BrowserWindow,
+  ipcMain,
+  session,
+  shell,
+  utilityProcess,
+  type UtilityProcess,
+} from 'electron';
+import {
+  ASK_CHANNEL,
+  OPEN_MIC_SETTINGS_CHANNEL,
+  SNAPSHOT_CHANNEL,
+  type EngineerSnapshot,
+} from '@race-engineer/engineer-core';
 import type { AskRequestMessage, WorkerMessage } from '../src/ask';
+import { MIC_SETTINGS_DEEPLINK } from '../src/audio-io';
 import { requestSingleInstanceLock } from '../src/single-instance';
 
 /**
@@ -112,7 +126,16 @@ const main = (): void => {
       askEngineerViaWorker(typeof question === 'string' ? question : ''),
   );
 
+  // Mic-denied recovery (docs/16 §1): open the OS mic-privacy page. The URL is a fixed constant —
+  // nothing from the renderer is interpolated, so this can't become an open-anything hole.
+  ipcMain.handle(OPEN_MIC_SETTINGS_CHANNEL, () => shell.openExternal(MIC_SETTINGS_DEEPLINK));
+
   void app.whenReady().then(() => {
+    // Grant the renderer's own microphone requests (Windows uses the standard getUserMedia flow;
+    // docs/16 §1). Only read-only mic capture for push-to-talk is auto-approved; everything else denied.
+    session.defaultSession.setPermissionRequestHandler((_wc, permission, callback) =>
+      callback(permission === 'media'),
+    );
     startEngineerWorker();
     createWindow();
     app.on('activate', () => {

@@ -43,9 +43,16 @@ export const SNAPSHOT_CHANNEL = 'engineer:snapshot' as const;
 export const ASK_CHANNEL = 'engineer:ask' as const;
 
 /**
- * The read-only API the preload script exposes to the renderer via `contextBridge`. The renderer
- * can *subscribe* to snapshots and *ask* the engineer a text question — both read-only; it can never
- * send anything toward the game.
+ * Renderer → main request to open the OS microphone-privacy settings page (docs/16 §1). Main opens a
+ * **fixed** deep-link via `shell.openExternal` (no URL comes from the renderer), so this can't be a
+ * general "open anything" hole. Used when mic capture is denied. Not a game-write path.
+ */
+export const OPEN_MIC_SETTINGS_CHANNEL = 'engineer:open-mic-settings' as const;
+
+/**
+ * The read-only API the preload script exposes to the renderer via `contextBridge`. The renderer can
+ * *subscribe* to snapshots, *ask* the engineer a text question, and *open* the OS mic-settings page —
+ * all read-only/advisory; it can never send anything toward the game.
  */
 export interface EngineerBridge {
   /** Subscribe to throttled snapshots; returns an unsubscribe function. */
@@ -55,6 +62,8 @@ export interface EngineerBridge {
    * (template mode over the read-only tools — docs/15). Advisory only.
    */
   ask(question: string): Promise<string>;
+  /** Open the OS microphone-privacy settings page (mic-denied recovery, docs/16 §1). */
+  openMicSettings(): Promise<void>;
 }
 
 /**

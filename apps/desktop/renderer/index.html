@@ -213,6 +213,33 @@
       .ask-answer:empty {
         display: none;
       }
+      /* Voice settings strip — mic check + output-device picker (T4.5 / docs/16 §1). */
+      .voice-bar {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 8px;
+        margin: 0 0 12px;
+        font-size: 12px;
+        color: var(--muted);
+      }
+      .voice-select {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        color: var(--text);
+        font: inherit;
+        padding: 6px 8px;
+      }
+      .voice-status {
+        font-variant-numeric: tabular-nums;
+      }
+      .voice-status.bad {
+        color: var(--caution);
+      }
+      .voice-status.ok {
+        color: var(--good);
+      }
       /* Colour language (docs/09): green = good, amber = caution, red = act-now. */
       .sev-good {
         color: var(--good);
@@ -258,6 +285,18 @@
       </form>
       <output class="ask-answer" id="ask-answer"></output>
     </section>
+    <section class="voice-bar">
+      <button class="ask-btn" id="mic-test" type="button">🎤 Test mic</button>
+      <span class="voice-status" id="mic-status"></span>
+      <button class="ask-btn" id="mic-settings" type="button" hidden>Open settings</button>
+      <span style="flex: 1"></span>
+      <label for="output-device">Engineer voice out:</label>
+      <select class="voice-select" id="output-device">
+        <option value="">System default</option>
+      </select>
+    </section>
+    <!-- Future engineer-voice playback target; selecting an output routes it via setSinkId now. -->
+    <audio id="engineer-audio" hidden></audio>
     <div id="app">Waiting for the Engineer Core…</div>
     <!-- electron-vite (Vite) bundles this TS entry; in dev it's served with HMR. -->
     <script type="module" src="./renderer.ts"></script>

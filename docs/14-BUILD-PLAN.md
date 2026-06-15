@@ -149,9 +149,10 @@ in a small, reviewable, green-tested change.
   pure `buildDashboardModel` + structured renderer; all docs/09 §A widgets + state-honesty colours,
   fixture-tested; Tailwind/shadcn reskin + Playwright deferred) → ~~text-ask the engineer (free/no-key
   Q&A in the shell)~~ (done, see below) → ~~wire the reactive radio loop + proactive router into the
-  shell~~ (done, see below — offline half) → **T4.5** mic/audio I/O (NEXT — turns the silent voice
-  wiring audible: real OS sink + `getUserMedia` mic + wheel PTT) → **T6.3** settings/secrets +
-  PTT-mapping UI → **T10.1** real STT/TTS (or cloud BYO-key).
+  shell~~ (done, see below — offline half) → ~~**T4.5** mic/audio I/O~~ (done — mic permission +
+  device picker + text fallback in the shell; real mic→STT / TTS→speaker streaming is T10.1) →
+  **T6.3** settings/secrets + PTT-mapping UI (NEXT) → **T10.1** real STT/TTS (or cloud BYO-key)
+  + the renderer↔worker audio path that makes the voice loop audible end-to-end.
   M7.7–M7.9 / M8 / M9 offline-strategy depth are paused until the app is launchable. (Offline glue
   done: `get_stint_plan` + `project_pit_window` are now wired into the AI read-only tool surface,
   reading a precomputed `ctx.stintPlan` (T7.3) like `get_fuel_plan` reads `ctx.fuelPlan`; 373 green.
@@ -434,10 +435,25 @@ Verify: ✅ interface-conformance tests (shape + not-ready throw + injected-back
 provider-swap is config-only (swap one field → different provider, no code change); default profile
 is free/local (8 tests; 236 green). Native impl + live audio: T10.1.
 
-**T4.5 — Microphone permission + audio I/O** · _Claude Code (live verify human-assisted)_ · deps: T4.3
-Build: `getUserMedia` capture; handle OS-denied mic (deep-link `ms-settings:privacy-microphone`);
-output-device enumeration/selection; hot-plug + default-change handling; text-input fallback.
-Verify: denied-mic path shows guidance (no crash); voice routes to the chosen output device.
+**T4.5 — Microphone permission + audio I/O** · _Claude Code (live verify human-assisted)_ · deps: T4.3 · **done (logic + shell affordance)**
+Build: new `apps/desktop/src/audio-io.ts` — the renderer audio-I/O primitives written over small
+**injected ports** (no DOM lib, so unit-testable in Node; the renderer passes the real
+`navigator.mediaDevices`/`<audio>`): `requestMicAccess` (getUserMedia probe → granted | denied /
+no-device / in-use / unsupported / error guidance, **never throws** — docs/16 §1), `releaseStream`
+(probe is released immediately — capture stays PTT-gated), `listOutputDevices`, `watchDeviceChanges`
+(hot-plug/default-change), `applyOutputDevice` (`setSinkId`, degrades gracefully), and
+`MIC_SETTINGS_DEEPLINK`. Shell wiring: a read-only `OPEN_MIC_SETTINGS_CHANNEL` (`EngineerBridge.openMicSettings`)
+→ main `shell.openExternal('ms-settings:privacy-microphone')` (**fixed constant URL — not an
+open-anything hole**) + `session.setPermissionRequestHandler` granting only `media`; a renderer
+voice-bar (🎤 Test mic → guidance + "Open settings" on denial, output-device picker routed via
+`setSinkId`). The text-ask box is the no-mic fallback. **Read-only/advisory — mic in + the
+engineer's own audio out, no game path.**
+Verify: ✅ 11 unit tests (every mic-failure path → guidance not a throw; enumerate filters audiooutput
++ flags default; devicechange subscribe/unsubscribe; setSinkId routing + graceful unsupported/error)
+(431 green); electron-vite build green (renderer stays lean — no AI graph); compliance PASS. _Human
+(dev machine — macOS ok for the mic/output prompts):_ `pnpm dev` → Test mic (allow/deny → see
+guidance), pick an output device. **Live half:** real mic→STT and TTS clip→speaker streaming
+(renderer↔worker audio path) lands with T10.1; the Windows `ms-settings:` deep-link verifies on the rig.
 Context: [16-PLATFORM-PREREQUISITES](16-PLATFORM-PREREQUISITES.md) §1.
 
 **T4.6 — Local-model manager** · _Claude Code (live impls human/T10.1)_ · deps: T0.2 (underpins T4.2/T4.3 and the free LLM route) · **done (logic)**

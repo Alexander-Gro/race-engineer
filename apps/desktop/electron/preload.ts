@@ -1,6 +1,7 @@
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron';
 import {
   ASK_CHANNEL,
+  OPEN_MIC_SETTINGS_CHANNEL,
   SNAPSHOT_CHANNEL,
   type EngineerBridge,
   type EngineerSnapshot,
@@ -21,6 +22,9 @@ const bridge: EngineerBridge = {
   },
   ask(question: string): Promise<string> {
     return ipcRenderer.invoke(ASK_CHANNEL, question) as Promise<string>;
+  },
+  openMicSettings(): Promise<void> {
+    return ipcRenderer.invoke(OPEN_MIC_SETTINGS_CHANNEL) as Promise<void>;
   },
 };
 
