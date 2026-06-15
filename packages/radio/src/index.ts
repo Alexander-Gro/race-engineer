@@ -21,3 +21,10 @@ export type {
   RoutedOutcome,
   LlmPhraserOptions,
 } from './proactive';
+export { isQuietWindow, shouldAnnounce } from './proactivity';
+export type {
+  ProactivityLevel,
+  DriverLoadInputs,
+  QuietWindowOptions,
+  AnnounceContext,
+} from './proactivity';

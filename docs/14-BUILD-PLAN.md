@@ -679,9 +679,26 @@ Context: [05-STRATEGY-ENGINE](05-STRATEGY-ENGINE.md).
 ## M8 — Proactive coaching & in-race aid advice (Roadmap Phase 3)
 
 T8.1 read current aids → T8.2 background-strategist loop → T8.3 integrated coaching
-(aid/driving ⇄ tire/fuel ⇄ strategy) → T8.4 advice verification from telemetry → T8.5
-proactivity controls + quiet windows. **Read-only throughout — no write path.**
+(aid/driving ⇄ tire/fuel ⇄ strategy) → T8.4 advice verification from telemetry → ~~T8.5
+proactivity controls + quiet windows~~ (done, pulled forward — the self-contained, offline-testable
+piece that closes the T6.3 proactivity-setting loop). **Read-only throughout — no write path.**
+T8.1–T8.4 (the coaching/strategist LLM loops) remain; better tackled once the live voice loop lands.
 Context: [06-AI-ENGINEER](06-AI-ENGINEER.md), [08-INPUT-AND-CONTROLS](08-INPUT-AND-CONTROLS.md).
+
+**T8.5 — Proactivity controls + quiet windows** · _Claude Code_ · deps: T6.3, T5.4/T7.9 · **done**
+Build: a pure gate in `radio` (`proactivity.ts`) — `shouldAnnounce(event, { level, inputs })` +
+`isQuietWindow(inputs)`. The driver's **proactivity level** caps chattiness (off = only the safety
+reflex; low = + urgent Tier-1; normal = + Tier-2; high = all); **quiet windows** hold non-urgent
+(Tier ≥ 2) chatter under heavy braking / hard cornering (docs/07); a **Tier-0 reflex spotter call
+always passes** (safety overrides everything — checked first). `radio` now owns the `ProactivityLevel`
+type (settings imports it **type-only**, so the renderer pulls no radio/ai runtime; `PROACTIVITY_LEVELS`
+value stays local, `satisfies`-pinned). `EngineerVoice.routeEvents` filters events through the gate
+using the latest snapshot's `player.inputs`; `setProactivity` is threaded from the saved setting via
+the worker `configure` message (race-safe: applied on configure and again once the voice is built).
+Verify: ✅ pure-gate unit tests (level cap, quiet-window hold, **safety-always-passes even off + under
+load**, custom thresholds) + EngineerVoice gating tests (496 green); electron build green (renderer
+stays lean); compliance PASS (0 findings). The brake+|steer| proxy stands in for combined-g (schema
+gap, docs/07). Live-audible once T10.1 lands; the setting already persists + reaches the worker today.
 
 ## M9 — Setup advisory (Roadmap Phase 4)
 

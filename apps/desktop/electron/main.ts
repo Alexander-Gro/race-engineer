@@ -163,8 +163,13 @@ const main = (): void => {
     // provider. Re-pushed on every settings/secret change so switching the engineer takes effect live.
     pushEngineerConfig = (): void => {
       if (!worker) return;
-      const llmRoute = resolveLlmRouteConfig(settingsStore.load().llm, secretStore);
-      worker.postMessage({ type: 'configure', llmRoute } satisfies ConfigureMessage);
+      const settings = settingsStore.load();
+      const llmRoute = resolveLlmRouteConfig(settings.llm, secretStore);
+      worker.postMessage({
+        type: 'configure',
+        llmRoute,
+        proactivity: settings.proactivity,
+      } satisfies ConfigureMessage);
     };
 
     ipcMain.handle(SETTINGS_LOAD_CHANNEL, () => settingsStore.load());

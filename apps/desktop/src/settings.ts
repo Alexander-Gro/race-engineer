@@ -1,5 +1,6 @@
 import type { LlmProviderId } from '@race-engineer/ai';
 import type { ButtonRef } from '@race-engineer/input';
+import type { ProactivityLevel } from '@race-engineer/radio';
 import type { SttEngineId, TtsEngineId } from '@race-engineer/voice';
 
 /**
@@ -14,9 +15,9 @@ import type { SttEngineId, TtsEngineId } from '@race-engineer/voice';
  */
 
 export type Profile = 'free' | 'premium';
-export type ProactivityLevel = 'off' | 'low' | 'normal' | 'high';
-/** LLM routes are owned by `ai` (the package that builds the providers) — re-exported for convenience. */
-export type { LlmProviderId };
+/** `ProactivityLevel` (radio) + `LlmProviderId` (ai) are owned by their acting package; re-exported
+ * here (type-only, so the renderer doesn't pull those runtimes) and pinned via the `satisfies` lists. */
+export type { LlmProviderId, ProactivityLevel };
 
 // `satisfies` ties these literal lists to the voice package's engine ids — a drift there is a compile
 // error here, so the settings enum can't silently fall out of sync with what `selectTtsProvider` knows.

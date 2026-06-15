@@ -1,5 +1,11 @@
 import { FakeProvider } from '@race-engineer/ai';
-import { EventDetector, fuelLowRule, spotterRule, type RaceState } from '@race-engineer/core';
+import {
+  EventDetector,
+  fuelLowRule,
+  spotterRule,
+  type EngineerEvent,
+  type RaceState,
+} from '@race-engineer/core';
 import { lowFuelState, multiClassTrafficState } from '@race-engineer/core/fixtures';
 import type { EngineerSnapshot } from '@race-engineer/engineer-core';
 import { computeFuelPlan, estimatePerLapConsumption } from '@race-engineer/strategy';
@@ -170,6 +176,56 @@ describe('EngineerVoice — reactive PTT loop', () => {
     await voice.whenIdle();
 
     expect(errors).toHaveLength(1);
+  });
+});
+
+describe('EngineerVoice — proactivity gating + quiet windows (T8.5)', () => {
+  const tier2Heads = (): EngineerEvent => ({
+    id: 'pwo:0',
+    tick: 0,
+    type: 'pit_window_open',
+    tier: 2,
+    priority: 0,
+    payload: { earliestLap: 8, latestLap: 22 },
+  });
+  const withInputs = (brake: number, steer: number): EngineerSnapshot => ({
+    seq: 0,
+    monotonicMs: 0,
+    raceState: {
+      ...multiClassTrafficState,
+      player: {
+        ...multiClassTrafficState.player,
+        inputs: { throttle: 0, brake, clutch: 0, steer },
+      },
+    },
+    strategy: { fuelPlan: null, stintPlan: null },
+  });
+
+  it("'off' suppresses a non-reflex call-out", async () => {
+    const { voice } = await makeVoice();
+    voice.onSnapshot(withInputs(0, 0));
+    voice.setProactivity('off');
+    expect(await voice.routeEvents([tier2Heads()])).toEqual([]);
+  });
+
+  it("'normal' speaks a Tier-2 heads-up when calm, but holds it under heavy braking (quiet window)", async () => {
+    const { voice } = await makeVoice();
+    voice.setProactivity('normal');
+
+    voice.onSnapshot(withInputs(0, 0)); // calm
+    expect((await voice.routeEvents([tier2Heads()])).map((o) => o.kind)).toEqual(['spoken']);
+
+    voice.onSnapshot(withInputs(0.9, 0)); // hard on the brakes
+    expect(await voice.routeEvents([tier2Heads()])).toEqual([]);
+  });
+
+  it('a Tier-0 spotter reflex always passes — even off and under load', async () => {
+    const { voice } = await makeVoice();
+    voice.setProactivity('off');
+    voice.onSnapshot(withInputs(0.9, 0.9));
+    const events = new EventDetector([spotterRule()]).process(multiClassTrafficState);
+    const outcomes = await voice.routeEvents(events);
+    expect(outcomes.some((o) => o.kind === 'prerendered')).toBe(true);
   });
 });
 

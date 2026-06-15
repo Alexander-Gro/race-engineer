@@ -7,6 +7,7 @@ import {
   type RaceContext,
 } from '@race-engineer/ai';
 import type { EngineerSnapshot } from '@race-engineer/engineer-core';
+import type { ProactivityLevel } from '@race-engineer/radio';
 
 /**
  * The free/no-key "ask the engineer" glue for the desktop app (Track A — "it answers you"). It
@@ -91,10 +92,12 @@ export interface AskRequestMessage {
   question: string;
 }
 
-/** Main → worker: apply the resolved engineer route (LLM provider + key, or template). */
+/** Main → worker: apply the saved engineer config — the LLM route (provider + key, or template)
+ * and the proactivity level. Pushed on the worker's `ready` and after every settings/secret change. */
 export interface ConfigureMessage {
   type: 'configure';
   llmRoute: LlmRouteConfig;
+  proactivity: ProactivityLevel;
 }
 
 /** Everything main can send the worker. */

@@ -1,8 +1,10 @@
 import { selectLlmProvider } from '@race-engineer/ai';
 import type { EngineerEvent } from '@race-engineer/core';
 import type { SnapshotTransport } from '@race-engineer/engineer-core';
+import type { ProactivityLevel } from '@race-engineer/radio';
 import { AskResponder, type MainToWorkerMessage, type WorkerMessage } from '../src/ask';
 import { createSyntheticEngineerCore } from '../src/host';
+import type { EngineerVoice } from '../src/voice-engine';
 
 /**
  * Engineer Core worker (build-plan T6.1 + Track A voice path) — runs in the Electron utility process
@@ -24,6 +26,11 @@ import { createSyntheticEngineerCore } from '../src/host';
  * demo is untouched, and the voice/radio/ai graph is **dynamically imported only when enabled**.
  */
 const responder = new AskResponder();
+// The proactive voice (built in the IIFE when ENGINEER_VOICE=1) + the latest configured chattiness.
+// `configure` may arrive before the voice is built (it's posted on `ready`), so hold the level and
+// apply it once the voice exists.
+let voice: EngineerVoice | null = null;
+let proactivity: ProactivityLevel = 'normal';
 
 // Main-relayed messages on the parent port: text questions, and the engineer-route config.
 process.parentPort.on('message', (event: { data: MainToWorkerMessage }): void => {
@@ -56,6 +63,8 @@ process.parentPort.on('message', (event: { data: MainToWorkerMessage }): void =>
       console.error('[configure] invalid LLM route — using free template mode', err);
       responder.setProvider(null);
     }
+    proactivity = msg.proactivity;
+    voice?.setProactivity(proactivity); // applied here, or after the voice is built (see below)
   }
 });
 
@@ -66,22 +75,24 @@ void (async (): Promise<void> => {
   const source = process.env['ENGINEER_SOURCE'] === 'lmu' ? 'lmu' : 'synthetic';
 
   // Proactive voice preview — opt-in, free/offline, silent until T4.5 wires a real audio sink.
-  const voice =
+  voice =
     process.env['ENGINEER_VOICE'] === '1'
       ? await (await import('./worker-voice')).createWorkerVoice()
       : null;
+  voice?.setProactivity(proactivity); // apply any config that arrived before the voice was built
+  const activeVoice = voice; // a const so the closures below narrow `null` away (configure uses `voice`)
 
   const transport: SnapshotTransport = (snapshot): void => {
     responder.update(snapshot);
-    voice?.onSnapshot(snapshot);
+    activeVoice?.onSnapshot(snapshot);
     process.parentPort.postMessage({ type: 'snapshot', snapshot } satisfies WorkerMessage);
   };
 
-  const onEvent = voice
+  const onEvent = activeVoice
     ? (events: readonly EngineerEvent[]): void => {
         // Fire-and-forget off the tick thread; a synth/TTS failure must never crash the worker
         // (docs/16 §1 "never crash; the radio is the core feature") — log and move on.
-        void voice
+        void activeVoice
           .routeEvents(events)
           .then((outcomes) => {
             for (const o of outcomes) {

@@ -4,8 +4,10 @@ import type { EngineerSnapshot } from '@race-engineer/engineer-core';
 import {
   ProactiveVoiceRouter,
   ReactiveRadioLoop,
+  shouldAnnounce,
   templatePhraser,
   type ProactivePhraser,
+  type ProactivityLevel,
   type ReactiveRadioLoopEvents,
   type RoutedOutcome,
 } from '@race-engineer/radio';
@@ -73,6 +75,7 @@ export class EngineerVoice {
   readonly loop: ReactiveRadioLoop | null;
 
   #latest: EngineerSnapshot | null = null;
+  #proactivity: ProactivityLevel = 'normal';
 
   constructor(deps: EngineerVoiceDeps) {
     this.player = new VoicePlayer(deps.sink);
@@ -105,14 +108,23 @@ export class EngineerVoice {
     this.#latest = snapshot;
   }
 
+  /** Set how chatty the engineer is (the driver's proactivity setting — T6.3/T8.5). */
+  setProactivity(level: ProactivityLevel): void {
+    this.#proactivity = level;
+  }
+
   /**
-   * Route a batch of detected events to engineer audio and resolve with the outcomes. Wire to
-   * `EngineerCore.onEvent`; call sites that don't care can ignore the promise (`void`), while tests
-   * (and the worker's logging) `await` it. Reflex clips enqueue synchronously inside `routeAll`;
-   * phrased ones synthesize before the promise resolves.
+   * Route a batch of detected events to engineer audio and resolve with the outcomes. Each event is
+   * first gated by the proactivity level + quiet windows (T8.5): non-urgent chatter is held when the
+   * driver is hard on the brakes / cornering, and the level caps chattiness — but a Tier-0 safety
+   * reflex always passes. Wire to `EngineerCore.onEvent`; ignore the promise (`void`) or `await` it.
    */
   routeEvents(events: readonly EngineerEvent[]): Promise<RoutedOutcome[]> {
-    return events.length === 0 ? Promise.resolve([]) : this.router.routeAll(events);
+    const inputs = this.#latest?.raceState.player.inputs;
+    const allowed = events.filter((event) =>
+      shouldAnnounce(event, { level: this.#proactivity, inputs }),
+    );
+    return allowed.length === 0 ? Promise.resolve([]) : this.router.routeAll(allowed);
   }
 
   /** Forward a PTT edge to the reactive loop. No-op until the reactive half is wired (T4.5). */
