@@ -808,9 +808,13 @@ and shake out anything the earlier (mostly stationary / short) captures missed.
   `|rate| > MAX_PLAUSIBLE_CLOSING_RATE_MPS (100)` to `null`. Near-car values (what T7.5 uses) were clean.
 
 ### B. Enums & sentinels (need the right session to occur)
-- [ ] **FCY / yellow / pit-state enums** `mGamePhase` / `mYellowFlagState` / `mPitState` /
+- [~] **FCY / yellow / pit-state enums** `mGamePhase` / `mYellowFlagState` / `mPitState` /
   `mUnderYellow` / `mFlag` — capture a session with a full-course yellow and a pit entry.
   Gates the FCY/SC opportunism work (T7.6) and `flags.global` mapping (T2.3).
+  **Partly resolved (S2 live 2026-06-16):** REST `/rest/sessions/GetGameState` returns these as
+  **strings** (`gamePhase:"GPHASE_GREEN"`, `PitState:"NONE"`, `MultiStintState:"DRIVING"`) — a clean
+  source for the *green* values and the enum vocabulary; still want a live **yellow + pit** session to
+  see the FCY/pit string values and cross-map them to the SHM numeric enums.
 - [ ] **Sector-flag enum** `mSectorFlag` (observed 1 and 11) — decode meanings.
 - [x] **Lap-time population** — **CONFIRMED S1#3**: `lastLapS`/`bestLapS` populate with real values
   after the first completed lap (5468/6400 frames non-null); sentinels → null correctly.
@@ -842,9 +846,14 @@ and shake out anything the earlier (mostly stationary / short) captures missed.
   decrementing (`pnpm record --frames N`), commit a trimmed copy, then `pnpm eval replay <file>` —
   it scores the live `StrategyEngine` vs the recording's own measured per-lap burn. Same recording
   also feeds §C tyre/pace calibration.
-- [ ] **T2.2 live** REST probe → capture Swagger payloads → finish Virtual-Energy + pit/refuel
-  mapping into `RaceState`.
-- [ ] **T1.3 / T1.4** current-aid (TC/ABS/engine-map index) + setup-file reads (S3/S4).
+- [x] **T2.2 live** REST probe → capture Swagger payloads — **done (T1.2, S2 live 2026-06-16):**
+  full endpoint list + payloads captured; base URL, GET-only avoid-list, VE/standings/aids sources
+  confirmed (see "S2 — live confirmation"). *Remaining (mapping, T2.2/T2.3):* wire VE/standings/
+  pit-estimate into `RaceState`; capture a non-zero `pitstop-estimate` from the garage.
+- [~] **T1.3 / T1.4** current-aid (TC/ABS/engine-map index) + setup-file reads (S3/S4).
+  **S3 mostly resolved via REST** (`getPlayerGarageData` `VM_*` — engine mixture/brake balance/VE/
+  compound read live; TC/ABS are enable-flags, live-level TBD). S4 `.svm` read now **optional** (REST
+  is the better current-setup source); one open item: live TC/ABS *level* update while driving.
 
 ## S2 / S4 desk-research findings (verify live)
 
@@ -950,12 +959,72 @@ reinforces: poll gently, GET-only, tolerate failure.
   **Virtual Energy per lap** (`/rest/strategy/usage`) and the **pit/refuel/repair + damage
   + brake-wear menu state** (`/rest/garage/UIScreen/RepairAndRefuel`). VE is an LMU concept
   absent from the rF2 SHM layout, so REST is the primary VE source.
-- **For S3 (current TC / ABS / engine-map *index*):** **LIVE-VERIFY** whether
-  `/rest/garage/getPlayerGarageData` or a `/rest/garage/UIScreen/*` screen exposes the
-  current aid indices. SHM does **not** carry these (S1 finding). If REST also does not,
-  fall back to the setup file (S4) for the baseline. This is the open S3 question.
+- **For S3 (current TC / ABS / engine-map *index*):** **RESOLVED (S2 live 2026-06-16):**
+  `/rest/garage/getPlayerGarageData` exposes them as `VM_*` `{value,stringValue}` objects (engine
+  mixture, brake balance, VE, compound all read live; TC/ABS read as enable-flags — see the S2 live
+  section). SHM does **not** carry these (S1). REST is the aids source; the setup file (S4) is no
+  longer needed for the baseline. One open live-verify: whether the wheel-dial TC/ABS *level* updates
+  here while driving.
 - **For available tire sets/compounds:** SHM gives the *current* compound name; **REST is
   the likely source for the list of available sets** — confirm via Swagger.
+
+## S2 — live confirmation (2026-06-16) — REST probed on the rig (T1.2)
+
+Probed `localhost:6397` live, mid-race (GT3 driving, Le Mans, the same session as S1#4).
+**The desk research is confirmed and substantially extended** — the authoritative Swagger spec
+gave the full endpoint list and several high-value GET endpoints desk research never found.
+Strictly **GET-only, read-only** throughout.
+
+**Connection (confirmed)**
+- **Base URL `http://127.0.0.1:6397` works; IPv6 `http://[::1]:6397` is refused** on this build.
+  The adapter should use IPv4 `127.0.0.1` (the documented `[::1]` fallback was *not* needed here,
+  but keep it as a fallback). No plugin required — the server runs with the game.
+- **Swagger spec lives at `http://localhost:6397/swagger-schema.json`** (OpenAPI **2.0**, title
+  `LMU`, version `1.0`) — *not* the conventional `/swagger/v1/swagger.json` (that 404s). The UI
+  page `/swagger/index.html` points to it via `/swagger/swagger-initializer.js`.
+- **178 paths total; 107 are non-GET (POST/PUT/DELETE) write operations.** Per rule 5 the adapter
+  is **GET-only**; the full non-GET list (garage `setup` POST/PUT/DELETE, `PitMenu/loadPitMenu`,
+  `SetCurrentVehicle`, `sessions/*` save/load/drive, `hud/toggle`, etc.) is the **avoid-list**.
+  A full dump of the spec + every probed payload was saved off-repo to `%TEMP%\lmu-rest-probe\`.
+
+**High-value GET endpoints (live payloads captured)**
+
+| Endpoint | Confirmed payload (key fields) | Beats SHM? |
+| --- | --- | --- |
+| `/rest/watch/standings` | `ARRAY[53]` rich per-car: `carClass`, `carPosition{x,y,z}`, `bestLapTime`, `lastLapTime`, `*SectorTime*`, `lapDistance`, `pathLateral`, `pitState`, `pitstops`, `timeBehind{Leader,Next,ClassLeader}`, `lapsBehind{Leader,Next,ClassLeader}`, **`fuelFraction`**, **`veFraction`**, `penalties`, `flag`, `underYellow`, `driverName`, `player` | **Yes** — adds per-**class** gaps, sector splits, fuel/VE fraction |
+| `/rest/watch/sessionInfo` | `ambientTemp`, `trackTemp`, `gamePhase`, `maxTime`, `maximumLaps`, `raceCompletion`, `sectorFlag`, `yellowFlagState`, `timeRemainingInGamePhase`, `session`, `numberOfVehicles`, `raining`, `windSpeed` | session rules/state |
+| `/rest/sessions/GetGameState` | **enum *strings***: `gamePhase:"GPHASE_GREEN"`, `PitState:"NONE"`, `MultiStintState:"DRIVING"`, `PitEntryDist:-684`, `teamVehicleState`, `playerVehicleLoaded`, `raceFinished` | resolves SHM FCY/pit **enum** meanings (as strings) |
+| `/rest/garage/getVehicleCondition` | `fuel:84`, `fuelCapacity:117`, `tireCondition[4]` (0.93/0.94/0.83/0.90 — matches SHM wear), `brakeCondition[4]`, `suspensionDamage[4]`, `vehicleDamage` | clean damage/wear read |
+| `/rest/garage/getPlayerGarageData` | the current car setup as `VM_*` objects `{value, stringValue, lastSavedStringValue, min/max}` — see S3 below | **aids baseline (S3)** |
+| `/rest/strategy/usage` | per-driver (keyed by name) VE usage history | VE per lap |
+| `/rest/strategy/pitstop-estimate` | `{fuel, tires, brakes, brakeDucts, damage, driverSwap, penalties, ve, total}` (seconds) — **all 0.0 while on track / no stop configured** | pit-time breakdown (T7.2) |
+| `/rest/garage/UIScreen/RepairAndRefuel` | `fuelInfo`, `pitMenu`, `pitRecommendations`, `pitStopLength`, `pitStopTimes`, `weatherForecast` | pit menu state |
+| `/rest/garage/UIScreen/TireManagement` | `tireInventory`, `tireInvGarageOptions`, `expectedUsage`, `optimalCompoundConditions`, `wheelInfo` | **available tyre sets (T7.3)** |
+| `/rest/garage/UIScreen/CarSetupOverview` | `carSetup`, `carPresetSetups`, `weatherForecast` | full setup state |
+| `/rest/sessions/weather` | `PRACTICE`/`QUALIFY`/`RACE` weather + forecast nodes | forecast |
+
+**S3 — RESOLVED (with one caveat): the current aids ARE readable via REST.** SHM does not carry
+TC/ABS/engine-map (S1#3), but `getPlayerGarageData` does, each as `{value (index), stringValue
+(display), lastSavedStringValue, minValue, maxValue}`. Live-read values this session:
+- `VM_ENGINE_MIXTURE` → `value:1`, `stringValue:"Race"` (max 2; `lastSaved:"Safety-car"`) — **engine map readable & mappable.**
+- `VM_BRAKE_BALANCE` → `stringValue:"49.5:50.5"` (front:rear; `value:30` is the *index*, confirming the S4 "index-not-value" rule). (Note: differs from SHM `mRearBrakeBias` 52.8% — REST is the *setup* baseline, SHM is *live*; prefer SHM for live brake bias.)
+- `VM_VIRTUAL_ENERGY` → `stringValue:"100% (11.1 laps)"`, `value:100` — **VE % + laps-to-empty readable.**
+- `VM_FUEL_LEVEL` → `value:83` (≈ 84 L; `max:117`), `VM_FRONT_TIRE_COMPOUND` → `"Medium"`.
+- ⚠️ **Caveat:** `VM_TRACTION_CONTROL` and `VM_ANTILOCK_BRAKES` read `value:0`/`stringValue:"Available"`
+  — i.e. an **enable flag** (TC/ABS allowed), **not** the live wheel-dial level the driver changes on
+  track. So the **setup baseline** is readable now; whether the *live* TC/ABS *level* updates here
+  while driving is the **one remaining S3 live-verify** (toggle on the wheel + re-poll). Engine
+  mixture and brake migration look like real adjustable values; TC/ABS look like flags.
+
+**Read-only confirmation.** Every call above is a GET. Write-capable endpoints exist (107 non-GET,
+incl. the garage `setup`/`PitMenu`/`SetCurrentVehicle` "set" operations CrewChief uses) — we issue
+**none** of them. The `RestClient` (T2.2) must hard-restrict to GET and carry the avoid-list.
+
+**Forward work (T2.2/T2.3 mapping, not this spike):** wire `veFraction`/`fuelFraction` + per-class
+gaps + sector times from `/rest/watch/standings` and the `GetGameState` enum strings into the
+canonical `RaceState` (merge with SHM, SHM winning for live physics); source VE-per-lap from
+`/rest/strategy/usage`; source the pit-time breakdown from `/rest/strategy/pitstop-estimate` (capture
+a non-zero sample with a stop configured in the garage); source tyre sets from `TireManagement`.
 
 ### S4.1 — Setup file location (confirmed from source; exact-path LIVE-VERIFY)
 
@@ -1087,7 +1156,11 @@ Get-ChildItem -Path $SET -Recurse -Filter *.svm | Sort-Object LastWriteTime -des
     driver toggled them on the wheel** — so the cockpit aid *levels* are confirmed **not** in telemetry
     and must come from REST (S2) or the setup file (S4). **Front-vs-rear CONFIRMED:** user verified
     52.5 = front, matching our `frontPct` (= `mRearBrakeBias × 100`). See S3 / S1#3.
-- [ ] **S2** REST base URL/port, endpoint list, payload schemas, read-only?
+- [x] **S2** REST base URL/port, endpoint list, payload schemas, read-only?
+  **LIVE-CONFIRMED 2026-06-16 (T1.2 — see "S2 — live confirmation"):** base `http://127.0.0.1:6397`
+  (IPv6 `[::1]` refused); authoritative spec at `/swagger-schema.json` (OpenAPI 2.0); **178 paths,
+  107 non-GET** (write avoid-list); payloads captured for standings/strategy/garage/session; aids in
+  `getPlayerGarageData`; rich per-class standings in `/rest/watch/standings`. GET-only confirmed.
   - *desk-research (confirmed from public tool sources — see "S2 / S4 desk-research
     findings"):* **Base URL `http://localhost:6397`** (corroborated by the LMU community REST
     thread, lmu-pitwall, TinyPedal, DR Sim Manager); **no extra plugin needed** for REST.
@@ -1117,7 +1190,11 @@ Get-ChildItem -Path $SET -Recurse -Filter *.svm | Sort-Object LastWriteTime -des
       or a `/rest/garage/UIScreen/*` screen are the candidates. **NEEDS LIVE VERIFICATION:**
       find the available-sets endpoint in the Swagger list and capture its payload. Source:
       TinyPedal (RepairAndRefuel/garage usage); LMU community REST thread.
-- [ ] **S3** Are current TC/ABS/brake-bias/engine-map values *readable* (telemetry/extended buffer or setup file)? (Read-only — we never write them.)
+- [x] **S3** Are current TC/ABS/brake-bias/engine-map values *readable* (telemetry/extended buffer or setup file)? (Read-only — we never write them.)
+  **RESOLVED 2026-06-16 (S2 live):** brake bias from SHM (live); **engine map (`VM_ENGINE_MIXTURE`),
+  brake balance, VE, compound readable from REST `getPlayerGarageData`**. One open live-verify: whether
+  the wheel-dial **TC/ABS *level*** updates in REST while driving (they read as enable-flags). See the
+  "S2 — live confirmation" S3 block.
   - *desk-research (confirmed from source):* see the second S1 item above. Summary: brake
     bias = telemetry (`rF2VehicleTelemetry.mRearBrakeBias`); TC/ABS *difficulty* flags =
     `rF2Extended.mPhysics`; in-cockpit TC/ABS/engine-map *index* = not found in SHM,

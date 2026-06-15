@@ -446,10 +446,19 @@ UTF-8 (regression-tested, 615 green). New observations logged for T2.3: `mPlace`
 for trailing cars (derive gaps, already handled canonical).
 Output: ✅ install path, enable flags, populated fields, decode fix + open items → doc 03 §S1 #1–#4.
 
-**T1.2 — S2: REST API probe** · _human-assisted_ · deps: T0.2
+**T1.2 — S2: REST API probe** · _human-assisted_ · deps: T0.2 · **done**
 Build: probe `localhost` (≈`:6397`), enumerate endpoints, capture sample payloads.
-Verify: standings/session/setup data retrieved; note which fields beat shared memory.
-Output: endpoint list + schemas + read-only confirmation → doc 03.
+Verify: ✅ live probe 2026-06-16 (docs/03 §"S2 — live confirmation"): base `http://127.0.0.1:6397`
+(IPv6 refused); authoritative spec `/swagger-schema.json` (OpenAPI 2.0) → **178 paths, 107 non-GET**
+(GET-only avoid-list). Standings/session/strategy/garage payloads retrieved. **Fields that beat SHM:**
+`/rest/watch/standings` (per-**class** gaps, sector splits, `fuelFraction`/`veFraction`);
+`/rest/sessions/GetGameState` (FCY/pit enums as strings); `/rest/garage/getPlayerGarageData`
+(**current aids** — engine mixture/brake balance/VE/compound — resolving the open **S3** question, with
+live TC/ABS *level* the one remaining verify); `/rest/strategy/{usage,pitstop-estimate}` (VE + pit-time
+breakdown); `/rest/garage/UIScreen/TireManagement` (tyre sets). Read-only confirmed (GET-only; 107
+write endpoints deliberately avoided).
+Output: ✅ endpoint list + schemas + read-only confirmation → doc 03 §S2 live. (REST→`RaceState`
+mapping is T2.2/T2.3 forward work.)
 
 **T1.3 — S3: current-aid readability** · _human-assisted_ · deps: T1.1
 Verify: determine whether current TC/ABS/brake-bias/engine-map are readable (telemetry/
