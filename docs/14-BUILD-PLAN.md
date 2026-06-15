@@ -737,11 +737,31 @@ Context: [05-STRATEGY-ENGINE](05-STRATEGY-ENGINE.md).
 ## M8 — Proactive coaching & in-race aid advice (Roadmap Phase 3)
 
 T8.1 read current aids → T8.2 background-strategist loop → T8.3 integrated coaching
-(aid/driving ⇄ tire/fuel ⇄ strategy) → T8.4 advice verification from telemetry → ~~T8.5
+(aid/driving ⇄ tire/fuel ⇄ strategy) → ~~T8.4 advice verification from telemetry~~ (done, pulled
+forward — the **data-ready, deterministic, LLM-free** piece, the M8 analog of T9.2) → ~~T8.5
 proactivity controls + quiet windows~~ (done, pulled forward — the self-contained, offline-testable
 piece that closes the T6.3 proactivity-setting loop). **Read-only throughout — no write path.**
-T8.1–T8.4 (the coaching/strategist LLM loops) remain; better tackled once the live voice loop lands.
+T8.1 (read aids — **S3** rig) + T8.2/T8.3 (the coaching/strategist **LLM** loops) remain; better tackled
+once the live voice loop lands / the aids read live.
 Context: [06-AI-ENGINEER](06-AI-ENGINEER.md), [08-INPUT-AND-CONTROLS](08-INPUT-AND-CONTROLS.md).
+
+**T8.4 — Advice verification from telemetry** · _Claude Code_ · deps: T0.3 (works on telemetry; live aid
+values pending S3) · **done**
+Build: `@race-engineer/strategy` `advice.ts` — the docs/08 §3 `AdviceVerifier`. When the engineer
+recommends a bounded aid change ("you're on TC 3 — go to 5") the **driver makes it themselves**, and the
+app *reads telemetry back* to confirm it. `readAidParameter(state, 'tc'|'abs'|'brakeBias'|'engineMap')`
+reads the canonical aids (`player.aids.tc/abs.value`, `brakeBias.frontPct`, `engine.map`); pure
+`changeSatisfied`/`classifyAdvice`; and a sticky `AdviceWatcher` that consumes the `RaceState` stream and
+resolves once to **`applied`** (reached the target / moved as advised), **`unchanged`** (still at baseline
+at the deadline — the driver didn't act), or **`timeout`** (moved but not as advised, or **unreadable** —
+it can't confirm what it can't read). Time is the frame's `monotonicMs`, so it's a deterministic, replay-
+safe function of the stream — **no wall clock, no LLM, no write path** (CLAUDE.md rule 5 — there is
+intentionally no `ControlWriter`). Pure/deterministic, depends on `core` only.
+Verify: ✅ worked examples (TC reached / directional bias-back / unchanged / wrong-change-timeout /
+unreadable-timeout / sticky-once-resolved) + pure `changeSatisfied`/`classifyAdvice` + a property test
+(only watching → a terminal status, sticky, never throws) (12 tests; 557 green); compliance PASS (rule 5 +
+rule 1 audited). _Live half:_ aid **values** populate with the S3 reads (docs/03); the "good, that's it"
+spoken feedback is wired by the coaching loop (T8.3) / radio layer.
 
 **T8.5 — Proactivity controls + quiet windows** · _Claude Code_ · deps: T6.3, T5.4/T7.9 · **done**
 Build: a pure gate in `radio` (`proactivity.ts`) — `shouldAnnounce(event, { level, inputs })` +
