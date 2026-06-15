@@ -18,6 +18,7 @@ import {
   type StrategyModel,
   type StrategyRivalRow,
 } from '../src/dashboard/strategy-model';
+import { estimateCloudCost } from '../src/cost';
 import type { PttApi } from '../src/ptt-mapping';
 import {
   LLM_PROVIDER_IDS,
@@ -423,7 +424,18 @@ const wireSettingsPanel = (): void => {
   const save = document.getElementById('set-key-save') as HTMLButtonElement | null;
   const clear = document.getElementById('set-key-clear') as HTMLButtonElement | null;
   const keysLabel = document.getElementById('set-keys');
-  if (!profile || !llm || !proactivity || !slot || !keyInput || !save || !clear || !keysLabel)
+  const costLabel = document.getElementById('set-cost');
+  if (
+    !profile ||
+    !llm ||
+    !proactivity ||
+    !slot ||
+    !keyInput ||
+    !save ||
+    !clear ||
+    !keysLabel ||
+    !costLabel
+  )
     return;
 
   const fill = (select: HTMLSelectElement, options: readonly string[]): void =>
@@ -442,6 +454,12 @@ const wireSettingsPanel = (): void => {
 
   let current: AppSettings | null = null;
 
+  // Show what the configured cloud providers would cost the user per hour / per 24 h (docs/15). The
+  // default free/local profile reads "$0"; the estimate is advisory — no provider is billed by us.
+  const paintCost = (settings: AppSettings): void => {
+    costLabel.textContent = estimateCloudCost(settings).summary;
+  };
+
   const persist = (): void => {
     if (!current) return;
     const next: AppSettings = {
@@ -450,6 +468,7 @@ const wireSettingsPanel = (): void => {
       llm: { ...current.llm, provider: llm.value as AppSettings['llm']['provider'] },
       proactivity: proactivity.value as AppSettings['proactivity'],
     };
+    paintCost(next); // reflect the new route immediately, before the async save resolves
     void window.settings.save(next).then((saved) => {
       current = saved;
     });
@@ -483,6 +502,7 @@ const wireSettingsPanel = (): void => {
     profile.value = loaded.profile;
     llm.value = loaded.llm.provider;
     proactivity.value = loaded.proactivity;
+    paintCost(loaded);
   });
   void window.settings.listApiKeys().then(showKeys);
 };

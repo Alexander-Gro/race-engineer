@@ -175,10 +175,21 @@ in a small, reviewable, green-tested change.
   preload bridge + a renderer PTT row (Map / Cancel / Clear, live status) persist the bound `ButtonRef`
   into `AppSettings.ptt`. Read-only/advisory — passive button read, **no game write path**; compliance
   PASS. _Human (Windows rig):_ plug a wheel → "Map button" → press it → see it bound (the dev box has no
-  joystick backend, so the flow runs but times out — the live capture is the rig half).) **Remaining
-  T10.1 (native/rig):** real Piper/Kokoro TTS + faster-whisper STT engines, the **mic→STT input** path,
-  the renderer↔worker audio streaming for the tiered `VoicePlayer` pipeline (wiring the configured
-  provider + `selectTtsProvider` into the reactive loop), and a cloud cost estimator.
+  joystick backend, so the flow runs but times out — the live capture is the rig half).) ~~**cloud cost
+  estimator**~~ (done 2026-06-15 — closes the docs/15 "documented cloud cost/hour" / M10-gate deliverable.
+  New **`apps/desktop/src/cost.ts`**: a pure `estimateCloudCost(settings)` → `$/hour` + `$/24 h-Le-Mans`
+  + a hedged display summary, over a static LLM token-pricing table (Claude $1/$5 · $3/$15 · $5/$25 per
+  1M in/out, docs/15) and the docs/15 usage basis (~30 interactions/h; defaults reproduce the doc's
+  Haiku ≈ $0.15/h budget figure). Only **Claude** is a paid BYO-key route; the other cloud routes are
+  free-tier and every selectable voice engine is local → `$0` (the `Record`-over-engine-id pricing makes
+  a future paid engine a compile error until priced). State-honest: an unpriced paid model returns
+  `null` → "depends on your model", never a guessed figure; the math is plain deterministic TS, the LLM
+  never prices itself (rule 1). Imports are **type-only** so the renderer pulls no ai/voice runtime
+  (build-verified: renderer stays lean, 9 modules, no AI graph); the settings panel shows the estimate,
+  live on provider change. 11 tests, 528 green; compliance PASS.) **Remaining T10.1 (native/rig):** real
+  Piper/Kokoro TTS + faster-whisper STT engines, the **mic→STT input** path, and the renderer↔worker
+  audio streaming for the tiered `VoicePlayer` pipeline (wiring the configured provider +
+  `selectTtsProvider` into the reactive loop).
   M7.7–M7.9 / M8 / M9 offline-strategy depth are paused until the app is launchable. (Offline glue
   done: `get_stint_plan` + `project_pit_window` are now wired into the AI read-only tool surface,
   reading a precomputed `ctx.stintPlan` (T7.3) like `get_fuel_plan` reads `ctx.fuelPlan`; 373 green.
