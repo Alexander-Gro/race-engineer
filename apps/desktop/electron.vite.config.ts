@@ -15,18 +15,27 @@ import { defineConfig, externalizeDepsPlugin } from 'electron-vite';
  * (electron, zod, node built-ins) is externalized. Read-only/advisory shell: snapshots flow
  * Core → main → renderer only.
  */
+// EVERY `@race-engineer/*` workspace package must be listed here: they export raw `.ts`, which
+// Electron's Node runtime cannot `require`/`import` at runtime — so they must be **bundled**, not
+// externalized. (Omitting one causes a runtime `ERR_MODULE_NOT_FOUND` on app launch, e.g. importing
+// `@race-engineer/ai/src/tools`.) Their *real* node_modules deps (koffi, @anthropic-ai/sdk, …) stay
+// external. Keep this list complete as packages are added.
+const WORKSPACE_PACKAGES = [
+  '@race-engineer/core',
+  '@race-engineer/engineer-core',
+  '@race-engineer/adapter-sim-replay',
+  '@race-engineer/adapter-lmu', // bundled raw TS; its native `koffi` import stays external
+  '@race-engineer/input', // bundled raw TS; its native SDL2/`koffi` import stays external
+  '@race-engineer/ai',
+  '@race-engineer/voice',
+  '@race-engineer/radio',
+  '@race-engineer/strategy',
+  '@race-engineer/persistence',
+  '@race-engineer/platform',
+];
+
 const bundleWorkspaceSrc = (): ReturnType<typeof externalizeDepsPlugin> =>
-  externalizeDepsPlugin({
-    exclude: [
-      '@race-engineer/core',
-      '@race-engineer/engineer-core',
-      '@race-engineer/adapter-sim-replay',
-      // Bundled (raw TS) but their native `koffi` imports stay external (real node_modules addons):
-      // the LMU shared-memory adapter and the SDL2 push-to-talk reader (T10.1 PTT mapping).
-      '@race-engineer/adapter-lmu',
-      '@race-engineer/input',
-    ],
-  });
+  externalizeDepsPlugin({ exclude: WORKSPACE_PACKAGES });
 
 export default defineConfig({
   main: {
