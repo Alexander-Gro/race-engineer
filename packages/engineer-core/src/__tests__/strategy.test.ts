@@ -96,4 +96,35 @@ describe('StrategyEngine', () => {
     ];
     expect(run(frames).summary(frames.at(-1)!).fuelPlan!.perLapLiters).toBeCloseTo(2.5, 6);
   });
+
+  it('excludes a lap that went under caution mid-lap, even if it completes green (review)', () => {
+    const frames = [
+      frame({ liters: 80, laps: 0 }),
+      frame({ liters: 78, laps: 0, flag: 'fcy' }), // caution drops mid-lap (no boundary)
+      frame({ liters: 76, laps: 1, lastLapS: 100, flag: 'green' }), // lap completes back under green
+      frame({ liters: 73.5, laps: 2, lastLapS: 100, flag: 'green' }), // a clean green lap
+    ];
+    // The first lap is tainted by the mid-lap FCY tick; only the clean lap (2.5) counts.
+    expect(run(frames).summary(frames.at(-1)!).fuelPlan!.perLapLiters).toBeCloseTo(2.5, 6);
+  });
+
+  it('averages a multi-lap jump (dropped frames) instead of counting it as one lap (review)', () => {
+    const frames = [
+      frame({ liters: 80, laps: 0 }),
+      frame({ liters: 75, laps: 2, lastLapS: 100 }), // jumped 2 laps: 5 L over 2 = 2.5/lap, not 5
+    ];
+    expect(run(frames).summary(frames.at(-1)!).fuelPlan!.perLapLiters).toBeCloseTo(2.5, 6);
+  });
+
+  it('clears stale history when the lap count goes backwards — restart / loop (review)', () => {
+    const frames = [
+      frame({ liters: 80, laps: 0 }),
+      frame({ liters: 70, laps: 1, lastLapS: 100 }), // old session: 10 L/lap
+      frame({ liters: 60, laps: 2, lastLapS: 100 }),
+      frame({ liters: 80, laps: 0 }), // restart: laps reset, full tank
+      frame({ liters: 77.5, laps: 1, lastLapS: 100 }), // new session: 2.5 L/lap
+    ];
+    // Only the new session's lap counts — not the heavy 10 L/lap of the old one.
+    expect(run(frames).summary(frames.at(-1)!).fuelPlan!.perLapLiters).toBeCloseTo(2.5, 6);
+  });
 });

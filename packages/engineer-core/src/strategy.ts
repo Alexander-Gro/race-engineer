@@ -17,25 +17,44 @@ const GREEN_LAP_WINDOW = 5;
 export class StrategyEngine {
   #lastLapsCompleted: number | null = null;
   #fuelAtLapStart: number | null = null;
+  /** Has the in-progress lap run entirely green so far? Reset each lap; tainted by any non-green tick. */
+  #currentLapGreen = true;
   readonly #fuelDeltas: number[] = [];
   readonly #greenLapTimes: number[] = [];
 
   /** Accumulate from one frame (cheap; called every tick). */
   observe(state: RaceState): void {
     const p = state.player;
+    const green = state.flags.global === 'green';
     if (this.#fuelAtLapStart === null) this.#fuelAtLapStart = p.fuel.liters;
 
-    if (this.#lastLapsCompleted !== null && p.lapsCompleted > this.#lastLapsCompleted) {
-      // A lap just completed — record its green-flag fuel use + lap time (skip in/out/FCY laps).
-      const green = state.flags.global === 'green';
-      if (green && this.#fuelAtLapStart !== null) {
+    if (this.#lastLapsCompleted !== null && p.lapsCompleted < this.#lastLapsCompleted) {
+      // Lap count went backwards — a session restart or a looped replay. Drop the stale history.
+      this.#reset(p.fuel.liters);
+    } else if (this.#lastLapsCompleted !== null && p.lapsCompleted > this.#lastLapsCompleted) {
+      // A lap (or more, if frames were dropped) just completed. Record only if it ran green
+      // throughout, and average a multi-lap jump so one stall can't skew the estimate ~Nx.
+      const lapsElapsed = p.lapsCompleted - this.#lastLapsCompleted;
+      if (this.#currentLapGreen && green && this.#fuelAtLapStart !== null) {
         const delta = this.#fuelAtLapStart - p.fuel.liters;
-        if (delta > 0) this.#fuelDeltas.push(delta); // drops a refuel (negative)
+        if (delta > 0) this.#fuelDeltas.push(delta / lapsElapsed); // drops a refuel (negative)
       }
-      if (green && p.lastLapS !== null && p.lastLapS > 0) this.#greenLapTimes.push(p.lastLapS);
+      if (this.#currentLapGreen && green && p.lastLapS !== null && p.lastLapS > 0) {
+        this.#greenLapTimes.push(p.lastLapS);
+      }
       this.#fuelAtLapStart = p.fuel.liters;
+      this.#currentLapGreen = true; // the new lap starts clean
+    } else if (!green) {
+      this.#currentLapGreen = false; // a non-green tick mid-lap taints the in-progress lap
     }
     this.#lastLapsCompleted = p.lapsCompleted;
+  }
+
+  #reset(currentLiters: number): void {
+    this.#fuelDeltas.length = 0;
+    this.#greenLapTimes.length = 0;
+    this.#fuelAtLapStart = currentLiters;
+    this.#currentLapGreen = true;
   }
 
   /** Compute the current strategy summary (runs the fuel model; called at snapshot emit). */
