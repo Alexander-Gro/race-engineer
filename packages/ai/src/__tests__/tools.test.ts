@@ -70,6 +70,20 @@ describe('read-only tools', () => {
     expect(wheels[0]?.compound).toBe('medium');
   });
 
+  it('get_handling_diagnosis reads balance + per-corner camber/pressure from tyre temps', () => {
+    const r = run('get_handling_diagnosis');
+    // Fixture tyres are uniform (inner 92 / centre 89 / outer 86) → balanced + neutral, full data.
+    expect(r.balance).toBe('neutral');
+    expect(r.confidence01).toBe(1);
+    expect(r.frontAvgTempC).toBe(89);
+    const camber = r.camber as Array<Record<string, unknown>>;
+    expect(camber.map((c) => c.corner)).toEqual(['FL', 'FR', 'RL', 'RR']);
+    expect(camber.every((c) => c.hint === 'balanced')).toBe(true);
+    expect((r.pressure as Array<Record<string, unknown>>).every((p) => p.hint === 'balanced')).toBe(
+      true,
+    );
+  });
+
   it('get_rivals splits cars ahead (−gap) and behind (+gap), nearest first', () => {
     const r = run('get_rivals');
     const ahead = r.ahead as Array<Record<string, unknown>>;
@@ -104,6 +118,7 @@ describe('read-only invariant', () => {
         'get_stint_plan',
         'project_pit_window',
         'get_tire_status',
+        'get_handling_diagnosis',
         'get_current_aids',
       ]),
     );

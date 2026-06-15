@@ -717,9 +717,11 @@ thresholds are rig-tunable options. State-honest: single-value temps ⇒ `unknow
 fraction of corners with 3-zone data (docs/05 §8). Pure/deterministic, depends on `core` only — the
 deterministic analysis the LLM *phrases* (backs the docs/06 `get_handling_diagnosis` tool).
 Verify: ✅ worked-example (camber/pressure/balance) + state-honesty + property (no NaN, confidence
-∈[0,1], sign-symmetric camber) tests (505 green); compliance PASS. _Consumers (follow-ups):_ the
-`get_handling_diagnosis` AI tool + a dashboard "Handling" card; magnitude thresholds calibrated on the
-rig.
+∈[0,1], sign-symmetric camber) tests (505 green); compliance PASS. **Wired into the AI surface:** the
+read-only `get_handling_diagnosis` tool (`ai/tools.ts` — runs the diagnosis from the snapshot tyres;
+`ai` now depends on `strategy` at runtime, acyclic) + a free template-mode handling answer (quotes the
+front/rear temps + balance tendency); 507 green. _Remaining follow-up:_ a dashboard "Handling" card;
+magnitude thresholds calibrated on the rig.
 Context: [08-INPUT-AND-CONTROLS](08-INPUT-AND-CONTROLS.md) §3, [09-UI-UX](09-UI-UX.md).
 
 ## M10 — Polish, local mode, packaging (Roadmap Phase 5)

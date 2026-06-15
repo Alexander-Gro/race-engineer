@@ -125,7 +125,6 @@ importers:
       '@race-engineer/core':
         specifier: workspace:*
         version: link:../core
-    devDependencies:
       '@race-engineer/strategy':
         specifier: workspace:*
         version: link:../strategy

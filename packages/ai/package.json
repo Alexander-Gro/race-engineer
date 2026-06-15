@@ -11,9 +11,7 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.104.1",
-    "@race-engineer/core": "workspace:*"
-  },
-  "devDependencies": {
+    "@race-engineer/core": "workspace:*",
     "@race-engineer/strategy": "workspace:*"
   }
 }

@@ -43,6 +43,13 @@ describe('templateAnswer (free, no-LLM reactive answering)', () => {
     expect(templateAnswer("what's my last lap?", ctx)).toBe('Last lap 218.7, best 217.2.');
   });
 
+  it('answers handling questions from the tyre-temp diagnosis, quoting the temps', () => {
+    // Fixture tyres are uniform → neutral balance, fronts == rears == 89°.
+    const a = templateAnswer("how's the handling?", ctx)!;
+    expect(a).toMatch(/neutral/);
+    expect(a).toContain('89');
+  });
+
   it('answers aid-baseline questions', () => {
     expect(templateAnswer("what's my brake bias?", ctx)).toBe(
       'TC 6, ABS 4, brake bias 55.0%, map 4.',

@@ -100,6 +100,20 @@ const INTENTS: readonly Intent[] = [
     },
   },
   {
+    // Handling/balance — distinct keywords from the tyre-wear intent above (no overlap).
+    test: /\b(handling|understeer|oversteer|rotate|balance|camber)\b/,
+    respond: (ctx) => {
+      const d = tool('get_handling_diagnosis', ctx);
+      const balance = d.balance as string;
+      if (balance === 'unknown') return 'Not enough tyre-temp data to read the handling yet.';
+      const front = round(d.frontAvgTempC);
+      const rear = round(d.rearAvgTempC);
+      if (balance === 'neutral') return `Balance looks neutral — fronts ${front}°, rears ${rear}°.`;
+      const hotter = balance === 'understeer' ? 'fronts' : 'rears';
+      return `Looks like ${balance} — ${hotter} are running hotter (${front}° front, ${rear}° rear).`;
+    },
+  },
+  {
     test: /\b(tc|abs|traction|brake\s*bias|engine\s*map|aids?)\b/,
     respond: (ctx) => {
       const a = tool('get_current_aids', ctx);

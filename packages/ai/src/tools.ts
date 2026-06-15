@@ -1,4 +1,5 @@
 import type { CarState, RaceState } from '@race-engineer/core';
+import { diagnoseHandling } from '@race-engineer/strategy';
 import type { RaceContext } from './context';
 import type { ToolSpec } from './types';
 
@@ -9,11 +10,11 @@ import type { ToolSpec } from './types';
  * verbatim and never recomputes them (CLAUDE.md rule 1).
  *
  * Only the tools with real backing today are implemented (RaceState fields + the fuel/stint
- * models). `get_stint_plan` + `project_pit_window` read the precomputed stint plan (T7.3).
- * The rest of docs/06's surface (`evaluate_undercut` — needs per-rival tyre-gain/pit-loss context
- * fields the Core doesn't expose yet; `get_setup_summary`, `get_handling_diagnosis`, `verify_change`
- * — M9 setup features) still lands with the features that back them; exposing them now would mean
- * inventing numbers.
+ * models). `get_stint_plan` + `project_pit_window` read the precomputed stint plan (T7.3);
+ * `get_handling_diagnosis` runs the deterministic tyre-temp diagnosis (T9.2). The rest of docs/06's
+ * surface (`evaluate_undercut` — needs per-rival tyre-gain/pit-loss context fields the Core doesn't
+ * expose yet; `get_setup_summary`, `verify_change` — M9 setup features needing the setup-file read)
+ * still lands with the features that back them; exposing them now would mean inventing numbers.
  */
 
 export interface ToolDef {
@@ -181,6 +182,27 @@ export const READ_ONLY_TOOLS: ToolDef[] = [
           compound: t.compound,
         })),
         units: { temp: 'C', pressure: 'kPa', wear: '0..1 (1=new)' },
+      };
+    },
+  },
+  {
+    name: 'get_handling_diagnosis',
+    description:
+      'Deterministic handling read from tyre temps (docs/08 §3): per-corner camber (inner-vs-outer spread) and pressure (centre-vs-edges; centre hot = over-inflated), plus axle balance (front-vs-rear avg → understeer/oversteer). confidence01 = fraction of corners with 3-zone temps; advise from this, never invent.',
+    parameters: NO_ARGS,
+    handler: (_args, ctx) => {
+      const d = diagnoseHandling(ctx.raceState.player.tires);
+      const byCorner = <T extends { deltaC: number | null; hint: string }>(reads: readonly T[]) =>
+        reads.map((r, i) => ({ corner: WHEELS[i] ?? `W${i}`, hint: r.hint, deltaC: r.deltaC }));
+      return {
+        balance: d.balance.tendency,
+        frontAvgTempC: d.balance.frontAvgC,
+        rearAvgTempC: d.balance.rearAvgC,
+        frontRearDeltaC: d.balance.deltaC,
+        camber: byCorner(d.camber),
+        pressure: byCorner(d.pressure),
+        confidence01: d.confidence01,
+        units: { temp: 'C' },
       };
     },
   },
