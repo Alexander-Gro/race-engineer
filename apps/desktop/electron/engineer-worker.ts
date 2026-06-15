@@ -54,12 +54,17 @@ void (async (): Promise<void> => {
 
   const onEvent = voice
     ? (events: readonly EngineerEvent[]): void => {
-        void voice.routeEvents(events).then((outcomes) => {
-          for (const o of outcomes) {
-            const detail = o.kind === 'skipped' ? o.reason : `priority ${o.priority}`;
-            console.log(`[voice] ${o.event.type} → ${o.kind} (${detail})`);
-          }
-        });
+        // Fire-and-forget off the tick thread; a synth/TTS failure must never crash the worker
+        // (docs/16 §1 "never crash; the radio is the core feature") — log and move on.
+        void voice
+          .routeEvents(events)
+          .then((outcomes) => {
+            for (const o of outcomes) {
+              const detail = o.kind === 'skipped' ? o.reason : `priority ${o.priority}`;
+              console.log(`[voice] ${o.event.type} → ${o.kind} (${detail})`);
+            }
+          })
+          .catch((err) => console.error('[voice] proactive routing failed', err));
       }
     : undefined;
 

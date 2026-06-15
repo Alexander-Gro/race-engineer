@@ -281,18 +281,23 @@ const wireVoiceBar = (): void => {
 
   settingsBtn.addEventListener('click', () => void window.engineer.openMicSettings());
 
+  const option = (value: string, label: string): HTMLOptionElement => {
+    const opt = document.createElement('option');
+    opt.value = value;
+    opt.textContent = label;
+    return opt;
+  };
+
   const refreshOutputs = (): void => {
     void listOutputDevices(navigator.mediaDevices).then((devices) => {
       const chosen = select.value;
+      // Always keep a "System default" entry first, so the picker is never empty (device labels are
+      // blank / the list can be empty until mic permission is granted).
       select.replaceChildren(
-        ...devices.map((d) => {
-          const opt = document.createElement('option');
-          opt.value = d.deviceId;
-          opt.textContent = d.label;
-          return opt;
-        }),
+        option('', 'System default'),
+        ...devices.filter((d) => !d.isDefault).map((d) => option(d.deviceId, d.label)),
       );
-      if (devices.some((d) => d.deviceId === chosen)) select.value = chosen;
+      if ([...select.options].some((o) => o.value === chosen)) select.value = chosen;
     });
   };
 
