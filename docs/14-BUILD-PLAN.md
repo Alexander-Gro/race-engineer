@@ -702,9 +702,24 @@ gap, docs/07). Live-audible once T10.1 lands; the setting already persists + rea
 
 ## M9 — Setup advisory (Roadmap Phase 4)
 
-T9.1 read setup (read-only) → T9.2 handling diagnosis from telemetry → T9.3 setup screen
-(current values + safe ranges) → T9.4 AI recommendations (`propose_setup_change`, advice
-only) → T9.5 before/after compare after the driver applies changes in the garage.
+T9.1 read setup (read-only — blocked on the **S4** setup-file format spike, rig) → ~~T9.2 handling
+diagnosis from telemetry~~ (done, pulled forward — it's the data-ready piece: tyre temps are already
+populated, no rig needed) → T9.3 setup screen (current values + safe ranges) → T9.4 AI
+recommendations (`propose_setup_change`, advice only) → T9.5 before/after compare after the driver
+applies changes in the garage.
+
+**T9.2 — Handling diagnosis from telemetry** · _Claude Code_ · deps: T0.3 (works on telemetry) · **done**
+Build: `diagnoseHandling(tires, thresholds?)` in `@race-engineer/strategy` `handling.ts` — the
+docs/08 §3 directional reads from the canonical tyre temps: per-corner **camber** (inner-vs-outer
+spread), **pressure** (centre-vs-edges; centre hot ⇒ over-inflated), and axle **balance** (front-avg
+vs rear-avg ⇒ understeer/oversteer tendency). Directions are conventional tyre theory; magnitude
+thresholds are rig-tunable options. State-honest: single-value temps ⇒ `unknown`, `confidence01` =
+fraction of corners with 3-zone data (docs/05 §8). Pure/deterministic, depends on `core` only — the
+deterministic analysis the LLM *phrases* (backs the docs/06 `get_handling_diagnosis` tool).
+Verify: ✅ worked-example (camber/pressure/balance) + state-honesty + property (no NaN, confidence
+∈[0,1], sign-symmetric camber) tests (505 green); compliance PASS. _Consumers (follow-ups):_ the
+`get_handling_diagnosis` AI tool + a dashboard "Handling" card; magnitude thresholds calibrated on the
+rig.
 Context: [08-INPUT-AND-CONTROLS](08-INPUT-AND-CONTROLS.md) §3, [09-UI-UX](09-UI-UX.md).
 
 ## M10 — Polish, local mode, packaging (Roadmap Phase 5)
