@@ -75,6 +75,15 @@ Tactics:
 - **Radio SFX:** band-limit + light noise/compression + open/close clicks to sound like
   a team radio. Subtle; user can disable.
 
+> **Interim spoken replies (Web Speech API).** Until the local Piper/Kokoro engines + the
+> `VoicePlayer`→`AudioSink` byte pipeline land (T10.1 native half), the desktop app speaks the
+> engineer's **conversational text-ask reply** aloud via the browser `speechSynthesis` (the OS
+> voice) — free, no key, no model download. This path is deliberately **separate** from the tiered
+> queue above and is used **only** for the conversational reply; Tier-0 spotter/strategy audio still
+> goes through the pre-rendered `VoicePlayer` path. It's a `SpeechController` over an injected port
+> (`apps/desktop/src/speech.ts`), with a mute toggle, degrading to text-only where speech is
+> unavailable.
+
 ## Audio playback & routing
 
 - **Priority queue.** Each utterance has a priority (urgent spotter > strategy > chatter).

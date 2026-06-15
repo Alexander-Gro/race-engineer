@@ -158,9 +158,14 @@ in a small, reviewable, green-tested change.
   grounded template; main resolves the route + decrypted key and pushes a `configure` message to the
   worker on a `ready` handshake and on every settings/secret change — key crosses main→worker only,
   never to the renderer; degrades to template on a keyless/invalid route or any provider error. So
-  switching the engineer in Settings now takes effect for the text-ask.) → **T10.1** real STT/TTS +
-  the renderer↔worker audio path that makes the **voice** loop audible end-to-end (wiring the same
-  provider + `selectTtsProvider` into the reactive loop) + the **PTT-mapping UI** (NEXT focus).
+  switching the engineer in Settings now takes effect for the text-ask.) → **T10.1 (in progress)**:
+  ~~spoken text-ask replies~~ (done — the engineer now **talks back**: a free/no-key `SpeechController`
+  speaks the text-ask answer via the browser Web Speech API / OS voice, with a mute toggle, degrading
+  to text-only where unavailable; conversational-reply path only, separate from the tiered VoicePlayer,
+  docs/07 reconciled; 479 green). **Remaining T10.1 (native/rig):** real Piper/Kokoro TTS +
+  faster-whisper STT engines, the **mic→STT input** path, the renderer↔worker audio streaming for the
+  tiered `VoicePlayer` pipeline (wiring the configured provider + `selectTtsProvider` into the reactive
+  loop), a cloud cost estimator, and the **PTT-mapping UI** (NEXT focus).
   M7.7–M7.9 / M8 / M9 offline-strategy depth are paused until the app is launchable. (Offline glue
   done: `get_stint_plan` + `project_pit_window` are now wired into the AI read-only tool surface,
   reading a precomputed `ctx.stintPlan` (T7.3) like `get_fuel_plan` reads `ctx.fuelPlan`; 373 green.

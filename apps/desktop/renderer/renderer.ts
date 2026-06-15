@@ -26,6 +26,7 @@ import {
   type AppSettings,
 } from '../src/settings';
 import type { SettingsApi } from '../src/settings-bridge';
+import { SpeechController, type SpeechPort } from '../src/speech';
 
 /**
  * Renderer (build-plan T6.2). Subscribes to throttled snapshots via the preload-exposed read-only
@@ -292,16 +293,44 @@ const wireAskBar = (): void => {
   const form = document.getElementById('ask-form') as HTMLFormElement | null;
   const input = document.getElementById('ask-input') as HTMLInputElement | null;
   const answer = document.getElementById('ask-answer');
+  const speakBtn = document.getElementById('ask-speak') as HTMLButtonElement | null;
   if (!form || !input || !answer) return;
+
+  // Spoken replies via the OS voice (Web Speech API) — free, no key. The engineer reads its answer
+  // aloud. Falls back silently to text-only where speech isn't available.
+  const port: SpeechPort | null =
+    'speechSynthesis' in window
+      ? {
+          speak: (text) => window.speechSynthesis.speak(new SpeechSynthesisUtterance(text)),
+          cancel: () => window.speechSynthesis.cancel(),
+        }
+      : null;
+  const speech = new SpeechController(port);
+
+  if (speakBtn) {
+    const paintToggle = (): void => {
+      speakBtn.textContent = speech.enabled ? '🔊 Voice on' : '🔇 Muted';
+      speakBtn.setAttribute('aria-pressed', String(speech.enabled));
+    };
+    if (!speech.available) speakBtn.hidden = true;
+    else paintToggle();
+    speakBtn.addEventListener('click', () => {
+      speech.setEnabled(!speech.enabled);
+      paintToggle();
+    });
+  }
+
   form.addEventListener('submit', (event) => {
     event.preventDefault();
     const question = input.value.trim();
     if (!question) return;
+    speech.stop(); // don't talk over the previous answer while fetching the next
     answer.textContent = '…';
     void window.engineer
       .ask(question)
       .then((reply) => {
         answer.textContent = reply;
+        speech.say(reply); // read the answer aloud (no-op when muted/unavailable)
       })
       .catch(() => {
         answer.textContent = "Sorry — I couldn't answer that just now.";
