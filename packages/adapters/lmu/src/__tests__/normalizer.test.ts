@@ -1,4 +1,4 @@
-import { RaceStateSchema } from '@race-engineer/core';
+import { RaceStateSchema, type RaceState } from '@race-engineer/core';
 import { describe, expect, it } from 'vitest';
 import { createLmuNormalizer } from '../normalizer';
 import { KELVIN } from '../shm/structs';
@@ -129,6 +129,42 @@ const grid = (): RawVehicleScoring[] => [
 const playerTelemetry = (o: Partial<RawVehicleTelemetry> = {}): TelemetryFrame => ({
   numVehicles: 1,
   vehicles: [vt({ id: 53, ...o })],
+});
+
+describe('closing-rate spike rejection (start/finish wrap — docs/03 §S1#3)', () => {
+  // A minimal 2-car grid (player + one rival) at chosen along-track distances.
+  const at = (monotonicMs: number, playerDist: number, rivalDist: number): LmuRawFrame =>
+    frame({
+      monotonicMs,
+      vehicles: [
+        vs({ id: 34, place: 1, vehicleClass: 'GT3', lapDistM: rivalDist, timeBehindLeader: 58 }),
+        vs({
+          id: 53,
+          place: 2,
+          vehicleClass: 'GT3',
+          isPlayer: true,
+          lapDistM: playerDist,
+          timeBehindLeader: 60,
+        }),
+      ],
+      telemetry: playerTelemetry(),
+    });
+  const rivalRate = (s: RaceState): number | null =>
+    s.cars.find((c) => c.id === 34)?.closingRateMps ?? null;
+
+  it('reports a sane closing rate for a normal gap change', () => {
+    const n = createLmuNormalizer();
+    n.toRaceState(at(1000, 3000, 2900)); // gap +100 m (rival behind)
+    const s = n.toRaceState(at(1100, 3000, 2902)); // +98 m over 0.1 s → +20 m/s closing
+    expect(rivalRate(s)).toBeCloseTo(20, 5);
+  });
+
+  it('rejects a discontinuous gap jump (the S/F-wrap spike) as null', () => {
+    const n = createLmuNormalizer();
+    n.toRaceState(at(1000, 3000, 2900)); // gap +100 m
+    const s = n.toRaceState(at(1100, 3000, 2850)); // +150 m over 0.1 s ⇒ |500 m/s| > cap → null
+    expect(rivalRate(s)).toBeNull();
+  });
 });
 
 describe('createLmuNormalizer', () => {

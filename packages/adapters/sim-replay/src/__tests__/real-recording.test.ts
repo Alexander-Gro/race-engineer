@@ -1,0 +1,48 @@
+import { readFile } from 'node:fs/promises';
+import { fileURLToPath } from 'node:url';
+import {
+  EventDetector,
+  RaceStateSchema,
+  spotterRule,
+  type EngineerEvent,
+  type RaceState,
+} from '@race-engineer/core';
+import { describe, expect, it } from 'vitest';
+import { parseReplay } from '../replay';
+
+/**
+ * Tests against a **real LMU recording** — a trimmed multi-class slice (Hyper/LMP2/GT3) of a recorded
+ * Circuit de la Sarthe stint, captured on the rig via `pnpm record` (docs/03 §S1#3). Pruned to the
+ * player + the nearest few cars of each class over a 60-frame window centred on a 0.0 m side-by-side, so
+ * the strategy/event logic runs against genuine Le Mans telemetry instead of synthetic fixtures (T1.5).
+ */
+const FIXTURE = fileURLToPath(
+  new URL('../../fixtures/lemans-multiclass.replay.jsonl', import.meta.url),
+);
+const loadFixture = async (): Promise<RaceState[]> => parseReplay(await readFile(FIXTURE, 'utf8'));
+
+describe('real LMU recording fixture (Le Mans multi-class)', () => {
+  it('every frame is schema-valid canonical RaceState', async () => {
+    const frames = await loadFixture();
+    expect(frames.length).toBeGreaterThan(40);
+    for (const f of frames) expect(() => RaceStateSchema.parse(f)).not.toThrow();
+  });
+
+  it('is genuinely multi-class (Hyper / LMP2 / GT3 all present)', async () => {
+    const frames = await loadFixture();
+    const classes = new Set(frames.flatMap((f) => f.cars.map((c) => c.className)));
+    expect(classes.has('Hyper')).toBe(true);
+    expect(classes.has('LMP2')).toBe(true);
+    expect(classes.has('GT3')).toBe(true);
+  });
+
+  it('runs the spotter over real side-by-side traffic and produces side call-outs', async () => {
+    const frames = await loadFixture();
+    const detector = new EventDetector([spotterRule()]);
+    const events: EngineerEvent[] = [];
+    for (const frame of frames) events.push(...detector.process(frame));
+    // The window is centred on a 0.0 m along-track moment, so a real car draws alongside → left/right.
+    const sides = events.filter((e) => e.type === 'car_left' || e.type === 'car_right');
+    expect(sides.length).toBeGreaterThan(0);
+  });
+});

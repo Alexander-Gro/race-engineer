@@ -27,9 +27,9 @@ import type { LmuRawFrame } from './types';
  * are `Hyper` / `LMP2` / `GT3`; lap times `-1`/`0` are "no lap yet" sentinels → null.
  *
  * Not yet sourced from shared memory (filled when REST/T2.2 or a decoder extension lands):
- * current TC/ABS/engine-map indices (aids.tc/abs/engine.map = null), driver inputs (0),
- * car model name, world position, sector-yellow detail. Brake-bias front-vs-rear is flagged
- * for HUD confirmation (docs/03).
+ * current TC/ABS/engine-map indices (aids.tc/abs/engine.map = null — live-confirmed not in telemetry,
+ * docs/03 §S1#3), driver inputs (0), car model name, world position, sector-yellow detail.
+ * Brake-bias `frontPct` is live-confirmed correct (52.5 = front; docs/03 §S1#3).
  */
 
 export interface LmuNormalizerOptions {
@@ -38,6 +38,15 @@ export interface LmuNormalizerOptions {
 }
 
 const clamp01 = (n: number): number => Math.min(1, Math.max(0, n));
+
+/**
+ * Cap on a believable car-to-car closing rate (~360 kph relative). The along-track gap jumps
+ * discontinuously when a car crosses start/finish (its `timeBehindLeader`/lap-distance wraps), which
+ * would otherwise emit a physically-impossible closing-rate spike. Live finding: docs/03 §S1#3 saw
+ * ~14.5 % of raw samples exceed this — those are wrap artifacts, reported as `null` (unknown), not a
+ * false approach. Near-car rates (what the spotter/traffic rules read) are well within this.
+ */
+export const MAX_PLAUSIBLE_CLOSING_RATE_MPS = 100;
 
 /** rF2 `mGamePhase` → canonical session phase (session *type* needs REST; see docs/03). */
 const mapPhase = (gamePhase: number): SessionState['phase'] => {
@@ -193,7 +202,8 @@ const buildPlayer = (
     aids: {
       tc: null, // not in SHM (REST/setup, S2/S3)
       abs: null,
-      // TODO(rig): mRearBrakeBias reads ~48–52%; confirm front-vs-rear vs the HUD (docs/03).
+      // CONFIRMED on the rig (docs/03 §S1#3): `mRearBrakeBias × 100` matches LMU's garage **front**
+      // brake-bias figure (user verified 52.5 = front), so `frontPct` is correct as mapped.
       brakeBias: { frontPct: tel ? tel.rearBrakeBias * 100 : null },
     },
     inputs: { throttle: 0, brake: 0, clutch: 0, steer: 0 }, // TODO: decode unfiltered inputs
@@ -242,8 +252,11 @@ export const createLmuNormalizer = (
             car.gapToPlayerM = gapM;
             const prev = prevGap.get(v.id);
             const dt = prev ? (monotonicMs - prev.ms) / 1000 : 0;
+            const rate = prev && dt > 0 ? (Math.abs(prev.gapM) - Math.abs(gapM)) / dt : null;
+            // Reject start/finish-wrap spikes (docs/03 §S1#3): an implausibly large rate means the gap
+            // jumped discontinuously, not that the car is actually closing that fast → null (unknown).
             car.closingRateMps =
-              prev && dt > 0 ? (Math.abs(prev.gapM) - Math.abs(gapM)) / dt : null;
+              rate !== null && Math.abs(rate) <= MAX_PLAUSIBLE_CLOSING_RATE_MPS ? rate : null;
             prevGap.set(v.id, { gapM, ms: monotonicMs });
           }
           return car;

@@ -734,11 +734,20 @@ toggled TC/ABS/brake-bias on the fly. (164 MB raw — git-ignored, never committ
   run; the zero-glitches are worth guarding in the Normalizer.
 
 **Still open**
-- **Spotter lateral sign** — `lateralPos` reads (±13–17 m across the grid) but no annotated side-by-side
-  was noted, so `+lateral = right` (T3.4) is still unconfirmed; needs a "car on my left at mm:ss" note.
-- **Brake-bias front/rear** — need the in-game **front** brake-bias % to confirm our `52.5–53.25` is the
-  front figure (leaning front — it's > 50%, typical for GT3).
+- **Spotter lateral *sign*** — `lateralPos` reads (±13–17 m); the real `spotterRule` now runs over the
+  committed fixture and emits `car_left`/`car_right` on the side-by-side, so the rule is validated on real
+  data — only `left = physical-left` still wants one annotated "car on my left at mm:ss" frame (low risk).
 - **FCY / pit enums** — clean green throughout, no pit stop; still need a yellow + pit session.
+
+**Resolved (2026-06-15, post-analysis)**
+- **Brake-bias front/rear — CONFIRMED:** user verified **52.5 = front** in the LMU garage, matching our
+  `frontPct` (= raw `mRearBrakeBias × 100` — the rF2 field, despite its `Rear` name, ×100 gives the front
+  %). Mapping correct as-is.
+- **Closing-rate spikes — FIXED in the Normalizer:** implausible rates (`|rate| > 100 m/s`, the S/F-wrap
+  artifacts) are now reported `null`; see `MAX_PLAUSIBLE_CLOSING_RATE_MPS`.
+- **Fixture committed (T1.5):** a 60-frame multi-class slice →
+  `packages/adapters/sim-replay/fixtures/lemans-multiclass.replay.jsonl`, replay-tested (schema + the
+  spotter on real traffic).
 
 ## Rig verification backlog (consolidated)
 
@@ -751,13 +760,14 @@ toggled TC/ABS/brake-bias on the fly. (164 MB raw — git-ignored, never committ
 - [x] **Gap sign** `gapToPlayerS` / `gapToPlayerM` is **+ = behind / − = ahead** — **CONFIRMED S1#3**
   (cross-checked vs race position over 6400 frames: car ahead 99.9% negative, car behind 99% positive).
   Underpins the undercut ahead/behind split (T7.4) and traffic forecasting (T7.5).
-- [ ] **Spotter lateral sign** `+mPathLateral = driver's right` (T3.4 `rightIsPositive`) — still open
-  (S1#3 `lateralPos` reads ±13–17 m but no annotated side-by-side); needs a "car on my left/right" note.
-- [ ] **Brake-bias front/rear** — S1#3 canonical `frontPct` reads **52.5–53.25** (raw `mRearBrakeBias`
-  ~47–48 ⇒ `frontPct ≈ 100 − rear`); confirm vs the in-game **front** figure (T2.3 `aids.brakeBias.frontPct`).
-- [~] **Closing-rate end-to-end** — `closingRateMps` (`(|prevGap| − |gap|)/dt`, **+ = closing**) computes,
-  but S1#3 found **~14.5% outlier spikes** (`|rate| > 50 m/s`) on distant cars near the lap boundary →
-  **clamp/filter in the Normalizer** before T7.5 trusts it. Near-car values (the ones T7.5 uses) are clean.
+- [~] **Spotter lateral sign** `+mPathLateral = driver's right` (T3.4 `rightIsPositive`) — the real
+  `spotterRule` runs over the S1#3 fixture and emits `car_left`/`car_right` on real side-by-side traffic
+  (validated on real data); only `left = physical-left` still wants one annotated "car on my left" frame.
+- [x] **Brake-bias front/rear** — **CONFIRMED S1#3**: user verified **52.5 = front** in the garage,
+  matching our `frontPct` (= raw `mRearBrakeBias × 100`; the rF2 field's `Rear` name is a misnomer).
+- [x] **Closing-rate end-to-end** — `closingRateMps` (`(|prevGap| − |gap|)/dt`, **+ = closing**) computes;
+  S1#3 found **~14.5% outlier spikes** (S/F-wrap artifacts) → **FIXED**: the Normalizer now clamps
+  `|rate| > MAX_PLAUSIBLE_CLOSING_RATE_MPS (100)` to `null`. Near-car values (what T7.5 uses) were clean.
 
 ### B. Enums & sentinels (need the right session to occur)
 - [ ] **FCY / yellow / pit-state enums** `mGamePhase` / `mYellowFlagState` / `mPitState` /
@@ -783,8 +793,9 @@ toggled TC/ABS/brake-bias on the fly. (164 MB raw — git-ignored, never committ
   from the session rules / REST `sessions` payload.
 
 ### D. Live end-to-end (already on Track B)
-- [ ] **T1.5** record a real green stint → commit a trimmed fixture (replaces synthetic;
-  unblocks C's tyre/pace items and replay-eval of T7.1/T7.3).
+- [x] **T1.5** record a real green stint → commit a trimmed fixture — **done S1#3**
+  (`packages/adapters/sim-replay/fixtures/lemans-multiclass.replay.jsonl`, replay-tested). A longer
+  *clean multi-lap* stint is still wanted for the tyre/pace calibration (§C) + replay-eval of T7.1/T7.3.
 - [ ] **T2.2 live** REST probe → capture Swagger payloads → finish Virtual-Energy + pit/refuel
   mapping into `RaceState`.
 - [ ] **T1.3 / T1.4** current-aid (TC/ABS/engine-map index) + setup-file reads (S3/S4).
@@ -1028,8 +1039,8 @@ Get-ChildItem -Path $SET -Recurse -Filter *.svm | Sort-Object LastWriteTime -des
     **LIVE-CONFIRMED (S1#3, 2026-06-15):** `mRearBrakeBias` **populates** (canonical `frontPct`
     52.5–53.25, tracks the driver's adjustments), and **TC/ABS/engine-map stayed `null` even while the
     driver toggled them on the wheel** — so the cockpit aid *levels* are confirmed **not** in telemetry
-    and must come from REST (S2) or the setup file (S4). Front-vs-rear identity still needs the in-game
-    HUD number. See S3 / S1#3.
+    and must come from REST (S2) or the setup file (S4). **Front-vs-rear CONFIRMED:** user verified
+    52.5 = front, matching our `frontPct` (= `mRearBrakeBias × 100`). See S3 / S1#3.
 - [ ] **S2** REST base URL/port, endpoint list, payload schemas, read-only?
   - *desk-research (confirmed from public tool sources — see "S2 / S4 desk-research
     findings"):* **Base URL `http://localhost:6397`** (corroborated by the LMU community REST
