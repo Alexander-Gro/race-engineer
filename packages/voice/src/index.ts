@@ -31,6 +31,8 @@ export { MockAudioSink } from './backends/mock-sink';
 export { MockMicSource } from './backends/mock-mic';
 // Local provider shells (T4.4) — free/offline default; native backends wired in T10.1.
 export { ProviderNotReadyError } from './providers/errors';
+export { CloudTtsProvider, openAiTts } from './providers/cloud-tts';
+export type { CloudTtsConfig, CloudTtsFormat, TtsFetchLike } from './providers/cloud-tts';
 export { LocalTtsProvider, piperTts, kokoroTts } from './providers/local-tts';
 export type { LocalTtsEngine, LocalTtsConfig, LocalTtsBackend } from './providers/local-tts';
 export { LocalSttProvider, fasterWhisperStt, whisperCppStt } from './providers/local-stt';

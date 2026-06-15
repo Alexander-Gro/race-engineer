@@ -36,8 +36,9 @@ export const LLM_MODEL_PRICING: Readonly<Record<string, TokenPrice>> = {
  */
 const DEFAULT_CLAUDE_MODEL = 'claude-haiku-4-5'; // docs/06 fast tier
 
-/** Hourly USD for local voice engines — every currently-selectable STT/TTS engine is local ($0). A
- * `Record` over the id types makes adding a *paid* engine later a compile error until it's priced. */
+/** Hourly USD per voice engine. Local engines are $0; cloud BYO-key engines carry the docs/15 §"Cost
+ * scenarios" figure. The `Record` over the id types makes adding a *new* engine a compile error until
+ * it's priced here — so a paid engine can never silently read as free. */
 export const STT_HOURLY_USD: Readonly<Record<SttEngineId, number>> = {
   fake: 0,
   'whisper-cpp': 0,
@@ -47,6 +48,7 @@ export const TTS_HOURLY_USD: Readonly<Record<TtsEngineId, number>> = {
   fake: 0,
   piper: 0,
   kokoro: 0,
+  openai: 0.1, // cloud BYO-key TTS ≈ $0.10/h (docs/15 §Cost scenarios, "Budget cloud" row)
 };
 
 /** Usage basis for the LLM estimate (docs/15 §"Rate-limit math": ~30 interactions/hour). */

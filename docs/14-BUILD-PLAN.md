@@ -248,13 +248,27 @@ in a small, reviewable, green-tested change.
   Pure orchestrator unit-tested (PTT flow, empty-transcript/empty-reply no-ops, reject-safe chain,
   RadioCapture round-trip) — 5 tests, 591 green; compliance PASS (rules 1/5/2/6). So the engineer now
   **answers a push-to-talk question aloud**, free/no-key (template) or via the configured LLM. **Still
-  silent/scripted** with the fake STT/TTS — slice 3b makes it real.) **Remaining T10.1 (slice 3b/3):**
-  swap the **real STT/TTS providers** in (`selectStt/TtsProvider` + a resolved voice route in the
-  `configure` message, key from secure storage → worker, never the renderer) so it *understands real
-  speech* and is *audible*. **cloud BYO-key** is the fastest audible path on the dev Mac; **local
-  Piper/Kokoro + faster-whisper** is the free default (native binaries — the rig/native half). This is
-  the **human-verify** half (you + mic + speakers, a key for the cloud route). Once it lands, the
-  premium voice path supersedes the free Web-Speech call-outs the renderer uses today.
+  silent/scripted** with the fake STT/TTS — slice 3b makes it real.) ~~**cloud TTS provider**
+  (slice 3b-i)~~ (done 2026-06-15 — the first **real** voice engine, mirroring the cloud-LLM providers
+  (T5.1b). New **`packages/voice/src/providers/cloud-tts.ts`** `CloudTtsProvider` (OpenAI-compatible
+  `POST /audio/speech` → binary audio): `synthesizeStream` yields the bytes, `prerender` **retains the
+  bytes + MIME** so Tier-0 clips are audible; `fetch` is **injectable** (mocked-transport tested — no
+  key, no network), the **key comes from config/OS secure storage, never embedded** (rule 6), and it
+  calls the vendor directly — no central server. Added `'openai'` to `TtsEngineId` + `cloudTtsConfig`
+  to `VoiceProviderConfig`, so `selectTtsProvider` swaps to it config-only (no key ⇒ not-ready →
+  caller falls back). Widening the engine enum forced the cost estimator to **price** it — `openai`
+  TTS ≈ $0.10/h (docs/15 §Cost scenarios "Budget cloud"), so a paid engine can't read as free. 9
+  mocked-transport tests (request mapping, Bearer key, binary→chunk, prerender bytes+MIME, readiness,
+  error-throws, selector swap), 600 green; compliance PASS (rules 6/5/1 + state-honesty). **Provider
+  built + offline-tested; not yet wired into the running app.**) **Remaining T10.1 (slice 3b-ii):**
+  **wire the cloud TTS into the worker** so it's audible with your key — add a **TTS API-key secret
+  slot**, resolve a `VoiceProviderConfig` in `main` (key from secure storage), thread it on the
+  `configure` message → the worker builds the TTS via `selectTtsProvider` (build-on-configure, graceful
+  fallback to fake when not-ready), and add `'openai'` to the settings UI engine list. Then **cloud STT**
+  (slice 3b-iii) for voice-in, and the **local native backends** (Piper/Kokoro + faster-whisper binaries
+  — the free default, rig/native). 3b-ii onward is the **human-verify** half (you + an OpenAI key + mic +
+  speakers). Once wired, the premium voice path supersedes the free Web-Speech call-outs the renderer
+  uses today.
   M7.7–M7.9 / M8 / M9 offline-strategy depth are paused until the app is launchable. (Offline glue
   done: `get_stint_plan` + `project_pit_window` are now wired into the AI read-only tool surface,
   reading a precomputed `ctx.stintPlan` (T7.3) like `get_fuel_plan` reads `ctx.fuelPlan`; 373 green.

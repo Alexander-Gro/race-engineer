@@ -1,3 +1,4 @@
+import { openAiTts, type CloudTtsConfig } from './providers/cloud-tts';
 import { FakeSttProvider } from './providers/fake-stt';
 import { FakeTtsProvider } from './providers/fake-tts';
 import {
@@ -20,11 +21,12 @@ import type { SttProvider, TtsProvider } from './types';
  * {@link selectSttProvider} turn that into a provider instance with no other code change. The
  * default is the **free, local** profile (docs/15) — it ships enabled and needs no key.
  *
- * Cloud (BYO-key) TTS/STT engines (ElevenLabs/Deepgram/…) join this enum behind the same
- * interface in the premium profile; the native local backends are injected here once T10.1 wires
- * them (until then the local shells are not-ready — see `local-tts.ts`/`local-stt.ts`).
+ * Cloud (BYO-key) engines join this enum behind the same interface: `openai` cloud TTS is wired
+ * (slice 3b — BYO-key, the fastest audible path on the dev Mac); more cloud STT/TTS (Deepgram/
+ * ElevenLabs/…) follow. The native local backends are injected here once T10.1 wires them (until
+ * then the local shells are not-ready — see `local-tts.ts`/`local-stt.ts`).
  */
-export type TtsEngineId = 'fake' | 'piper' | 'kokoro';
+export type TtsEngineId = 'fake' | 'piper' | 'kokoro' | 'openai';
 export type SttEngineId = 'fake' | 'whisper-cpp' | 'faster-whisper';
 
 export interface VoiceProviderConfig {
@@ -35,6 +37,8 @@ export interface VoiceProviderConfig {
   /** Native backends, wired in T10.1; absent ⇒ the selected local shell reports not-ready. */
   ttsBackend?: LocalTtsBackend;
   sttBackend?: LocalSttBackend;
+  /** Cloud TTS (BYO-key) config for the `openai` engine; absent/empty key ⇒ reports not-ready. */
+  cloudTtsConfig?: CloudTtsConfig;
 }
 
 /** The free profile (docs/15, default, ships enabled): fully local, no signup, no key. */
@@ -48,6 +52,8 @@ export const selectTtsProvider = (config: VoiceProviderConfig): TtsProvider => {
       return piperTts(config.ttsConfig, config.ttsBackend ?? null);
     case 'kokoro':
       return kokoroTts(config.ttsConfig, config.ttsBackend ?? null);
+    case 'openai':
+      return openAiTts(config.cloudTtsConfig ?? { apiKey: '' }); // no key ⇒ not-ready, caller falls back
     default: {
       const unknown: never = config.tts;
       throw new Error(`unknown TTS engine: ${String(unknown)}`);
