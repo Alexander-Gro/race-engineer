@@ -1,10 +1,14 @@
-import type { EngineerSnapshot } from '@race-engineer/engineer-core';
+import type { SnapshotTransport } from '@race-engineer/engineer-core';
+import { AskResponder, type AskRequestMessage, type WorkerMessage } from '../src/ask';
 import { createSyntheticEngineerCore } from '../src/host';
 
 /**
  * Engineer Core worker (build-plan T6.1) — runs in the Electron utility process so the tick
  * pipeline stays **off the UI thread**. It `postMessage`s throttled snapshots to the main process,
- * which forwards them to the renderer. Read-only/advisory: the worker only reads telemetry.
+ * which forwards them to the renderer. It also answers **text questions** relayed from the renderer
+ * via the free/no-key {@link AskResponder} (template mode — docs/15), keeping the AI brain off the
+ * UI thread alongside the pipeline. Read-only/advisory: the worker only reads telemetry and phrases
+ * tool output; there is no path to the game.
  *
  * Source is chosen by the `ENGINEER_SOURCE` env var:
  *   - default → the offline **synthetic** scenario (paced + looped) so the app shows live values
@@ -13,9 +17,25 @@ import { createSyntheticEngineerCore } from '../src/host';
  *     (koffi, Windows-only native) is **dynamically imported only when selected**, so the synthetic
  *     demo never loads koffi. Until LMU is in a session it emits nothing — the dashboard waits.
  */
-const transport = (snapshot: EngineerSnapshot): void => {
-  process.parentPort.postMessage(snapshot);
+const responder = new AskResponder();
+
+const transport: SnapshotTransport = (snapshot): void => {
+  responder.update(snapshot);
+  process.parentPort.postMessage({ type: 'snapshot', snapshot } satisfies WorkerMessage);
 };
+
+// Renderer questions arrive (relayed by main) on the parent port; answer from the latest snapshot.
+process.parentPort.on('message', (event: { data: AskRequestMessage }): void => {
+  const msg = event.data;
+  if (msg?.type === 'ask') {
+    const reply: WorkerMessage = {
+      type: 'ask-reply',
+      id: msg.id,
+      answer: responder.answer(msg.question),
+    };
+    process.parentPort.postMessage(reply);
+  }
+});
 
 void (async (): Promise<void> => {
   const source = process.env['ENGINEER_SOURCE'] === 'lmu' ? 'lmu' : 'synthetic';

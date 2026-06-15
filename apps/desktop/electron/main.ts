@@ -1,6 +1,7 @@
 import path from 'node:path';
-import { app, BrowserWindow, utilityProcess, type UtilityProcess } from 'electron';
-import { SNAPSHOT_CHANNEL, type EngineerSnapshot } from '@race-engineer/engineer-core';
+import { app, BrowserWindow, ipcMain, utilityProcess, type UtilityProcess } from 'electron';
+import { ASK_CHANNEL, SNAPSHOT_CHANNEL, type EngineerSnapshot } from '@race-engineer/engineer-core';
+import type { AskRequestMessage, WorkerMessage } from '../src/ask';
 import { requestSingleInstanceLock } from '../src/single-instance';
 
 /**
@@ -21,6 +22,11 @@ let worker: UtilityProcess | null = null;
 // The most recent snapshot, replayed to any window once it finishes loading so a freshly-opened or
 // reloaded window paints immediately instead of waiting for the next throttled tick.
 let lastSnapshot: EngineerSnapshot | null = null;
+
+// Pending text-ask requests, correlated by id: renderer → main (invoke) → worker → main → resolve.
+let askSeq = 0;
+const pendingAsks = new Map<number, (answer: string) => void>();
+const ASK_TIMEOUT_MS = 5000;
 
 const createWindow = (): BrowserWindow => {
   const window = new BrowserWindow({
@@ -60,12 +66,33 @@ const startEngineerWorker = (): void => {
   });
   worker.stdout?.on('data', (chunk: Buffer) => process.stdout.write(chunk));
   worker.stderr?.on('data', (chunk: Buffer) => process.stderr.write(chunk));
-  worker.on('message', (snapshot: EngineerSnapshot) => {
-    lastSnapshot = snapshot;
-    // Broadcast to all live windows so a re-opened window (macOS dock re-open) keeps receiving.
-    for (const window of BrowserWindow.getAllWindows()) {
-      if (!window.isDestroyed()) window.webContents.send(SNAPSHOT_CHANNEL, snapshot);
+  worker.on('message', (message: WorkerMessage) => {
+    if (message.type === 'snapshot') {
+      lastSnapshot = message.snapshot;
+      // Broadcast to all live windows so a re-opened window (macOS dock re-open) keeps receiving.
+      for (const window of BrowserWindow.getAllWindows()) {
+        if (!window.isDestroyed()) window.webContents.send(SNAPSHOT_CHANNEL, message.snapshot);
+      }
+    } else if (message.type === 'ask-reply') {
+      const resolve = pendingAsks.get(message.id);
+      if (resolve) {
+        pendingAsks.delete(message.id);
+        resolve(message.answer);
+      }
     }
+  });
+};
+
+/** Relay a renderer question to the worker and resolve when its answer comes back (or it times out). */
+const askEngineerViaWorker = (question: string): Promise<string> => {
+  if (!worker) return Promise.resolve("The engineer isn't running yet — give it a moment.");
+  const id = ++askSeq;
+  return new Promise<string>((resolve) => {
+    pendingAsks.set(id, resolve);
+    worker?.postMessage({ type: 'ask', id, question } satisfies AskRequestMessage);
+    setTimeout(() => {
+      if (pendingAsks.delete(id)) resolve("Sorry — I didn't get that in time.");
+    }, ASK_TIMEOUT_MS);
   });
 };
 
@@ -76,6 +103,14 @@ const main = (): void => {
     app.quit();
     return;
   }
+
+  // Renderer asks a text question; main relays it to the worker and returns the spoken-style answer.
+  // `invoke`/`handle` is request/response only — there is no fire-and-forget channel toward the game.
+  ipcMain.handle(
+    ASK_CHANNEL,
+    (_event, question: unknown): Promise<string> =>
+      askEngineerViaWorker(typeof question === 'string' ? question : ''),
+  );
 
   void app.whenReady().then(() => {
     startEngineerWorker();

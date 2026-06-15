@@ -36,12 +36,25 @@ export interface EngineerSnapshot {
 export const SNAPSHOT_CHANNEL = 'engineer:snapshot' as const;
 
 /**
- * The read-only API the preload script exposes to the renderer via `contextBridge`. The
- * renderer can only *subscribe* to snapshots — it cannot send anything toward the game.
+ * The request/response channel the renderer asks a text question on (`invoke`/`handle`). This is a
+ * renderer→Core *query* path, not a write path: the question reaches the read-only AI tools, which
+ * only read the latest `RaceContext`. There is still no channel toward the game (CLAUDE.md rule 5).
+ */
+export const ASK_CHANNEL = 'engineer:ask' as const;
+
+/**
+ * The read-only API the preload script exposes to the renderer via `contextBridge`. The renderer
+ * can *subscribe* to snapshots and *ask* the engineer a text question — both read-only; it can never
+ * send anything toward the game.
  */
 export interface EngineerBridge {
   /** Subscribe to throttled snapshots; returns an unsubscribe function. */
   onSnapshot(listener: (snapshot: EngineerSnapshot) => void): () => void;
+  /**
+   * Ask the engineer a text question; resolves with a spoken-style answer. Free/no-key by default
+   * (template mode over the read-only tools — docs/15). Advisory only.
+   */
+  ask(question: string): Promise<string>;
 }
 
 /**

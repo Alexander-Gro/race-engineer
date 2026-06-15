@@ -170,6 +170,49 @@
         font-size: 12px;
         margin-bottom: 8px;
       }
+      /* Ask-the-engineer bar (Track A — free/no-key text Q&A). Lives outside #app so a snapshot
+         redraw never wipes the typed question or the last answer. */
+      .ask-bar {
+        margin: 0 0 12px;
+      }
+      .ask-form {
+        display: flex;
+        gap: 8px;
+      }
+      .ask-input {
+        flex: 1;
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        color: var(--text);
+        font: inherit;
+        padding: 8px 10px;
+      }
+      .ask-input::placeholder {
+        color: var(--muted);
+      }
+      .ask-btn {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        color: var(--text);
+        font: inherit;
+        padding: 8px 14px;
+        cursor: pointer;
+      }
+      .ask-btn:hover {
+        border-color: var(--good);
+        color: var(--good);
+      }
+      .ask-answer {
+        display: block;
+        min-height: 1.4em;
+        margin-top: 8px;
+        color: var(--good);
+      }
+      .ask-answer:empty {
+        display: none;
+      }
       /* Colour language (docs/09): green = good, amber = caution, red = act-now. */
       .sev-good {
         color: var(--good);
@@ -202,6 +245,19 @@
       <h1>Race Engineer — live (synthetic source)</h1>
       <div class="meta" id="meta"></div>
     </header>
+    <section class="ask-bar">
+      <form class="ask-form" id="ask-form">
+        <input
+          class="ask-input"
+          id="ask-input"
+          type="text"
+          autocomplete="off"
+          placeholder="Ask the engineer — fuel, tyres, position, last lap, when to pit…"
+        />
+        <button class="ask-btn" type="submit">Ask</button>
+      </form>
+      <output class="ask-answer" id="ask-answer"></output>
+    </section>
     <div id="app">Waiting for the Engineer Core…</div>
     <!-- electron-vite (Vite) bundles this TS entry; in dev it's served with HMR. -->
     <script type="module" src="./renderer.ts"></script>

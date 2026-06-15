@@ -202,3 +202,30 @@ const render = (model: DashboardModel): void => {
 };
 
 window.engineer.onSnapshot((snapshot) => render(buildDashboardModel(snapshot)));
+
+/**
+ * The free/no-key "ask the engineer" bar (Track A). Wired once — it lives outside `#app`, so the
+ * snapshot redraw never clears the typed question or the answer. The question goes Core-side over the
+ * read-only `ask` bridge (template mode answers it from the latest snapshot); we just show the reply.
+ */
+const wireAskBar = (): void => {
+  const form = document.getElementById('ask-form') as HTMLFormElement | null;
+  const input = document.getElementById('ask-input') as HTMLInputElement | null;
+  const answer = document.getElementById('ask-answer');
+  if (!form || !input || !answer) return;
+  form.addEventListener('submit', (event) => {
+    event.preventDefault();
+    const question = input.value.trim();
+    if (!question) return;
+    answer.textContent = '…';
+    void window.engineer
+      .ask(question)
+      .then((reply) => {
+        answer.textContent = reply;
+      })
+      .catch(() => {
+        answer.textContent = "Sorry — I couldn't answer that just now.";
+      });
+  });
+};
+wireAskBar();

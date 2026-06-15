@@ -17,11 +17,13 @@
   "dependencies": {
     "@race-engineer/adapter-lmu": "workspace:*",
     "@race-engineer/adapter-sim-replay": "workspace:*",
+    "@race-engineer/ai": "workspace:*",
     "@race-engineer/core": "workspace:*",
     "@race-engineer/engineer-core": "workspace:*",
     "koffi": "^3.0.0"
   },
   "devDependencies": {
+    "@race-engineer/strategy": "workspace:*",
     "cross-env": "^7.0.3",
     "electron": "^42.4.0",
     "electron-vite": "^5.0.0",

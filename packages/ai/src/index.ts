@@ -20,6 +20,7 @@ export type { Persona } from './prompt';
 export { runRadioTurn } from './orchestrator';
 export type { RadioTurnInput, RadioTurnResult, ExecutedToolCall } from './orchestrator';
 export { templateAnswer } from './template';
+export { askEngineer, ASK_FALLBACK } from './ask';
 export { checkSpokenNumbers, extractNumbers, collectToolNumbers } from './guard';
 export type { HallucinationReport, SpokenNumber } from './guard';
 export { FakeProvider } from './providers/fake';

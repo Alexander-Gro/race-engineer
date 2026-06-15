@@ -56,6 +56,9 @@ importers:
       '@race-engineer/adapter-sim-replay':
         specifier: workspace:*
         version: link:../../packages/adapters/sim-replay
+      '@race-engineer/ai':
+        specifier: workspace:*
+        version: link:../../packages/ai
       '@race-engineer/core':
         specifier: workspace:*
         version: link:../../packages/core
@@ -66,6 +69,9 @@ importers:
         specifier: ^3.0.0
         version: 3.0.2
     devDependencies:
+      '@race-engineer/strategy':
+        specifier: workspace:*
+        version: link:../../packages/strategy
       cross-env:
         specifier: ^7.0.3
         version: 7.0.3

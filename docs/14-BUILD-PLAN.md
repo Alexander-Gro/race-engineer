@@ -147,9 +147,10 @@ in a small, reviewable, green-tested change.
   sim-replay adapter** — the rig only swaps synthetic→live-LMU adapter + keyboard→wheel PTT.
   Order: ~~**T6.1** Electron boot~~ (done — electron-vite wired) → ~~**T6.2** dashboard~~ (done —
   pure `buildDashboardModel` + structured renderer; all docs/09 §A widgets + state-honesty colours,
-  fixture-tested; Tailwind/shadcn reskin + Playwright deferred) → **wire the reactive radio loop +
-  proactive router into the shell** (NEXT) → **T4.5** mic/audio I/O → **T6.3** settings/secrets +
-  PTT-mapping UI → **T10.1** real STT/TTS (or cloud BYO-key).
+  fixture-tested; Tailwind/shadcn reskin + Playwright deferred) → ~~text-ask the engineer (free/no-key
+  Q&A in the shell)~~ (done, see below) → **wire the reactive radio loop + proactive router into the
+  shell** (NEXT — the *voice* path; reuses the snapshot→`RaceContext` bridge) → **T4.5** mic/audio I/O
+  → **T6.3** settings/secrets + PTT-mapping UI → **T10.1** real STT/TTS (or cloud BYO-key).
   M7.7–M7.9 / M8 / M9 offline-strategy depth are paused until the app is launchable. (Offline glue
   done: `get_stint_plan` + `project_pit_window` are now wired into the AI read-only tool surface,
   reading a precomputed `ctx.stintPlan` (T7.3) like `get_fuel_plan` reads `ctx.fuelPlan`; 373 green.
@@ -167,8 +168,17 @@ in a small, reviewable, green-tested change.
   **Template-mode answering done (2026-06-15):** `templateAnswer(question, ctx)` in `ai` — the
   free/offline/no-key reactive engineer (docs/15): matches a question to an intent, reads the
   read-only tools, and phrases a grounded answer (fuel/pit/tyres/position/lap-time/aids) quoting tool
-  numbers verbatim, no LLM. Returns null on no match → caller falls back to a configured LLM. Next:
-  wire it to a text-ask UI + the snapshot→`RaceContext` glue ("it answers you", free, no key).
+  numbers verbatim, no LLM. Returns null on no match → caller falls back to a configured LLM.
+  **Text-ask the engineer done (2026-06-15):** the desktop app now *answers you*, free/no-key. New
+  `askEngineer(question, ctx)` in `ai` (template mode + a guiding fallback — always returns a spoken
+  answer, the seam where a configured LLM plugs in later). The snapshot→`RaceContext` bridge +
+  `AskResponder` (latest-snapshot holder) live in `apps/desktop/src/ask.ts` (pure, unit-tested) — the
+  *same bridge the voice radio loop reuses next*. Wired through the shell: a renderer ask-bar →
+  read-only `ASK_CHANNEL` (`invoke`/`handle`, request/response — **no game write path**) → the Core
+  **worker** answers off the UI thread from its freshest snapshot → reply painted in the renderer. The
+  AI brain bundles only into the Node worker, never the renderer (build-verified: renderer stays 4
+  modules). 411 green. _Human (dev machine, macOS ok):_ `pnpm dev` → type "how's my fuel?" → see the
+  grounded answer (the live half).
 - **Track B (needs the Windows rig + LMU) — app can now drive it (2026-06-15):** the launchable app
   is the test harness. **`pnpm dev:lmu`** drives the dashboard from the **live LMU shared-memory
   source** (`apps/desktop/src/lmu-host.ts` — `LmuAdapter` + `createLmuNormalizer`, dynamically loaded
