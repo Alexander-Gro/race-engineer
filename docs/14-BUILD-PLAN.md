@@ -460,15 +460,24 @@ write endpoints deliberately avoided).
 Output: ✅ endpoint list + schemas + read-only confirmation → doc 03 §S2 live. (REST→`RaceState`
 mapping is T2.2/T2.3 forward work.)
 
-**T1.3 — S3: current-aid readability** · _human-assisted_ · deps: T1.1
-Verify: determine whether current TC/ABS/brake-bias/engine-map are readable (telemetry/
-extended buffer or setup file). (Read-only — we never write them.)
-Output: source + field locations → doc 03.
+**T1.3 — S3: current-aid readability** · _human-assisted_ · deps: T1.1 · **done**
+Verify: ✅ determined (docs/03 §S3, S2/S4 live 2026-06-16). **Baseline** TC-map/ABS-map/engine-mixture/
+brake-balance/VE/compound are readable from REST `getPlayerGarageData` (== the `.svm` file); live
+**brake bias** from SHM. **Definitive negative:** the *live* in-cockpit TC/ABS/mixture *level* the driver
+dials on track is **not** externally readable — `getPlayerGarageData` is a frozen garage snapshot (full
+JSON static all session while toggling + driving + burning fuel), SHM doesn't carry it (S1#3), `/rest/hud`
+has none. So the engineer advises aids from the **baseline**, in **relative clicks**, and never claims the
+live level. (Read-only — we never write them.)
+Output: ✅ source + field locations → doc 03 §S3 + "S2/S4 — live confirmation".
 
-**T1.4 — S4: setup file read** · _human-assisted_ · deps: T1.1
-Build: locate the setup directory; parse a setup file (read-only) into `SetupParams`.
-Verify: parsed values match the in-game garage. Never write.
-Output: location + format notes → doc 03.
+**T1.4 — S4: setup file read** · _human-assisted_ · deps: T1.1 · **done**
+Build: ✅ located the setup dir + built a **read-only `.svm` parser**
+(`packages/adapters/lmu/src/setup/svm.ts` — `parseSvm`/`parseSvmFile`/`extractSetupBaseline`/
+`toSetupSummary` → canonical `SetupSummary`; 8 tests, synthetic fixture).
+Verify: ✅ parsed values match the in-game garage / live REST baseline (ABS `9 (Understeer)`, mixture
+`Race`, compound `Medium`, VE `100%`). Never writes (rule 5). **Finding:** values are setting *indices*
+but LMU **embeds the display string in the `//` comment**, so it's recoverable per-entry.
+Output: ✅ location + format notes → doc 03 §"S4 — live confirmation".
 
 **T1.5 — Record a real session** · _human-assisted_ · deps: T1.1 → **tooling ready (T2.4)**
 Build: dump a full short stint to a replay file; commit a trimmed version as a test fixture.

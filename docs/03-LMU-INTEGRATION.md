@@ -1010,11 +1010,20 @@ TC/ABS/engine-map (S1#3), but `getPlayerGarageData` does, each as `{value (index
 - `VM_BRAKE_BALANCE` → `stringValue:"49.5:50.5"` (front:rear; `value:30` is the *index*, confirming the S4 "index-not-value" rule). (Note: differs from SHM `mRearBrakeBias` 52.8% — REST is the *setup* baseline, SHM is *live*; prefer SHM for live brake bias.)
 - `VM_VIRTUAL_ENERGY` → `stringValue:"100% (11.1 laps)"`, `value:100` — **VE % + laps-to-empty readable.**
 - `VM_FUEL_LEVEL` → `value:83` (≈ 84 L; `max:117`), `VM_FRONT_TIRE_COMPOUND` → `"Medium"`.
-- ⚠️ **Caveat:** `VM_TRACTION_CONTROL` and `VM_ANTILOCK_BRAKES` read `value:0`/`stringValue:"Available"`
-  — i.e. an **enable flag** (TC/ABS allowed), **not** the live wheel-dial level the driver changes on
-  track. So the **setup baseline** is readable now; whether the *live* TC/ABS *level* updates here
-  while driving is the **one remaining S3 live-verify** (toggle on the wheel + re-poll). Engine
-  mixture and brake migration look like real adjustable values; TC/ABS look like flags.
+- TC/ABS **levels** are present too: `VM_TRACTIONCONTROLMAP` → `value:6`, `VM_ANTILOCKBRAKESYSTEMMAP`
+  → `value:9 (Understeer)` (the `VM_TRACTION_CONTROL`/`VM_ANTILOCK_BRAKES` fields are just enable-flags,
+  `"Available"`). So the TC/ABS *map level* baseline IS readable.
+- ❌ **RESOLVED — `getPlayerGarageData` is a FROZEN garage snapshot; it does NOT update live.** Verified
+  this session (T1.3): while the driver changed TC/ABS on the wheel and drove ~3.5 laps, the **entire
+  `getPlayerGarageData` JSON stayed byte-identical** across a multi-minute watcher *and* a 30 s
+  full-JSON diff (TCmap stuck at 6, ABSmap at 9, mixture "Race"); `VM_FUEL_LEVEL`/`getVehicleCondition.fuel`
+  stayed at **84 L despite fuel being burned**; `/rest/hud` (70 bytes — component visibility only) carries
+  no aids. Combined with S1#3 (SHM also doesn't reflect live aid toggles), the conclusion is definitive:
+  **the live, in-cockpit TC/ABS/mixture *level* the driver dials on track is NOT externally readable** —
+  not via SHM, not via REST. **Only the pre-session baseline is** (REST garage snapshot == the `.svm`
+  file, S4). *Product implication:* the engineer advises aids from the **baseline** and in **relative
+  terms** ("TC up one from your 6"); it must not claim to know the driver's current live level after they
+  change it. (Live brake bias is the exception — SHM `mRearBrakeBias` *does* update live, S1#3.)
 
 **Read-only confirmation.** Every call above is a GET. Write-capable endpoints exist (107 non-GET,
 incl. the garage `setup`/`PitMenu`/`SetCurrentVehicle` "set" operations CrewChief uses) — we issue
@@ -1025,6 +1034,46 @@ gaps + sector times from `/rest/watch/standings` and the `GetGameState` enum str
 canonical `RaceState` (merge with SHM, SHM winning for live physics); source VE-per-lap from
 `/rest/strategy/usage`; source the pit-time breakdown from `/rest/strategy/pitstop-estimate` (capture
 a non-zero sample with a stop configured in the garage); source tyre sets from `TireManagement`.
+
+## S4 — live confirmation (2026-06-16) — setup `.svm` located + parsed (T1.4)
+
+Located and parsed real `.svm` files on the rig; **a read-only parser is now committed**
+(`packages/adapters/lmu/src/setup/svm.ts`, `parseSvm`/`parseSvmFile`/`extractSetupBaseline`/
+`toSetupSummary`, 8 tests).
+
+**Location (CONFIRMED).** `…\Le Mans Ultimate\UserData\player\Settings\<Track>\<name>.svm` — exactly the
+desk-research layout, with a **per-track** subfolder (`Lemans`, `Qatar`, `Sebring`, `Spa`, …) and the
+**car encoded in the filename** (e.g. `Lemans\CDA 992 LM24 Race Balanced.svm` = Porsche 992 GT3). The
+first line carries the authoritative car id: `VehicleClassSetting="GT3 Porsche_911_GT3_R_LMGT3 WEC2025"`
+and a `//VEH=…\…\92_25_….VEH` comment — so the car/track come from the file, not the (author-chosen) name.
+
+**Format (CONFIRMED) — and better than desk research feared.** INI-style: `[SECTION]` headers
+(`[GENERAL]`, `[FRONTWING]`, `[REARWING]`, `[FRONTLEFT]`…`[REARRIGHT]`, driving-aid keys) and
+`Key=<index>//<display>` entries. Values **are setting *indices*** (`RWSetting=0`), confirming S4.2 —
+**but LMU embeds the human-readable display in the trailing `//` comment**, so it *is* recoverable
+per-entry: `RWSetting=0//6.3 deg`, `AntilockBrakeSystemMapSetting=9//9 (Understeer)`,
+`EngineMixtureSetting=1//Race`, `FuelCapacitySetting=0//84.0L (10.8 laps)`. (Some read `//N/A` /
+`//Non-adjustable` / `//Standard`.) The parser keeps **both** the raw index and the display string.
+
+**Aid/strategy field map (CONFIRMED, cross-checked against the live REST garage values):**
+
+| `.svm` key | Sample value//display | Canonical / use |
+| --- | --- | --- |
+| `TractionControlMapSetting` | `5//5` | TC level baseline (REST `VM_TRACTIONCONTROLMAP`) |
+| `AntilockBrakeSystemMapSetting` | `9//9 (Understeer)` | ABS level baseline (REST `VM_ANTILOCKBRAKESYSTEMMAP`) ✓ matches REST exactly |
+| `EngineMixtureSetting` | `1//Race` | engine map (`PlayerCar.engine.map`) ✓ matches REST |
+| `BrakeMigrationSetting` / `EngineBoostSetting` / `RegenerationMapSetting` | `0//…` | aid baselines |
+| `VirtualEnergySetting` | `100//100% (10.7 laps)` | VE target (REST `VM_VIRTUAL_ENERGY`) ✓ |
+| `FuelSetting` / `FuelCapacitySetting` | `83//0.84` / `0//84.0L` | fuel plan baseline |
+| `CompoundSetting` (×4 corners) | `0//Medium` | per-corner compound ✓ matches SHM |
+
+**Verify ✓** parsed values match the in-game garage / the live REST snapshot (ABS `9 (Understeer)`,
+mixture `Race`, compound `Medium`, VE `100%` all agree). **Read-only** — the parser only reads a file
+the driver saved; no write path (rule 5). **S4 is now satisfied by REST anyway** (the garage snapshot is
+the same baseline), so the `.svm` parser is a **fallback / offline** source — useful when REST is
+unavailable, and the one source that names the exact car/track + every setting field. *Not pursued
+(out of scope):* mapping every mechanical/aero index to a physical UI number (needs per-car base/step
+data not in the file — S4.2); the engineer expresses setup advice in **relative clicks** regardless.
 
 ### S4.1 — Setup file location (confirmed from source; exact-path LIVE-VERIFY)
 
@@ -1191,10 +1240,13 @@ Get-ChildItem -Path $SET -Recurse -Filter *.svm | Sort-Object LastWriteTime -des
       find the available-sets endpoint in the Swagger list and capture its payload. Source:
       TinyPedal (RepairAndRefuel/garage usage); LMU community REST thread.
 - [x] **S3** Are current TC/ABS/brake-bias/engine-map values *readable* (telemetry/extended buffer or setup file)? (Read-only — we never write them.)
-  **RESOLVED 2026-06-16 (S2 live):** brake bias from SHM (live); **engine map (`VM_ENGINE_MIXTURE`),
-  brake balance, VE, compound readable from REST `getPlayerGarageData`**. One open live-verify: whether
-  the wheel-dial **TC/ABS *level*** updates in REST while driving (they read as enable-flags). See the
-  "S2 — live confirmation" S3 block.
+  **RESOLVED 2026-06-16 (S2 + T1.3 live):** **baseline** TC map / ABS map / engine mixture / brake
+  balance / VE / compound are readable from REST `getPlayerGarageData` (== the `.svm` file, S4) and live
+  **brake bias** from SHM. **But the *live* in-cockpit TC/ABS/mixture *level* the driver dials on track is
+  NOT externally readable** — `getPlayerGarageData` is a frozen garage snapshot (full-JSON static all
+  session while toggling + driving), SHM doesn't carry it (S1#3), `/rest/hud` has no aids. So: advise aids
+  from the **baseline**, in **relative clicks**; don't claim the live level. See the "S2 — live
+  confirmation" S3 block.
   - *desk-research (confirmed from source):* see the second S1 item above. Summary: brake
     bias = telemetry (`rF2VehicleTelemetry.mRearBrakeBias`); TC/ABS *difficulty* flags =
     `rF2Extended.mPhysics`; in-cockpit TC/ABS/engine-map *index* = not found in SHM,
@@ -1209,7 +1261,13 @@ Get-ChildItem -Path $SET -Recurse -Filter *.svm | Sort-Object LastWriteTime -des
       VERIFICATION:** capture `getPlayerGarageData` + `RepairAndRefuel` JSON and grep for
       traction/abs/enginemap/mixture fields (probe step 3). If absent everywhere, advise in
       *relative clicks* only. Sources: TinyPedal; lmu-pitwall; LMU `.svm` format thread.
-- [ ] **S4** Setup file location + format for **read-only** parsing (and/or REST setup read).
+- [x] **S4** Setup file location + format for **read-only** parsing (and/or REST setup read).
+  **LIVE-CONFIRMED 2026-06-16 (T1.4 — see "S4 — live confirmation"):** location
+  `…\Le Mans Ultimate\UserData\player\Settings\<Track>\<name>.svm` (per-track subfolder, car in the
+  filename + `VehicleClassSetting`/`//VEH=`); INI `[SECTION]` + `Key=<index>//<display>`; values are
+  indices **but the display string is in the `//` comment** (recoverable). Read-only parser committed
+  (`packages/adapters/lmu/src/setup/svm.ts`, 8 tests); parsed values match the garage/REST baseline.
+  REST garage snapshot is the same baseline, so `.svm` is the offline fallback source.
   - *desk-research (confirmed from public sources — see "S2 / S4 desk-research findings"):*
     **Location:** `…\steamapps\common\Le Mans Ultimate\UserData\player\Settings\<track>\`,
     **extension `.svm`** (rF2 format). **Format:** human-readable **text / INI** — `[SECTION]`

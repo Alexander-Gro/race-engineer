@@ -1,0 +1,39 @@
+VehicleClassSetting="GT3 Sample_GT3_Car WEC2025"
+UpgradeSetting=(299140,0,0,0)
+//VEH=C:\Games\Le Mans Ultimate\Installed\Vehicles\SampleGT3\1.0\sample.VEH
+//Note: synthetic fixture for the .svm parser test (T1.4) — not a real saved setup.
+
+[GENERAL]
+Notes=""
+Symmetric=1
+FuelSetting=83//0.84
+FuelCapacitySetting=0//84.0L (10.8 laps)
+VirtualEnergySetting=100//100% (10.7 laps)
+WedgeSetting=0//N/A
+
+[FRONTWING]
+FWSetting=0//Standard
+
+[REARWING]
+RWSetting=0//6.3 deg
+
+[DRIVING AIDS]
+BrakeMigrationSetting=0// 0.0
+ABSSetting=0//Available
+TractionControlMapSetting=5//5
+AntilockBrakeSystemMapSetting=9//9 (Understeer)
+EngineBoostSetting=0//N/A
+RegenerationMapSetting=0//0%
+EngineMixtureSetting=1//Race
+
+[FRONTLEFT]
+CompoundSetting=0//Medium
+
+[FRONTRIGHT]
+CompoundSetting=0//Medium
+
+[REARLEFT]
+CompoundSetting=0//Medium
+
+[REARRIGHT]
+CompoundSetting=0//Medium
