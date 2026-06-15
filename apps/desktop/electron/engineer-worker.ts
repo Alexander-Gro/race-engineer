@@ -32,8 +32,11 @@ const responder = new AskResponder();
 // `configure` may arrive before the voice is built (it's posted on `ready`), so hold the level and
 // apply it once the voice exists.
 let voice: EngineerVoice | null = null;
-// Feeds renderer-reported clip completions back to the voice queue; null until the voice is built.
+// Voice-bridge hooks, null until the voice is built: drain the audio-out queue, drive radio capture
+// (PTT edges), and feed captured mic frames into the STT stream.
 let handleAudioEnded: ((pid: number) => void) | null = null;
+let onPtt: ((down: boolean) => void) | null = null;
+let handleMicFrame: ((frame: Uint8Array) => void) | null = null;
 let proactivity: ProactivityLevel = 'normal';
 
 // Main-relayed messages on the parent port: text questions, and the engineer-route config.
@@ -72,6 +75,12 @@ process.parentPort.on('message', (event: { data: MainToWorkerMessage }): void =>
   } else if (msg?.type === 'audio-ended') {
     // The renderer finished playing a clip → drain the voice queue's next utterance.
     handleAudioEnded?.(msg.pid);
+  } else if (msg?.type === 'radio-ptt') {
+    // A push-to-talk edge from the renderer drives the radio capture lifecycle.
+    onPtt?.(msg.down);
+  } else if (msg?.type === 'radio-frame') {
+    // A captured mic frame from the renderer → the active STT stream (dropped if not capturing).
+    handleMicFrame?.(msg.frame);
   }
 });
 
@@ -92,6 +101,8 @@ void (async (): Promise<void> => {
     );
     voice = workerVoice.voice;
     handleAudioEnded = workerVoice.handleAudioEnded;
+    onPtt = workerVoice.onPtt;
+    handleMicFrame = workerVoice.handleMicFrame;
   }
   voice?.setProactivity(proactivity); // apply any config that arrived before the voice was built
   const activeVoice = voice; // a const so the closures below narrow `null` away (configure uses `voice`)

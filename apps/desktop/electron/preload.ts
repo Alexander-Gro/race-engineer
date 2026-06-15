@@ -13,6 +13,7 @@ import {
   type AudioOutApi,
   type AudioOutMessage,
 } from '../src/audio-bridge';
+import { RADIO_FRAME_CHANNEL, RADIO_PTT_CHANNEL, type RadioInApi } from '../src/mic-bridge';
 import {
   PTT_EVENT_CHANNEL,
   PTT_GET_CHANNEL,
@@ -99,7 +100,19 @@ const audioOut: AudioOutApi = {
   },
 };
 
+// Mic-in bridge (T10.1 slice 2): push-to-talk edges + captured mic frames to the worker's STT.
+// Input-only — the driver's radio audio in; no data flows toward the game.
+const radioIn: RadioInApi = {
+  ptt(down: boolean): void {
+    ipcRenderer.send(RADIO_PTT_CHANNEL, down);
+  },
+  frame(bytes: Uint8Array): void {
+    ipcRenderer.send(RADIO_FRAME_CHANNEL, bytes);
+  },
+};
+
 contextBridge.exposeInMainWorld('engineer', bridge);
 contextBridge.exposeInMainWorld('settings', settings);
 contextBridge.exposeInMainWorld('ptt', ptt);
 contextBridge.exposeInMainWorld('audioOut', audioOut);
+contextBridge.exposeInMainWorld('radioIn', radioIn);

@@ -19,9 +19,12 @@ import type {
   AskRequestMessage,
   AudioEndedRelayMessage,
   ConfigureMessage,
+  RadioFrameRelayMessage,
+  RadioPttRelayMessage,
   WorkerMessage,
 } from '../src/ask';
 import { AUDIO_ENDED_CHANNEL, AUDIO_OUT_CHANNEL } from '../src/audio-bridge';
+import { RADIO_FRAME_CHANNEL, RADIO_PTT_CHANNEL } from '../src/mic-bridge';
 import { MIC_SETTINGS_DEEPLINK } from '../src/audio-io';
 import { resolveLlmRouteConfig } from '../src/llm-route';
 import {
@@ -258,6 +261,19 @@ const main = (): void => {
   ipcMain.on(AUDIO_ENDED_CHANNEL, (_event, pid: unknown) => {
     if (typeof pid === 'number') {
       worker?.postMessage({ type: 'audio-ended', pid } satisfies AudioEndedRelayMessage);
+    }
+  });
+
+  // Mic-in bridge (T10.1 slice 2): relay the renderer's PTT edges + captured mic frames to the worker's
+  // radio capture. Input-only — the driver's radio audio in; nothing flows toward the game (rule 5).
+  ipcMain.on(RADIO_PTT_CHANNEL, (_event, down: unknown) => {
+    if (typeof down === 'boolean') {
+      worker?.postMessage({ type: 'radio-ptt', down } satisfies RadioPttRelayMessage);
+    }
+  });
+  ipcMain.on(RADIO_FRAME_CHANNEL, (_event, frame: unknown) => {
+    if (frame instanceof Uint8Array) {
+      worker?.postMessage({ type: 'radio-frame', frame } satisfies RadioFrameRelayMessage);
     }
   });
 

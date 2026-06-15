@@ -109,5 +109,22 @@ export interface AudioEndedRelayMessage {
   pid: number;
 }
 
+/** Main → worker: a push-to-talk edge from the renderer (down → begin capture, up → finalize). */
+export interface RadioPttRelayMessage {
+  type: 'radio-ptt';
+  down: boolean;
+}
+
+/** Main → worker: one captured mic audio frame from the renderer (fed to the STT stream). */
+export interface RadioFrameRelayMessage {
+  type: 'radio-frame';
+  frame: Uint8Array;
+}
+
 /** Everything main can send the worker. */
-export type MainToWorkerMessage = AskRequestMessage | ConfigureMessage | AudioEndedRelayMessage;
+export type MainToWorkerMessage =
+  | AskRequestMessage
+  | ConfigureMessage
+  | AudioEndedRelayMessage
+  | RadioPttRelayMessage
+  | RadioFrameRelayMessage;

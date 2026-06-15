@@ -219,12 +219,30 @@ in a small, reviewable, green-tested change.
   default `FakeTtsProvider` produces metadata-only clips (the queue drains silently); audibility needs
   a real TTS to fill the bytes — the next slice. _Verify split (per [[windows-only-runtime-mac-dev]]):_
   the Web-Audio playback + bridge verify on the dev **Mac**; the OS audio sink + device routing are a
-  Windows-runtime verify.) **Remaining T10.1 (next slices):** (1) **mic→STT input** path (renderer
-  `getUserMedia` → worker STT; the key stays in main/worker, never the renderer) and (2)
-  **provider-wiring** — a real TTS/STT into the reactive loop (`selectTtsProvider` + the configured
-  provider): **cloud BYO-key** is the fastest audible path on the dev Mac, **local Piper/Kokoro +
-  faster-whisper** is the free default (native binaries — the rig/native half). Once those land the
-  premium voice path supersedes the free Web-Speech call-outs the renderer uses today.
+  Windows-runtime verify.) ~~**mic→STT input** (slice 2/3)~~ (done 2026-06-15 — the push-to-talk radio
+  input path. New **`apps/desktop/src/mic-bridge.ts`**: a pure `BridgedMicSource` (worker-side
+  `MicSource` **frame receiver** that `RadioCapture` feeds from — `handleFrame` routes a frame to the
+  active capture, gated by start/stop so frames outside PTT are dropped) + `createRadioInput` (renderer
+  coordinator: PTT-down starts mic capture + emits the down edge, PTT-up stops + emits up; idempotent),
+  both **unit-tested over injected ports** incl. a round-trip renderer-capture → worker
+  `RadioCapture(FakeStt)` → transcript (4 tests, 586 green). The STT runs in the **worker** so a future
+  key never reaches the renderer (rule 6); the renderer only captures the mic (`getUserMedia` →
+  `MediaRecorder`, PTT-gated — capture runs **only while held**, no wake word) and ships opaque frames.
+  Wired Electron: renderer→worker `radio:ptt` + `radio:frame` (type-guarded relay in `main`),
+  `window.radioIn` preload bridge, a 🎙 **Hold to talk** button (pointer down/up/leave/cancel → PTT
+  edges); worker builds a `RadioCapture(FakeSttProvider, BridgedMicSource)` and **logs the transcript**.
+  Read-only/advisory — radio audio *in* + a PTT boolean only, no game path; compliance PASS (rules
+  5/6/2 + privacy gating). **Not yet understanding speech:** the `FakeSttProvider` won't transcribe
+  real audio bytes — this slice proves the capture *plumbing* (PTT→mic→frames→STT-stream→transcript).
+  _Verify split:_ the coordinator + worker gating are Node-tested; `getUserMedia`/`MediaRecorder`
+  capture verifies on the dev **Mac**; the OS mic device + the mapped **wheel** PTT are a Windows verify.)
+  **Remaining T10.1 (slice 3/3):** **provider-wiring** — a real TTS/STT into the reactive loop
+  (`selectTtsProvider` + the configured provider) so the engineer *hears, understands, and answers*:
+  feed the captured transcript → `runRadioTurn` (read-only tools) → sentence-streamed TTS out the
+  audio-out bridge (slice 1), with PTT barge-in. **cloud BYO-key** is the fastest audible path on the
+  dev Mac; **local Piper/Kokoro + faster-whisper** is the free default (native binaries — the rig/native
+  half). Once it lands, the premium voice path supersedes the free Web-Speech call-outs the renderer
+  uses today.
   M7.7–M7.9 / M8 / M9 offline-strategy depth are paused until the app is launchable. (Offline glue
   done: `get_stint_plan` + `project_pit_window` are now wired into the AI read-only tool surface,
   reading a precomputed `ctx.stintPlan` (T7.3) like `get_fuel_plan` reads `ctx.fuelPlan`; 373 green.

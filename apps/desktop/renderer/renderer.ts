@@ -1,6 +1,7 @@
 import type { EngineerBridge } from '@race-engineer/engineer-core';
 import type { AudioClip, AudioSink, PlaybackHandle } from '@race-engineer/voice';
 import { createAudioReceiver, type AudioOutApi } from '../src/audio-bridge';
+import { createRadioInput, type MicCaptureBackend, type RadioInApi } from '../src/mic-bridge';
 import {
   applyOutputDevice,
   listOutputDevices,
@@ -49,6 +50,7 @@ declare global {
     settings: SettingsApi;
     ptt: PttApi;
     audioOut: AudioOutApi;
+    radioIn: RadioInApi;
   }
 }
 
@@ -542,6 +544,85 @@ const wireAudioOut = (): void => {
   window.audioOut.onCommand(receive);
 };
 wireAudioOut();
+
+/**
+ * Push-to-talk radio input (T10.1 voice loop slice 2, docs/07 §PTT flow). Holding the button captures
+ * the mic (`getUserMedia` → `MediaRecorder`) and streams frames to the Core **worker** over
+ * `window.radioIn`, where the STT runs (the key never reaches the renderer — rule 6). The PTT edges
+ * drive the worker's capture lifecycle. Capture runs **only while held** (privacy-friendly, no wake
+ * word). The mapped wheel button is the rig PTT; this hold-button is the dev trigger. Input-only — no
+ * game path. (Real STT understanding + the spoken reply are slice 3; the worker logs the transcript.)
+ */
+const wireRadioInput = (): void => {
+  const button = document.getElementById('radio-ptt') as HTMLButtonElement | null;
+  if (!button || !window.radioIn) return;
+  // Mic capture needs getUserMedia + MediaRecorder; hide the control where they're unavailable.
+  if (typeof MediaRecorder === 'undefined' || !navigator.mediaDevices?.getUserMedia) {
+    button.hidden = true;
+    return;
+  }
+
+  // getUserMedia → MediaRecorder capture backend (DOM glue). Guards a release that beats the async
+  // permission grant, so the mic is never left open.
+  const makeMicCapture = (): MicCaptureBackend => {
+    let active = false;
+    let recorder: MediaRecorder | null = null;
+    let stream: MediaStream | null = null;
+    const teardown = (): void => {
+      if (recorder && recorder.state !== 'inactive') recorder.stop();
+      recorder = null;
+      stream?.getTracks().forEach((t) => t.stop());
+      stream = null;
+    };
+    return {
+      start(onFrame: (frame: Uint8Array) => void): void {
+        active = true;
+        void navigator.mediaDevices
+          .getUserMedia({ audio: true })
+          .then((s) => {
+            if (!active) {
+              s.getTracks().forEach((t) => t.stop()); // released before the grant — don't open the mic
+              return;
+            }
+            stream = s;
+            recorder = new MediaRecorder(s);
+            recorder.ondataavailable = (e): void => {
+              if (e.data.size > 0)
+                void e.data.arrayBuffer().then((buf) => onFrame(new Uint8Array(buf)));
+            };
+            recorder.start(250); // emit a chunk ~4×/s while held
+          })
+          .catch(() => {
+            active = false; // denied / no device — the 🎤 Test mic button surfaces the guidance
+          });
+      },
+      stop(): void {
+        active = false;
+        teardown();
+      },
+    };
+  };
+
+  const radio = createRadioInput({
+    capture: makeMicCapture(),
+    postFrame: (f) => window.radioIn.frame(f),
+    postPtt: (down) => window.radioIn.ptt(down),
+  });
+
+  const setHeld = (held: boolean): void => button.setAttribute('aria-pressed', String(held));
+  button.addEventListener('pointerdown', () => {
+    radio.pttDown();
+    setHeld(true);
+  });
+  const release = (): void => {
+    radio.pttUp();
+    setHeld(false);
+  };
+  button.addEventListener('pointerup', release);
+  button.addEventListener('pointerleave', release); // dragged off / released outside → end capture
+  button.addEventListener('pointercancel', release);
+};
+wireRadioInput();
 
 /**
  * The settings panel (T6.3): profile / engineer (LLM) / proactivity persist via `window.settings`,
