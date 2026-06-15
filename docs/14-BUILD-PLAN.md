@@ -162,10 +162,23 @@ in a small, reviewable, green-tested change.
   ~~spoken text-ask replies~~ (done — the engineer now **talks back**: a free/no-key `SpeechController`
   speaks the text-ask answer via the browser Web Speech API / OS voice, with a mute toggle, degrading
   to text-only where unavailable; conversational-reply path only, separate from the tiered VoicePlayer,
-  docs/07 reconciled; 479 green). **Remaining T10.1 (native/rig):** real Piper/Kokoro TTS +
-  faster-whisper STT engines, the **mic→STT input** path, the renderer↔worker audio streaming for the
-  tiered `VoicePlayer` pipeline (wiring the configured provider + `selectTtsProvider` into the reactive
-  loop), a cloud cost estimator, and the **PTT-mapping UI** (NEXT focus).
+  docs/07 reconciled; 479 green). ~~**PTT-mapping UI**~~ (done 2026-06-15 — the docs/08 §1 "press a
+  button to map push-to-talk" flow. New **`apps/desktop/src/ptt-mapping.ts`**: a pure `PttMapper`
+  coordinator (armed `InputReader` press-to-map → first debounced DOWN edge captured → persisted →
+  `captured`/`cancelled`/`timeout`/`error` events) + the renderer↔main IPC contract
+  (`ptt:map-begin/cancel/clear/get/event`) + `formatPttBinding`, all over **injected ports** (an
+  `openReader` factory, emit/persist callbacks, an app clock, a timer scheduler) so the whole capture
+  flow is unit-tested in Node with a `MockBackend`-backed real `InputReader` and a stepped clock — 10
+  tests, 517 green. Imports from `@race-engineer/input` are **type-only**, and `main` builds the real
+  reader behind a **dynamic import** (SDL2 on win32, `MockBackend` elsewhere), so koffi is isolated to a
+  lazy chunk and the synthetic `pnpm dev` startup never loads it (build-verified). A `window.ptt`
+  preload bridge + a renderer PTT row (Map / Cancel / Clear, live status) persist the bound `ButtonRef`
+  into `AppSettings.ptt`. Read-only/advisory — passive button read, **no game write path**; compliance
+  PASS. _Human (Windows rig):_ plug a wheel → "Map button" → press it → see it bound (the dev box has no
+  joystick backend, so the flow runs but times out — the live capture is the rig half).) **Remaining
+  T10.1 (native/rig):** real Piper/Kokoro TTS + faster-whisper STT engines, the **mic→STT input** path,
+  the renderer↔worker audio streaming for the tiered `VoicePlayer` pipeline (wiring the configured
+  provider + `selectTtsProvider` into the reactive loop), and a cloud cost estimator.
   M7.7–M7.9 / M8 / M9 offline-strategy depth are paused until the app is launchable. (Offline glue
   done: `get_stint_plan` + `project_pit_window` are now wired into the AI read-only tool surface,
   reading a precomputed `ctx.stintPlan` (T7.3) like `get_fuel_plan` reads `ctx.fuelPlan`; 373 green.
@@ -622,9 +635,10 @@ key → "keys set: …", restart → still set; values never appear in logs.
 network at selection, vendor endpoints only, `baseUrl` override confined to Ollama so config can't proxy
 a cloud route) + `resolveLlmRouteConfig(llm, secrets)` in the app (reads the key from secure storage at
 the last moment). `LlmProviderId` is now ai-owned (single source of truth, settings re-exports it). 451
-green; compliance PASS (rule 6). **Deferred (surface):** the **PTT-mapping UI** (`ButtonCapture` "press
-the button" — needs live input, docs/08) and **the worker actually instantiating + using** the resolved
-provider/voice on startup/change (the "mode switch takes effect" half) — land with T10.1.
+green; compliance PASS (rule 6). **Deferred (surface):** ~~the **PTT-mapping UI**~~ (done with T10.1 —
+the `PttMapper` capture flow + `window.ptt` bridge + renderer PTT row; live wheel capture is the rig
+half) and **the worker actually instantiating + using** the resolved provider/voice on startup/change
+(the "mode switch takes effect" half) — lands with T10.1.
 Context: [15-COST-AND-FREE-OPERATION](15-COST-AND-FREE-OPERATION.md), [16-PLATFORM-PREREQUISITES](16-PLATFORM-PREREQUISITES.md), [08-INPUT-AND-CONTROLS](08-INPUT-AND-CONTROLS.md).
 
 **T6.4 — Overlay window** · _Claude Code_ · deps: T6.2

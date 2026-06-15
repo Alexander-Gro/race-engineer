@@ -17,6 +17,17 @@ import {
 import type { AskRequestMessage, ConfigureMessage, WorkerMessage } from '../src/ask';
 import { MIC_SETTINGS_DEEPLINK } from '../src/audio-io';
 import { resolveLlmRouteConfig } from '../src/llm-route';
+import {
+  formatPttBinding,
+  PttMapper,
+  PTT_EVENT_CHANNEL,
+  PTT_GET_CHANNEL,
+  PTT_MAP_BEGIN_CHANNEL,
+  PTT_MAP_CANCEL_CHANNEL,
+  PTT_MAP_CLEAR_CHANNEL,
+  type PttBindingInfo,
+  type PttMappingEvent,
+} from '../src/ptt-mapping';
 import { isSecretSlot, SettingsStore, type AppSettings } from '../src/settings';
 import {
   SECRET_DELETE_CHANNEL,
@@ -57,6 +68,17 @@ const ASK_TIMEOUT_MS = 5000;
 // secret change so a "mode switch" takes effect live. The key crosses only main→worker, never to the
 // renderer.
 let pushEngineerConfig: (() => void) | null = null;
+
+// PTT-mapping coordinator (T10.1, docs/08 §1). Built in `whenReady` (it persists into settings). Reads
+// the wheel **passively** to learn which button is push-to-talk — there is no write path to the game.
+let pttMapper: PttMapper | null = null;
+
+/** Push a PTT mapping-flow event to every open window (the renderer reflects listening/captured/…). */
+const broadcastPttEvent = (event: PttMappingEvent): void => {
+  for (const window of BrowserWindow.getAllWindows()) {
+    if (!window.isDestroyed()) window.webContents.send(PTT_EVENT_CHANNEL, event);
+  }
+};
 
 const createWindow = (): BrowserWindow => {
   const window = new BrowserWindow({
@@ -190,6 +212,42 @@ const main = (): void => {
     });
     ipcMain.handle(SECRET_LIST_CHANNEL, () => secretStore.listSetKeys());
 
+    // PTT mapping (T10.1, docs/08 §1). The backend is opened only when the user maps — and the SDL2
+    // (koffi, Windows-only) backend is loaded lazily, so the default path never touches it. On the dev
+    // box there's no joystick backend, so the flow runs but finds nothing to press: the live capture is
+    // the rig human-assisted half. Read-only/advisory: it reads a button, it never sends input.
+    const currentBinding = (): PttBindingInfo => {
+      const ptt = settingsStore.load().ptt;
+      return { ptt, label: formatPttBinding(ptt) };
+    };
+    pttMapper = new PttMapper({
+      openReader: async (onMapped) => {
+        // Dynamic import keeps koffi/SDL2 off the default path (the synthetic demo never loads it).
+        const { InputReader, Sdl2Backend, MockBackend } = await import('@race-engineer/input');
+        const backend = process.platform === 'win32' ? new Sdl2Backend() : new MockBackend();
+        const reader = new InputReader({ backend, events: { onMapped } });
+        reader.beginMapping('ptt');
+        return {
+          poll: () => reader.poll(),
+          close: () => {
+            reader.cancelMapping();
+            reader.stop(); // passive read only — releases the device, no write path
+          },
+        };
+      },
+      onCaptured: (ptt) => {
+        settingsStore.save({ ...settingsStore.load(), ptt }); // persist the bound button
+      },
+      emit: broadcastPttEvent,
+    });
+    ipcMain.handle(PTT_MAP_BEGIN_CHANNEL, () => pttMapper?.begin());
+    ipcMain.handle(PTT_MAP_CANCEL_CHANNEL, () => pttMapper?.cancel());
+    ipcMain.handle(PTT_MAP_CLEAR_CHANNEL, () => {
+      settingsStore.save({ ...settingsStore.load(), ptt: null });
+      return currentBinding();
+    });
+    ipcMain.handle(PTT_GET_CHANNEL, () => currentBinding());
+
     // Grant the renderer's own microphone requests (Windows uses the standard getUserMedia flow;
     // docs/16 §1). Only read-only mic capture for push-to-talk is auto-approved; everything else denied.
     session.defaultSession.setPermissionRequestHandler((_wc, permission, callback) =>
@@ -210,6 +268,8 @@ const main = (): void => {
   });
 
   app.on('will-quit', () => {
+    pttMapper?.dispose();
+    pttMapper = null;
     worker?.kill();
     worker = null;
   });

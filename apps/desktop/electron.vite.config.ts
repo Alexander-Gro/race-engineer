@@ -21,8 +21,10 @@ const bundleWorkspaceSrc = (): ReturnType<typeof externalizeDepsPlugin> =>
       '@race-engineer/core',
       '@race-engineer/engineer-core',
       '@race-engineer/adapter-sim-replay',
-      // Bundled (raw TS) but its native `koffi` import stays external (a real node_modules addon).
+      // Bundled (raw TS) but their native `koffi` imports stay external (real node_modules addons):
+      // the LMU shared-memory adapter and the SDL2 push-to-talk reader (T10.1 PTT mapping).
       '@race-engineer/adapter-lmu',
+      '@race-engineer/input',
     ],
   });
 

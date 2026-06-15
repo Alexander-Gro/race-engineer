@@ -18,6 +18,7 @@ import {
   type StrategyModel,
   type StrategyRivalRow,
 } from '../src/dashboard/strategy-model';
+import type { PttApi } from '../src/ptt-mapping';
 import {
   LLM_PROVIDER_IDS,
   PROACTIVITY_LEVELS,
@@ -42,6 +43,7 @@ declare global {
   interface Window {
     engineer: EngineerBridge;
     settings: SettingsApi;
+    ptt: PttApi;
   }
 }
 
@@ -485,3 +487,67 @@ const wireSettingsPanel = (): void => {
   void window.settings.listApiKeys().then(showKeys);
 };
 wireSettingsPanel();
+
+/**
+ * Push-to-talk mapping (T10.1 / docs/08 §1). "Map button" arms capture in the main process; the next
+ * wheel-button press is bound and reported back. The flow is read-only/advisory — the app only learns
+ * *which* button keys the radio; it never sends input to the game (CLAUDE.md rule 5). With no wheel
+ * (e.g. the dev box) the listen window simply times out — capturing a real button is the rig step.
+ */
+const wirePttBar = (): void => {
+  const binding = document.getElementById('ptt-binding');
+  const mapBtn = document.getElementById('ptt-map') as HTMLButtonElement | null;
+  const clearBtn = document.getElementById('ptt-clear') as HTMLButtonElement | null;
+  const status = document.getElementById('ptt-status');
+  if (!binding || !mapBtn || !clearBtn || !status) return;
+
+  let listening = false;
+
+  const setStatus = (text: string, cls: '' | 'ok' | 'bad' | 'listening'): void => {
+    status.textContent = text;
+    status.className = `voice-status${cls ? ` ${cls}` : ''}`;
+  };
+  const setListening = (on: boolean): void => {
+    listening = on;
+    mapBtn.textContent = on ? 'Cancel' : 'Map button';
+  };
+
+  window.ptt.onMappingEvent((event) => {
+    switch (event.type) {
+      case 'listening':
+        setListening(true);
+        setStatus('Press the push-to-talk button on your wheel…', 'listening');
+        break;
+      case 'captured':
+        setListening(false);
+        binding.textContent = `${event.deviceName} · button ${event.buttonIndex}`;
+        setStatus('Mapped', 'ok');
+        break;
+      case 'cancelled':
+        setListening(false);
+        setStatus(event.reason === 'timeout' ? 'No button detected — try again' : '', 'bad');
+        break;
+      case 'error':
+        setListening(false);
+        setStatus(event.message, 'bad');
+        break;
+    }
+  });
+
+  mapBtn.addEventListener('click', () => {
+    if (listening) void window.ptt.cancelMapping();
+    else void window.ptt.beginMapping();
+  });
+
+  clearBtn.addEventListener('click', () => {
+    void window.ptt.clearMapping().then((info) => {
+      binding.textContent = info.label;
+      setStatus('', '');
+    });
+  });
+
+  void window.ptt.getBinding().then((info) => {
+    binding.textContent = info.label;
+  });
+};
+wirePttBar();

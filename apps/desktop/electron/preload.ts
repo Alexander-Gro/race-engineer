@@ -6,6 +6,16 @@ import {
   type EngineerBridge,
   type EngineerSnapshot,
 } from '@race-engineer/engineer-core';
+import {
+  PTT_EVENT_CHANNEL,
+  PTT_GET_CHANNEL,
+  PTT_MAP_BEGIN_CHANNEL,
+  PTT_MAP_CANCEL_CHANNEL,
+  PTT_MAP_CLEAR_CHANNEL,
+  type PttApi,
+  type PttBindingInfo,
+  type PttMappingEvent,
+} from '../src/ptt-mapping';
 import type { AppSettings, SecretSlot } from '../src/settings';
 import {
   SECRET_DELETE_CHANNEL,
@@ -17,10 +27,11 @@ import {
 } from '../src/settings-bridge';
 
 /**
- * Preload (build-plan T6.1 / Track A text-ask + T6.3 settings). Exposes two read-only/advisory
- * bridges via `contextBridge`: `window.engineer` (subscribe to snapshots, ask a text question, open
- * the OS mic-settings page) and `window.settings` (config CRUD + BYO-key management). Neither can send
- * anything toward the game (CLAUDE.md rule 5). `contextIsolation` keeps Node out of the renderer.
+ * Preload (build-plan T6.1 / Track A text-ask + T6.3 settings + T10.1 PTT mapping). Exposes three
+ * read-only/advisory bridges via `contextBridge`: `window.engineer` (subscribe to snapshots, ask a text
+ * question, open the OS mic-settings page), `window.settings` (config CRUD + BYO-key management), and
+ * `window.ptt` (map the push-to-talk wheel button). None can send anything toward the game (CLAUDE.md
+ * rule 5). `contextIsolation` keeps Node out of the renderer.
  */
 const bridge: EngineerBridge = {
   onSnapshot(listener: (snapshot: EngineerSnapshot) => void): () => void {
@@ -49,5 +60,20 @@ const settings: SettingsApi = {
   listApiKeys: () => ipcRenderer.invoke(SECRET_LIST_CHANNEL) as Promise<SecretSlot[]>,
 };
 
+// PTT mapping (T10.1, docs/08 §1): arm capture, then learn which button was bound — advisory only.
+const ptt: PttApi = {
+  beginMapping: () => ipcRenderer.invoke(PTT_MAP_BEGIN_CHANNEL) as Promise<void>,
+  cancelMapping: () => ipcRenderer.invoke(PTT_MAP_CANCEL_CHANNEL) as Promise<void>,
+  clearMapping: () => ipcRenderer.invoke(PTT_MAP_CLEAR_CHANNEL) as Promise<PttBindingInfo>,
+  getBinding: () => ipcRenderer.invoke(PTT_GET_CHANNEL) as Promise<PttBindingInfo>,
+  onMappingEvent(listener: (event: PttMappingEvent) => void): () => void {
+    const handler = (_event: IpcRendererEvent, mappingEvent: PttMappingEvent): void =>
+      listener(mappingEvent);
+    ipcRenderer.on(PTT_EVENT_CHANNEL, handler);
+    return () => ipcRenderer.removeListener(PTT_EVENT_CHANNEL, handler);
+  },
+};
+
 contextBridge.exposeInMainWorld('engineer', bridge);
 contextBridge.exposeInMainWorld('settings', settings);
+contextBridge.exposeInMainWorld('ptt', ptt);

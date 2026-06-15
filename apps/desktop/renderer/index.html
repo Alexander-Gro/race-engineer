@@ -273,6 +273,13 @@
       .voice-status.ok {
         color: var(--good);
       }
+      /* PTT capture: amber while waiting for a button press. */
+      .voice-status.listening {
+        color: var(--caution);
+      }
+      #ptt-binding {
+        color: var(--text);
+      }
       /* Colour language (docs/09): green = good, amber = caution, red = act-now. */
       .sev-good {
         color: var(--good);
@@ -352,6 +359,13 @@
       <button class="ask-btn" id="set-key-save" type="button">Save</button>
       <button class="ask-btn" id="set-key-clear" type="button">Clear</button>
       <span class="voice-status" id="set-keys"></span>
+    </section>
+    <section class="voice-bar ptt-bar">
+      <label>Push-to-talk</label>
+      <span class="voice-status" id="ptt-binding">Unmapped</span>
+      <button class="ask-btn" id="ptt-map" type="button">Map button</button>
+      <button class="ask-btn" id="ptt-clear" type="button">Clear</button>
+      <span class="voice-status" id="ptt-status"></span>
     </section>
     <!-- Future engineer-voice playback target; selecting an output routes it via setSinkId now. -->
     <audio id="engineer-audio" hidden></audio>
