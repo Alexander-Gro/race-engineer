@@ -21,6 +21,8 @@ export { runRadioTurn } from './orchestrator';
 export type { RadioTurnInput, RadioTurnResult, ExecutedToolCall } from './orchestrator';
 export { templateAnswer } from './template';
 export { askEngineer, ASK_FALLBACK } from './ask';
+export { selectLlmProvider } from './select';
+export type { LlmProviderId, LlmRouteConfig } from './select';
 export { checkSpokenNumbers, extractNumbers, collectToolNumbers } from './guard';
 export type { HallucinationReport, SpokenNumber } from './guard';
 export { FakeProvider } from './providers/fake';

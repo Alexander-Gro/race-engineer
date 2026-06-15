@@ -151,10 +151,13 @@ in a small, reviewable, green-tested change.
   Q&A in the shell)~~ (done, see below) → ~~wire the reactive radio loop + proactive router into the
   shell~~ (done, see below — offline half) → ~~**T4.5** mic/audio I/O~~ (done — mic permission +
   device picker + text fallback in the shell; real mic→STT / TTS→speaker streaming is T10.1) →
-  ~~**T6.3** settings/secrets~~ (done — settings + BYO-key secure storage + a settings panel; the
-  **PTT-mapping UI** + **worker-applies-settings** are the remaining T6.3 slices) → **T10.1** real
-  STT/TTS (or cloud BYO-key) + the renderer↔worker audio path that makes the voice loop audible
-  end-to-end, and the worker reconstructing providers from the saved profile/key (NEXT focus).
+  ~~**T6.3** settings/secrets~~ (done — settings + BYO-key secure storage + a settings panel) →
+  ~~LLM-route selector~~ (done — `selectLlmProvider` in `ai` + `resolveLlmRouteConfig` glue: the saved
+  "engineer" setting + BYO-key now resolves to a provider, offline-tested; the **PTT-mapping UI** +
+  **the worker actually instantiating + using** that provider/voice on startup/change are the remaining
+  T6.3 slices) → **T10.1** real STT/TTS (or cloud BYO-key) + the renderer↔worker audio path that makes
+  the voice loop audible end-to-end, wiring `selectLlmProvider`/`selectTtsProvider` into the worker from
+  settings (NEXT focus).
   M7.7–M7.9 / M8 / M9 offline-strategy depth are paused until the app is launchable. (Offline glue
   done: `get_stint_plan` + `project_pit_window` are now wired into the AI read-only tool surface,
   reading a precomputed `ctx.stintPlan` (T7.3) like `get_fuel_plan` reads `ctx.fuelPlan`; 373 green.
@@ -605,10 +608,15 @@ Verify: ✅ 12 unit tests — tolerant parse + per-field fallback, **no secret c
 SettingsStore round-trip, secret set/get/has/delete/list (names-only) (443 green); electron-vite build
 green (renderer stays lean; settings imports are type-erased); compliance PASS (rule 6 audited). _Human
 (dev machine, macOS ok):_ `pnpm dev` → flip profile/engineer/chatter (persists across restart), paste a
-key → "keys set: …", restart → still set; values never appear in logs. **Deferred (surface):** the
-**PTT-mapping UI** (`ButtonCapture` "press the button" — needs live input, docs/08) and **the worker
-*applying* settings** (reconstruct LLM/voice providers + the key from the chosen profile — the
-"mode switch takes effect" half) land next, with T10.1.
+key → "keys set: …", restart → still set; values never appear in logs.
+**LLM-route selector done (follow-up):** `selectLlmProvider(config)` in `ai` (the AI sibling of voice's
+`selectTtsProvider` — `template`→null free path, `ollama` key-less, cloud routes BYO-key-guarded; no
+network at selection, vendor endpoints only, `baseUrl` override confined to Ollama so config can't proxy
+a cloud route) + `resolveLlmRouteConfig(llm, secrets)` in the app (reads the key from secure storage at
+the last moment). `LlmProviderId` is now ai-owned (single source of truth, settings re-exports it). 451
+green; compliance PASS (rule 6). **Deferred (surface):** the **PTT-mapping UI** (`ButtonCapture` "press
+the button" — needs live input, docs/08) and **the worker actually instantiating + using** the resolved
+provider/voice on startup/change (the "mode switch takes effect" half) — land with T10.1.
 Context: [15-COST-AND-FREE-OPERATION](15-COST-AND-FREE-OPERATION.md), [16-PLATFORM-PREREQUISITES](16-PLATFORM-PREREQUISITES.md), [08-INPUT-AND-CONTROLS](08-INPUT-AND-CONTROLS.md).
 
 **T6.4 — Overlay window** · _Claude Code_ · deps: T6.2

@@ -1,3 +1,4 @@
+import type { LlmProviderId } from '@race-engineer/ai';
 import type { ButtonRef } from '@race-engineer/input';
 import type { SttEngineId, TtsEngineId } from '@race-engineer/voice';
 
@@ -14,8 +15,8 @@ import type { SttEngineId, TtsEngineId } from '@race-engineer/voice';
 
 export type Profile = 'free' | 'premium';
 export type ProactivityLevel = 'off' | 'low' | 'normal' | 'high';
-/** LLM routes (docs/06/15): free needs no key (`template`/`ollama`); the rest are BYO-key (T5.1b). */
-export type LlmProviderId = 'template' | 'ollama' | 'claude' | 'groq' | 'openrouter' | 'gemini';
+/** LLM routes are owned by `ai` (the package that builds the providers) — re-exported for convenience. */
+export type { LlmProviderId };
 
 // `satisfies` ties these literal lists to the voice package's engine ids — a drift there is a compile
 // error here, so the settings enum can't silently fall out of sync with what `selectTtsProvider` knows.
