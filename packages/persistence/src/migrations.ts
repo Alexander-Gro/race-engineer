@@ -3,12 +3,12 @@ import type { Database } from 'better-sqlite3';
 /**
  * Schema migrations for the local SQLite store. Idempotent (`IF NOT EXISTS`) and version-
  * gated via `PRAGMA user_version` so future tasks can add tables (events, transcripts,
- * tire_models, setups — docs/04) without a destructive reset.
+ * setups — docs/04) without a destructive reset.
  *
- * Scope for T3.3: `sessions`, `laps`, `fuel_models` only — the tables the strategy/learning
- * layer needs offline. The rest land with the features that use them.
+ * v1 (T3.3): `sessions`, `laps`, `fuel_models`. v2 (T7.7): `tire_models` — the tyre-degradation
+ * learning layer. Each version is additive; an existing v1 store upgrades in place on next open.
  */
-export const SCHEMA_VERSION = 1;
+export const SCHEMA_VERSION = 2;
 
 const MIGRATION_V1 = `
 CREATE TABLE IF NOT EXISTS sessions (
@@ -51,11 +51,29 @@ CREATE TABLE IF NOT EXISTS fuel_models (
 );
 `;
 
+const MIGRATION_V2 = `
+CREATE TABLE IF NOT EXISTS tire_models (
+  car                      TEXT    NOT NULL,
+  track                    TEXT    NOT NULL,
+  compound                 TEXT    NOT NULL,
+  deg_rate_per_lap_s_mean  REAL    NOT NULL,
+  deg_rate_per_lap_s_stdev REAL    NOT NULL,
+  base_lap_s_mean          REAL    NOT NULL,
+  base_lap_s_stdev         REAL    NOT NULL,
+  samples                  INTEGER NOT NULL,
+  updated_at               INTEGER NOT NULL,
+  PRIMARY KEY (car, track, compound)
+);
+`;
+
 /** Apply all pending migrations to bring `db` up to {@link SCHEMA_VERSION}. */
 export const migrate = (db: Database): void => {
   const current = db.pragma('user_version', { simple: true }) as number;
   if (current < 1) {
     db.exec(MIGRATION_V1);
+  }
+  if (current < 2) {
+    db.exec(MIGRATION_V2);
   }
   if (current !== SCHEMA_VERSION) {
     // PRAGMA doesn't accept bound params; SCHEMA_VERSION is a trusted integer literal.

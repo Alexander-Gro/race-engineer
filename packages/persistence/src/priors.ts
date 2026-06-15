@@ -1,5 +1,5 @@
-import type { FuelPrior } from '@race-engineer/strategy';
-import type { FuelModelRecord } from './types';
+import type { FuelPrior, TirePrior } from '@race-engineer/strategy';
+import type { FuelModelRecord, TireModelRecord } from './types';
 
 /**
  * The learning layer's pure math (docs/05 §1 & §8). Kept free of any DB knowledge so it is
@@ -71,3 +71,46 @@ export const fuelPriorFromRecord = (
   record: FuelModelRecord | null | undefined,
   maxWeight: number = DEFAULT_MAX_PRIOR_WEIGHT,
 ): FuelPrior | null => (record ? fuelPriorFromStats(statsFromRecord(record), maxWeight) : null);
+
+// --- Tyre degradation learning (docs/05 §2) — the fuel layer's pattern, two learned scalars --------
+
+/** Running stats for the two learned tyre-degradation scalars (advanced together per stint). */
+export interface TireRunningStats {
+  degRate: RunningStats;
+  baseLap: RunningStats;
+}
+
+export const EMPTY_TIRE_STATS: TireRunningStats = { degRate: EMPTY_STATS, baseLap: EMPTY_STATS };
+
+/** A persisted {@link TireModelRecord} carries running stats for the slope and the intercept. */
+export const tireStatsFromRecord = (record: TireModelRecord): TireRunningStats => ({
+  degRate: {
+    mean: record.degRatePerLapSMean,
+    stdev: record.degRatePerLapSStdev,
+    samples: record.samples,
+  },
+  baseLap: { mean: record.baseLapSMean, stdev: record.baseLapSStdev, samples: record.samples },
+});
+
+/**
+ * Convert learned tyre stats into a {@link TirePrior} that `fitTireDegradation` blends with live
+ * stint laps (same weighting as the fuel prior — weight grows with samples, saturates at the cap).
+ * Returns null when nothing is learned, so the tyre model stays silent rather than guessing.
+ */
+export const tirePriorFromStats = (
+  stats: TireRunningStats,
+  maxWeight: number = DEFAULT_MAX_PRIOR_WEIGHT,
+): TirePrior | null => {
+  if (stats.degRate.samples <= 0) return null;
+  return {
+    degRatePerLapS: stats.degRate.mean,
+    baseLapS: stats.baseLap.mean > 0 ? stats.baseLap.mean : null,
+    weight: Math.min(stats.degRate.samples, Math.max(0, maxWeight)),
+  };
+};
+
+/** Build a {@link TirePrior} straight from a stored record (null if the record is empty). */
+export const tirePriorFromRecord = (
+  record: TireModelRecord | null | undefined,
+  maxWeight: number = DEFAULT_MAX_PRIOR_WEIGHT,
+): TirePrior | null => (record ? tirePriorFromStats(tireStatsFromRecord(record), maxWeight) : null);

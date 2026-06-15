@@ -639,9 +639,16 @@ Verify: ✅ worked linear-fit + noisy-fit + prior-blend + silent-case unit tests
 (13 tests; 276 green). Replay-eval on recorded stints lands with T1.5/T7.7.
 
 Remaining order: ~~T7.2 pit-loss model~~ (done) → ~~T7.3 stint planner~~ (done) → ~~T7.4
-undercut/overcut~~ (done) → ~~T7.5 multi-class traffic forecasting~~ (done) → ~~T7.6 FCY/SC opportunism~~ (done) → T7.7
-learning layer (priors per car/track/conditions) → T7.8 strategy UI + rival tracker → T7.9
-proactive strategy call-outs. Each pure-math task is unit-tested with doc-05 examples and
+undercut/overcut~~ (done) → ~~T7.5 multi-class traffic forecasting~~ (done) → ~~T7.6 FCY/SC opportunism~~ (done) →
+~~T7.7 learning layer~~ (done — **tyre** half: the fuel learning layer (T3.3) extended to tyre
+degradation. New `tire_models` table (schema **v2**, additive/idempotent — an existing v1 store upgrades
+in place without data loss, tested), `TireModelRepo` (one bucket per **car/track/compound**, folds each
+completed stint's fitted slope+intercept into Welford running stats, accumulates across sessions), and
+`tirePriorFromStats`/`tirePriorFromRecord` → a `TirePrior` that `fitTireDegradation` (T7.1) blends —
+null until learned, weight saturates at the cap, prior-only fit reports confidence 0. Pure/deterministic,
+clock injected; 463 green; compliance PASS. _Still pending:_ wiring the tyre prior into the live
+`StrategyEngine` + the replay-eval on recorded stints, with T1.5.) → T7.8 strategy UI + rival tracker →
+T7.9 proactive strategy call-outs. Each pure-math task is unit-tested with doc-05 examples and
 validated on recorded endurance sessions (replay eval set).
 Gate: Phase 2 acceptance (fuel-to-finish ±1 lap by mid-stint; pit calls match labeled set;
 multi-class warnings precede encounters).

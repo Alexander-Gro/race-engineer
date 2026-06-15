@@ -1,17 +1,29 @@
-import { estimatePerLapConsumption } from '@race-engineer/strategy';
+import { estimatePerLapConsumption, fitTireDegradation } from '@race-engineer/strategy';
 import { describe, expect, it } from 'vitest';
 import {
   addSample,
   DEFAULT_MAX_PRIOR_WEIGHT,
   EMPTY_STATS,
+  EMPTY_TIRE_STATS,
   fuelPriorFromStats,
+  tirePriorFromStats,
   type RunningStats,
+  type TireRunningStats,
 } from '../priors';
 
 /** Fold N copies of `x` into running stats (a learned model that has seen N laps at `x`). */
 const learn = (x: number, n: number): RunningStats => {
   let s = EMPTY_STATS;
   for (let i = 0; i < n; i += 1) s = addSample(s, x);
+  return s;
+};
+
+/** Fold N copies of a (degRate, baseLap) stint fit into tyre running stats. */
+const learnTire = (degRate: number, baseLap: number, n: number): TireRunningStats => {
+  let s = EMPTY_TIRE_STATS;
+  for (let i = 0; i < n; i += 1) {
+    s = { degRate: addSample(s.degRate, degRate), baseLap: addSample(s.baseLap, baseLap) };
+  }
   return s;
 };
 
@@ -74,6 +86,46 @@ describe('learned priors shift the blended fuel estimate (docs/05 §1)', () => {
     // confidence = n/(n+weight): 1/6 then 3/8.
     expect(c1).toBeCloseTo(1 / 6, 6);
     expect(c3).toBeCloseTo(3 / 8, 6);
+  });
+});
+
+describe('tirePriorFromStats + blended degradation (docs/05 §2)', () => {
+  it('returns null until a stint is learned, and drops a non-positive base lap', () => {
+    expect(tirePriorFromStats(EMPTY_TIRE_STATS)).toBeNull();
+    const noBase = tirePriorFromStats({ degRate: learn(0.05, 3), baseLap: EMPTY_STATS });
+    expect(noBase?.degRatePerLapS).toBeCloseTo(0.05, 10);
+    expect(noBase?.baseLapS).toBeNull(); // no usable intercept yet
+  });
+
+  it('weight is monotonic non-decreasing in stint count and capped', () => {
+    let prev = 0;
+    for (let n = 1; n <= 12; n += 1) {
+      const w = tirePriorFromStats(learnTire(0.05, 101, n))?.weight ?? 0;
+      expect(w).toBeGreaterThanOrEqual(prev);
+      expect(w).toBeLessThanOrEqual(DEFAULT_MAX_PRIOR_WEIGHT);
+      prev = w;
+    }
+    expect(prev).toBe(DEFAULT_MAX_PRIOR_WEIGHT); // saturates
+  });
+
+  it('a more-sampled (heavier) prior pulls the blended deg rate back toward the learned rate', () => {
+    const LEARNED = 0.04;
+    const liveLaps = [
+      { stintLap: 1, lapTimeS: 100.1 },
+      { stintLap: 2, lapTimeS: 100.2 },
+      { stintLap: 3, lapTimeS: 100.3 },
+    ]; // live slope ≈ 0.10 s/lap — steeper than the learned 0.04
+    const weak = fitTireDegradation({
+      greenStintLaps: liveLaps,
+      prior: tirePriorFromStats(learnTire(LEARNED, 100, 1)), // 1 stint → weight 1
+    });
+    const heavy = fitTireDegradation({
+      greenStintLaps: liveLaps,
+      prior: tirePriorFromStats(learnTire(LEARNED, 100, 9)), // 9 stints → weight 5 (capped)
+    });
+    expect(weak.degRatePerLapS).toBeGreaterThan(LEARNED); // live pulls the blend up from the prior
+    expect(heavy.degRatePerLapS).toBeGreaterThan(LEARNED);
+    expect(heavy.degRatePerLapS).toBeLessThan(weak.degRatePerLapS); // heavier prior pulls back toward 0.04
   });
 });
 

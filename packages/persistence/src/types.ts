@@ -85,3 +85,27 @@ export interface FuelModelRecord extends FuelModelKey {
   /** Epoch ms of the last update (priors get staler with age — docs/05 §8). */
   updatedAt: number;
 }
+
+/** Composite key for a learned tyre-degradation model (one bucket per car/track/compound). */
+export interface TireModelKey {
+  car: string;
+  track: string;
+  /** Tyre compound — degradation differs sharply by compound, so it buckets by it (docs/05 §2). */
+  compound: string;
+}
+
+/**
+ * A persisted `tire_models` row — learned degradation priors (docs/04, docs/05 §2). One learning
+ * sample is a completed stint's fitted line: its slope (`degRatePerLapS`) and intercept (`baseLapS`),
+ * folded into running stats so future sessions seed `fitTireDegradation` from history.
+ */
+export interface TireModelRecord extends TireModelKey {
+  degRatePerLapSMean: number;
+  degRatePerLapSStdev: number;
+  baseLapSMean: number;
+  baseLapSStdev: number;
+  /** Stints folded in (degRate and baseLap advance together, so one count). */
+  samples: number;
+  /** Epoch ms of the last update (priors get staler with age — docs/05 §8). */
+  updatedAt: number;
+}

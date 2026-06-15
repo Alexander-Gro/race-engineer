@@ -9,6 +9,8 @@ export { migrate, SCHEMA_VERSION } from './migrations';
 export { SessionRepo } from './repos/sessions';
 export { LapRepo } from './repos/laps';
 export { FuelModelRepo } from './repos/fuel-models';
+export { TireModelRepo } from './repos/tire-models';
+export type { TireStintFit } from './repos/tire-models';
 export {
   addSample,
   EMPTY_STATS,
@@ -16,8 +18,12 @@ export {
   fuelPriorFromStats,
   fuelPriorFromRecord,
   statsFromRecord,
+  EMPTY_TIRE_STATS,
+  tirePriorFromStats,
+  tirePriorFromRecord,
+  tireStatsFromRecord,
 } from './priors';
-export type { RunningStats } from './priors';
+export type { RunningStats, TireRunningStats } from './priors';
 export type {
   NewSession,
   SessionRecord,
@@ -25,4 +31,6 @@ export type {
   LapRecord,
   FuelModelKey,
   FuelModelRecord,
+  TireModelKey,
+  TireModelRecord,
 } from './types';
