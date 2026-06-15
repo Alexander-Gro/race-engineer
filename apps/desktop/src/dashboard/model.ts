@@ -1,4 +1,12 @@
-import type { CarState, EventType, PlayerCar, RaceState, Tier, Tire } from '@race-engineer/core';
+import type {
+  CarState,
+  EventType,
+  PlayerCar,
+  RaceState,
+  StintPlan,
+  Tier,
+  Tire,
+} from '@race-engineer/core';
 import type { EngineerSnapshot } from '@race-engineer/engineer-core';
 
 /**
@@ -213,7 +221,13 @@ const nearestRivals = (state: RaceState): { ahead: CarState | null; behind: CarS
 
 export interface DashboardModel {
   session: { phase: string; multiClass: boolean; flag: Reading; remaining: Reading };
-  fuel: { lapsRemaining: Reading; liters: Reading; perLap: Reading; addAtStop: Reading };
+  fuel: {
+    lapsRemaining: Reading;
+    liters: Reading;
+    perLap: Reading;
+    addAtStop: Reading;
+    nextPit: Reading;
+  };
   tyres: { compound: string | null; corners: [CornerTyre, CornerTyre, CornerTyre, CornerTyre] };
   brakes: { corners: [Reading, Reading, Reading, Reading] };
   aids: { tc: Reading; abs: Reading; brakeBias: Reading; engineMap: Reading };
@@ -236,6 +250,14 @@ const buildAlerts = (snapshot: EngineerSnapshot): AlertReading[] =>
   (snapshot.events ?? [])
     .filter((e) => e.type !== 'lap_completed')
     .map((e) => ({ label: EVENT_LABELS[e.type] ?? e.type, severity: alertSeverity(e.tier) }));
+
+/** The next pit window as a lap range from the stint plan: `8–22`, `none`, or `—` while unknown. */
+const nextPitReading = (stintPlan: StintPlan | null): Reading => {
+  if (!stintPlan) return UNKNOWN;
+  const window = stintPlan.pitWindows[0];
+  if (!window) return { value: 'none', severity: 'neutral' };
+  return { value: `${window.earliestLap}–${window.latestLap}`, severity: 'neutral' };
+};
 
 const aidValue = (v: number | null | undefined): Reading =>
   v === null || v === undefined || !Number.isFinite(v)
@@ -304,6 +326,7 @@ export const buildDashboardModel = (
       perLap: num(p.fuel.perLapAvgLiters, 2, ' L'),
       // Strategy: fuel to add at the next stop to reach the flag (null until pace/consumption known).
       addAtStop: num(fuelPlan?.litersToAddNextStop ?? null, 1, ' L'),
+      nextPit: nextPitReading(snapshot.strategy?.stintPlan ?? null),
     },
     tyres: {
       compound: fl?.compound ?? null,

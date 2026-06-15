@@ -50,9 +50,25 @@ describe('StrategyEngine', () => {
     expect(fuelPlan!.confidence01).toBeLessThanOrEqual(1);
   });
 
-  it('is silent (null plan) until it has learned anything — no deltas, no prior', () => {
+  it('is silent (null fuel + stint plan) until it has learned anything — no deltas, no prior', () => {
     const f = frame({ liters: 80, laps: 0 });
-    expect(run([f]).summary(f).fuelPlan).toBeNull();
+    const { fuelPlan, stintPlan } = run([f]).summary(f);
+    expect(fuelPlan).toBeNull();
+    expect(stintPlan).toBeNull();
+  });
+
+  it('plans the rest of the race (fuel-bound stints + a pit window) from the current lap', () => {
+    const frames = [
+      frame({ liters: 80, laps: 0 }),
+      frame({ liters: 77.5, laps: 1, lastLapS: 100 }), // 2.5 L/lap, 100 s/lap
+      frame({ liters: 75, laps: 2, lastLapS: 100 }),
+      frame({ liters: 72.5, laps: 3, lastLapS: 100, remainingS: 5000 }), // ~50 laps left
+    ];
+    const { stintPlan } = run(frames).summary(frames.at(-1)!);
+    expect(stintPlan).not.toBeNull();
+    expect(stintPlan!.stints.length).toBe(2); // 50 laps doesn't fit one 80 L tank
+    expect(stintPlan!.pitWindows.length).toBe(1);
+    expect(stintPlan!.stints[0]!.startLap).toBe(3); // plans from the current lap, not lap 0
   });
 
   it("seeds from the Normalizer's rolling estimate so a plan is available immediately", () => {

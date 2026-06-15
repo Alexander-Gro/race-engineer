@@ -86,6 +86,8 @@ describe('EngineerCore', () => {
     expect(plan.lapsRemainingOnFuel).toBeGreaterThan(0);
     expect(plan.confidence01).toBeGreaterThanOrEqual(0);
     expect(plan.confidence01).toBeLessThanOrEqual(1);
+    // The timed synthetic session also yields a fuel-bound stint plan once consumption is known.
+    expect(snaps.some((s) => s.strategy?.stintPlan != null)).toBe(true);
   });
 
   it('runs the event detector and attaches fired events to snapshots (synthetic stint)', async () => {

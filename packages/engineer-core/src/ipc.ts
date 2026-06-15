@@ -1,4 +1,4 @@
-import type { EngineerEvent, FuelPlan, RaceState } from '@race-engineer/core';
+import type { EngineerEvent, FuelPlan, RaceState, StintPlan } from '@race-engineer/core';
 
 /**
  * Typed IPC contract between the Engineer Core (worker / utility process) and the renderer
@@ -15,6 +15,8 @@ import type { EngineerEvent, FuelPlan, RaceState } from '@race-engineer/core';
 export interface StrategySummary {
   /** Live fuel plan (per-lap, laps remaining, to-finish, save target), or null while learning. */
   fuelPlan: FuelPlan | null;
+  /** Fuel-bound stint plan (stint boundaries + pit windows for the rest of the race), or null. */
+  stintPlan: StintPlan | null;
 }
 
 export interface EngineerSnapshot {

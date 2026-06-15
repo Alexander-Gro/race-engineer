@@ -36,9 +36,10 @@ describe('fuel state honesty', () => {
     expect(m.fuel.perLap).toEqual({ value: '—', severity: 'unknown' });
     expect(m.fuel.liters.value).toBe('78.0 L'); // a real reading is still shown
     expect(m.fuel.addAtStop).toEqual({ value: '—', severity: 'unknown' }); // no strategy plan yet
+    expect(m.fuel.nextPit).toEqual({ value: '—', severity: 'unknown' });
   });
 
-  it('surfaces the Core strategy engine fuel plan (add-at-stop) when present', () => {
+  it('surfaces the Core strategy engine fuel + stint plan (add-at-stop, next pit) when present', () => {
     const withStrategy: EngineerSnapshot = {
       ...snap(midStintState),
       strategy: {
@@ -51,9 +52,25 @@ describe('fuel state honesty', () => {
           fuelSaveTargetLitersPerLap: null,
           confidence01: 0.8,
         },
+        stintPlan: {
+          stints: [
+            {
+              index: 0,
+              startLap: 9,
+              endLap: 18,
+              fuelAddLiters: 50,
+              tireCompound: null,
+              expectedDegradation01: 0,
+            },
+          ],
+          pitWindows: [{ earliestLap: 18, latestLap: 24, reason: 'fuel-limited' }],
+          mandatoryStopsRemaining: null,
+        },
       },
     };
-    expect(buildDashboardModel(withStrategy).fuel.addAtStop.value).toBe('12.5 L');
+    const m = buildDashboardModel(withStrategy);
+    expect(m.fuel.addAtStop.value).toBe('12.5 L');
+    expect(m.fuel.nextPit.value).toBe('18–24');
   });
 });
 

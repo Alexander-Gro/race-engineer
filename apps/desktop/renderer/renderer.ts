@@ -59,6 +59,7 @@ const fuelCard = (m: DashboardModel['fuel']): HTMLElement => {
     metric('In tank', m.liters),
     metric('Per lap', m.perLap),
     metric('Add at stop', m.addAtStop),
+    metric('Next pit (lap)', m.nextPit),
   );
   return card('Fuel', big, grid);
 };

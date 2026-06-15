@@ -1,5 +1,5 @@
 import type { RaceState } from '@race-engineer/core';
-import { computeFuelPlan, estimatePerLapConsumption } from '@race-engineer/strategy';
+import { computeFuelPlan, estimatePerLapConsumption, planStints } from '@race-engineer/strategy';
 import type { StrategySummary } from './ipc';
 
 /**
@@ -58,13 +58,42 @@ export class StrategyEngine {
       state.session.isTimed && state.session.remainingS !== null && avgGreenLapS !== null
         ? { remainingS: state.session.remainingS, avgGreenLapS }
         : null;
+    const fuelPlan = computeFuelPlan({ fuelLiters: p.fuel.liters, consumption, race });
 
-    return { fuelPlan: computeFuelPlan({ fuelLiters: p.fuel.liters, consumption, race }) };
+    // Fuel-bound stint plan for the rest of the race: needs laps-remaining + tank + per-lap. Tyre-life
+    // / pit-loss bounds (and the fewer-vs-more-stops trade-off) need per-track calibration (rig backlog).
+    const lapsRemaining = this.#lapsRemaining(state, avgGreenLapS);
+    const stintPlan =
+      lapsRemaining !== null &&
+      lapsRemaining >= 1 &&
+      p.fuel.capacityLiters !== null &&
+      fuelPlan !== null &&
+      fuelPlan.perLapLiters > 0
+        ? planStints({
+            raceLaps: lapsRemaining,
+            startLap: p.lapsCompleted,
+            tankCapacityLiters: p.fuel.capacityLiters,
+            perLapFuelLiters: fuelPlan.perLapLiters,
+          })
+        : null;
+
+    return { fuelPlan, stintPlan };
   }
 
   #avgGreenLapS(fallback: number | null): number | null {
     const recent = this.#greenLapTimes.slice(-GREEN_LAP_WINDOW);
     if (recent.length === 0) return fallback;
     return recent.reduce((a, b) => a + b, 0) / recent.length;
+  }
+
+  /** Laps left in the race: from the clock + average lap (timed), or the lap count. Null if unknown. */
+  #lapsRemaining(state: RaceState, avgLapS: number | null): number | null {
+    const s = state.session;
+    if (s.isTimed) {
+      if (s.remainingS === null || avgLapS === null || !(avgLapS > 0)) return null;
+      return Math.ceil(s.remainingS / avgLapS);
+    }
+    if (s.totalLaps !== null) return Math.max(0, s.totalLaps - state.player.lapsCompleted);
+    return null;
   }
 }
