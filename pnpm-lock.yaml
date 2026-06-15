@@ -20,6 +20,9 @@ importers:
       '@race-engineer/core':
         specifier: workspace:*
         version: link:packages/core
+      '@race-engineer/eval':
+        specifier: workspace:*
+        version: link:packages/eval
       '@types/node':
         specifier: ^22.10.5
         version: 22.19.21
@@ -147,6 +150,31 @@ importers:
       '@race-engineer/adapter-sim-replay':
         specifier: workspace:*
         version: link:../adapters/sim-replay
+
+  packages/eval:
+    dependencies:
+      '@race-engineer/core':
+        specifier: workspace:*
+        version: link:../core
+      '@race-engineer/engineer-core':
+        specifier: workspace:*
+        version: link:../engineer-core
+      '@race-engineer/radio':
+        specifier: workspace:*
+        version: link:../radio
+      '@race-engineer/strategy':
+        specifier: workspace:*
+        version: link:../strategy
+    devDependencies:
+      '@race-engineer/adapter-sim-replay':
+        specifier: workspace:*
+        version: link:../adapters/sim-replay
+      '@race-engineer/ai':
+        specifier: workspace:*
+        version: link:../ai
+      '@race-engineer/voice':
+        specifier: workspace:*
+        version: link:../voice
 
   packages/input:
     dependencies:

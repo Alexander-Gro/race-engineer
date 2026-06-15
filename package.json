@@ -22,13 +22,15 @@
     "inspect": "tsx tools/inspect.ts",
     "replay": "tsx tools/inspect.ts replay",
     "shm-dump": "tsx packages/adapters/lmu/src/cli/dump.ts",
-    "record": "tsx tools/record.ts"
+    "record": "tsx tools/record.ts",
+    "eval": "tsx tools/eval.ts"
   },
   "devDependencies": {
     "@eslint/js": "^9.17.0",
     "@race-engineer/adapter-lmu": "workspace:*",
     "@race-engineer/adapter-sim-replay": "workspace:*",
     "@race-engineer/core": "workspace:*",
+    "@race-engineer/eval": "workspace:*",
     "@types/node": "^22.10.5",
     "eslint": "^9.17.0",
     "eslint-config-prettier": "^9.1.0",

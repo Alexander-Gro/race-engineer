@@ -1,0 +1,23 @@
+{
+  "name": "@race-engineer/eval",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@race-engineer/core": "workspace:*",
+    "@race-engineer/engineer-core": "workspace:*",
+    "@race-engineer/radio": "workspace:*",
+    "@race-engineer/strategy": "workspace:*"
+  },
+  "devDependencies": {
+    "@race-engineer/adapter-sim-replay": "workspace:*",
+    "@race-engineer/ai": "workspace:*",
+    "@race-engineer/voice": "workspace:*"
+  }
+}

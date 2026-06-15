@@ -796,6 +796,14 @@ toggled TC/ABS/brake-bias on the fly. (164 MB raw — git-ignored, never committ
 - [x] **T1.5** record a real green stint → commit a trimmed fixture — **done S1#3**
   (`packages/adapters/sim-replay/fixtures/lemans-multiclass.replay.jsonl`, replay-tested). A longer
   *clean multi-lap* stint is still wanted for the tyre/pace calibration (§C) + replay-eval of T7.1/T7.3.
+- [ ] **Multi-lap stint with real fuel burn → run the T10.4 eval.** The committed fixture is a
+  60-frame side-by-side slice (flat fuel, no lap completes), so the `@race-engineer/eval`
+  fuel-accuracy *numbers* run today only on synthetic ground truth; the real flat-fuel slice
+  correctly reports **silent**. To close the docs/10 Phase-2 gate ("fuel-to-finish within ±1 lap by
+  mid-stint **on a recorded endurance race**"), capture a ~5–10-lap green stint with fuel
+  decrementing (`pnpm record --frames N`), commit a trimmed copy, then `pnpm eval replay <file>` —
+  it scores the live `StrategyEngine` vs the recording's own measured per-lap burn. Same recording
+  also feeds §C tyre/pace calibration.
 - [ ] **T2.2 live** REST probe → capture Swagger payloads → finish Virtual-Energy + pit/refuel
   mapping into `RaceState`.
 - [ ] **T1.3 / T1.4** current-aid (TC/ABS/engine-map index) + setup-file reads (S3/S4).

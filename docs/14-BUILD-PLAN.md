@@ -807,9 +807,26 @@ Context: [08-INPUT-AND-CONTROLS](08-INPUT-AND-CONTROLS.md) §3, [09-UI-UX](09-UI
 T10.1 wire local STT/TTS (Piper/Kokoro + faster-whisper) + cost estimator → T10.2 full
 onboarding (profile choice + model download/GPU detect + mic permission + plugin-install
 helper + health UI, per [16](16-PLATFORM-PREREQUISITES.md) §5) → T10.3 crash isolation,
-graceful degradation, local diagnostics export → T10.4 eval suites (latency + accuracy) in
-CI on recordings → T10.5 electron-builder installer + auto-update (GitHub Releases) + **code
-signing (SignPath Foundation, free for OSS)** + `THIRD-PARTY`/`NOTICE`.
+graceful degradation, local diagnostics export → ~~T10.4 eval suites (latency + accuracy) in
+CI on recordings~~ (done — new **`@race-engineer/eval`** package + `pnpm eval` CLI. Three pure,
+deterministic eval suites that score the **same always-on machinery the app runs** against ground
+truth derived from the data itself: (a) **fuel accuracy** — replays a `RaceState` stream through
+the live `StrategyEngine` and, at each lap boundary, compares its estimate to the recording's own
+measured per-lap burn; the docs/10 Phase-2 gate is *within ±1 lap by mid-stint* (passes on a clean
+synthetic stint, converges from a wrong-early start on a noisy one, fails a non-converged stint, and
+stays **silent** — no fabricated rate — on a flat-fuel slice, docs/05 §8); (b) **event correctness**
+— runs `EventDetector` + `defaultEventRules` over the stream and checks one `lap_completed` per lap
+boundary, schema/NaN well-formedness, and no event storm; (c) **latency** — drives the real
+`ReactiveRadioLoop` over scripted turns with an injected clock and gates Tier-2 first-audio p95 vs
+the docs/01 budget (reuses radio's `LatencyAggregator`). `pnpm eval <synthetic|replay <file>>` prints
+the report; the suites run in CI as tests (`packages/eval/src/__tests__`). Pure/read-only, no key,
+no network — the math is reused from `@race-engineer/strategy`/`core`, the eval only measures (rule
+1). 11 tests, 573 green; compliance PASS. **Real-data accuracy is rig-gated:** both committed
+recordings are flat-fuel slices, so the fuel-accuracy *numbers* run today only on synthetic
+ground-truth — the headline "±1 lap by mid-stint **on a recorded endurance race**" gate needs a
+**multi-lap rig recording with real fuel burn** (rig backlog, docs/03; `pnpm eval replay <stint>`
+scores it the day it lands)) → T10.5 electron-builder installer + auto-update (GitHub Releases) +
+**code signing (SignPath Foundation, free for OSS)** + `THIRD-PARTY`/`NOTICE`.
 Gate: clean install on a fresh Windows PC; guided first-run to a working radio exchange;
 multi-hour race unattended; documented cloud cost/hour + working free local mode.
 
