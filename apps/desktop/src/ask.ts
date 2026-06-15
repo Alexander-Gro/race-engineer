@@ -8,6 +8,7 @@ import {
 } from '@race-engineer/ai';
 import type { EngineerSnapshot } from '@race-engineer/engineer-core';
 import type { ProactivityLevel } from '@race-engineer/radio';
+import type { VoiceProviderConfig } from '@race-engineer/voice';
 import type { AudioOutMessage } from './audio-bridge';
 
 /**
@@ -95,12 +96,14 @@ export interface AskRequestMessage {
   question: string;
 }
 
-/** Main → worker: apply the saved engineer config — the LLM route (provider + key, or template)
- * and the proactivity level. Pushed on the worker's `ready` and after every settings/secret change. */
+/** Main → worker: apply the saved engineer config — the LLM route (provider + key, or template), the
+ * proactivity level, and the **voice route** (TTS/STT engine ids + any cloud key, serializable). Pushed
+ * on the worker's `ready` and after every settings/secret change. The keys cross main→worker only. */
 export interface ConfigureMessage {
   type: 'configure';
   llmRoute: LlmRouteConfig;
   proactivity: ProactivityLevel;
+  voiceRoute: VoiceProviderConfig;
 }
 
 /** Main → worker: the renderer reported a clip finished playing (drains the voice queue). */

@@ -3,7 +3,13 @@ import {
   FakeTtsProvider,
   prerenderTier0,
   RadioCapture,
+  selectSttProvider,
+  selectTtsProvider,
+  type AudioClip,
+  type SttProvider,
+  type TtsProvider,
   type VoiceId,
+  type VoiceProviderConfig,
 } from '@race-engineer/voice';
 import { IpcAudioSink, type AudioOutMessage } from '../src/audio-bridge';
 import { BridgedMicSource } from '../src/mic-bridge';
@@ -11,52 +17,63 @@ import { createRadioReply } from '../src/radio-reply';
 import { EngineerVoice } from '../src/voice-engine';
 
 /**
- * The worker's **proactive voice + reactive radio** (Track A voice path, build-plan T10.1). It runs
- * the radio layer in the Core worker, driving the renderer↔worker bridges:
+ * The worker's **voice layer** (Track A voice path, build-plan T10.1 slice 3b). Builds the engineer's
+ * voice from the configured **voice route** and wires it to the renderer bridges:
  *
- *  - **audio out** (slice 1) — the {@link IpcAudioSink} serializes the {@link VoicePlayer}'s play/stop
- *    to the renderer, which plays it and acks completion via {@link WorkerVoice.handleAudioEnded};
- *  - **mic in** (slice 2) — a {@link BridgedMicSource} feeds a {@link RadioCapture}; renderer PTT
- *    edges drive begin/end ({@link WorkerVoice.onPtt}), frames arrive via
- *    {@link WorkerVoice.handleMicFrame};
- *  - **reactive reply** (slice 3) — on PTT-up the transcript is answered by the injected `answer`
- *    (the provider-aware {@link AskResponder}: free template *or* the configured LLM, hallucination-
- *    guarded) and the reply is spoken back out the audio-out bridge; PTT-down barges in.
+ *  - **audio out** (slice 1) — the {@link IpcAudioSink} serializes play/stop to the renderer;
+ *  - **mic in** (slice 2) — a {@link BridgedMicSource} feeds a {@link RadioCapture};
+ *  - **reactive reply** (slice 3a) — PTT-up transcript → provider-aware `answer` → spoken reply;
+ *  - **real providers** (slice 3b) — TTS/STT come from `selectTts/SttProvider(route)`; a not-ready
+ *    engine (no key / no native backend) **falls back to the fake** so the app never crashes, and a
+ *    cloud pre-render failure (bad key / offline) falls back too.
  *
- * So the engineer now *hears a push-to-talk question and answers it aloud* — for free/no-key (template)
- * and, when a key is set, via the configured LLM. **Audible/understanding once real STT/TTS replace the
- * fakes** (slice 3b — cloud BYO-key fastest on the dev Mac; local Piper/Kokoro + faster-whisper the free
- * default). With the fakes the full plumbing runs and is logged (silent audio, fake transcript).
+ * With a cloud TTS route + a key this is **audible in a real voice**; with the fakes it stays silent.
  * Read-only/advisory — audio in/out only, no game path.
  */
 export interface WorkerVoice {
   voice: EngineerVoice;
-  /** Feed a renderer-reported natural clip completion back to the queue (drains the next utterance). */
   handleAudioEnded: (pid: number) => void;
-  /** A renderer PTT edge: down barges in + opens capture; up finalizes → answer → spoken reply. */
   onPtt: (down: boolean) => void;
-  /** A captured mic frame from the renderer (routed into the active STT stream). */
   handleMicFrame: (frame: Uint8Array) => void;
 }
 
-/**
- * Build the proactive voice + reactive radio over the renderer audio/mic bridges. `post` ships audio
- * commands to the renderer; `answer` grounds a transcript (the worker passes `AskResponder.answer`).
- */
+const VOICE: VoiceId = 'engineer-1';
+
+/** The configured TTS, or the offline fake when it isn't ready (no key / no native backend). */
+const pickTts = (route: VoiceProviderConfig): TtsProvider => {
+  const selected = selectTtsProvider(route);
+  return selected.available === false ? new FakeTtsProvider() : selected;
+};
+/** The configured STT, or the offline fake when it isn't ready. */
+const pickStt = (route: VoiceProviderConfig): SttProvider => {
+  const selected = selectSttProvider(route);
+  return selected.available === false ? new FakeSttProvider() : selected;
+};
+
 export const createWorkerVoice = async (
   post: (msg: AudioOutMessage) => void,
   answer: (question: string) => Promise<string>,
+  route: VoiceProviderConfig,
 ): Promise<WorkerVoice> => {
-  const tts = new FakeTtsProvider();
-  const voice: VoiceId = 'engineer-1';
-  const tier0Clips = await prerenderTier0(tts, voice);
-  const sink = new IpcAudioSink(post);
-  const engineerVoice = new EngineerVoice({ tts, sink, tier0Clips, voice });
+  let tts = pickTts(route);
+  const stt = pickStt(route);
 
-  // Reactive radio: a bridged mic + a deterministic STT for now (real STT = slice 3b). The transcript
-  // is answered by the provider-aware responder and spoken back; the chain is logged for the dev loop.
+  // Pre-render the Tier-0 spotter clips once (a cloud TTS makes ~6 calls here). If that fails (bad key
+  // / offline), fall back to the free offline voice rather than leaving the engineer mute mid-race.
+  let tier0Clips: ReadonlyMap<string, AudioClip>;
+  try {
+    tier0Clips = await prerenderTier0(tts, VOICE);
+  } catch (err) {
+    console.error('[voice] TTS pre-render failed — falling back to the offline voice', err);
+    tts = new FakeTtsProvider();
+    tier0Clips = await prerenderTier0(tts, VOICE);
+  }
+
+  const sink = new IpcAudioSink(post);
+  const engineerVoice = new EngineerVoice({ tts, sink, tier0Clips, voice: VOICE });
+
   const mic = new BridgedMicSource();
-  const capture = new RadioCapture({ stt: new FakeSttProvider(), mic });
+  const capture = new RadioCapture({ stt, mic });
   const reply = createRadioReply({
     capture,
     answer,

@@ -260,15 +260,26 @@ in a small, reviewable, green-tested change.
   TTS ≈ $0.10/h (docs/15 §Cost scenarios "Budget cloud"), so a paid engine can't read as free. 9
   mocked-transport tests (request mapping, Bearer key, binary→chunk, prerender bytes+MIME, readiness,
   error-throws, selector swap), 600 green; compliance PASS (rules 6/5/1 + state-honesty). **Provider
-  built + offline-tested; not yet wired into the running app.**) **Remaining T10.1 (slice 3b-ii):**
-  **wire the cloud TTS into the worker** so it's audible with your key — add a **TTS API-key secret
-  slot**, resolve a `VoiceProviderConfig` in `main` (key from secure storage), thread it on the
-  `configure` message → the worker builds the TTS via `selectTtsProvider` (build-on-configure, graceful
-  fallback to fake when not-ready), and add `'openai'` to the settings UI engine list. Then **cloud STT**
-  (slice 3b-iii) for voice-in, and the **local native backends** (Piper/Kokoro + faster-whisper binaries
-  — the free default, rig/native). 3b-ii onward is the **human-verify** half (you + an OpenAI key + mic +
-  speakers). Once wired, the premium voice path supersedes the free Web-Speech call-outs the renderer
-  uses today.
+  built + offline-tested; not yet wired into the running app.**) ~~**wire cloud TTS into the worker**
+  (slice 3b-ii)~~ (done 2026-06-16 — the cloud TTS is now **audible in the running app** with your key.
+  New **`apps/desktop/src/voice-route.ts`** `resolveVoiceRoute(settings.voice, secrets)` → a
+  **serializable** `VoiceProviderConfig` (engine ids + `cloudTtsConfig:{apiKey}` only when tts=openai;
+  key from secure storage, **main-side only**) + `voiceRouteIsCloud`; the route rides the `configure`
+  message (main→worker, never the renderer — rule 6). The **worker (re)builds the voice layer on
+  configure** when a cloud engine is selected (or `ENGINEER_VOICE=1`): `worker-voice` builds TTS/STT via
+  `selectTts/SttProvider(route)`, **falling back to the fake** when not-ready (no key) or if the cloud
+  Tier-0 pre-render fails (bad key/offline) — never crashes (docs/16 §1). Rebuilds serialized + de-duped
+  by route key so rapid saves can't race or re-bill the pre-render. Settings gained a **Voice** TTS-engine
+  dropdown (`TTS_ENGINES` exported, `'openai'` added; cost estimator already prices it $0.10/h). 605
+  tests + a `resolveVoiceRoute` suite green; typecheck (both) + lint + electron build green; compliance
+  PASS (rule 6 key-handling verified clean — key never reaches the renderer, never logged; Tier-0 stays
+  pre-rendered). **So: select Voice=openai + paste an OpenAI key → the engineer speaks text-ask replies +
+  proactive call-outs in a real cloud voice.** _Human-verify (you + OpenAI key + speakers):_ confirm
+  audible.) **Remaining T10.1 (slice 3b-iii):** **cloud STT** (OpenAI transcription) for voice-in — so
+  hold-to-talk is *understood* (the on-screen 🎙 button works without SDL2; the wheel PTT needs SDL2.dll
+  on the rig, a packaging follow-up). Then the **local native backends** (Piper/Kokoro + faster-whisper
+  binaries — the free default, rig/native). Once STT lands, the full loop (talk → understand → real-voice
+  answer) is testable; it supersedes the free Web-Speech call-outs the renderer uses today.
   M7.7–M7.9 / M8 / M9 offline-strategy depth are paused until the app is launchable. (Offline glue
   done: `get_stint_plan` + `project_pit_window` are now wired into the AI read-only tool surface,
   reading a precomputed `ctx.stintPlan` (T7.3) like `get_fuel_plan` reads `ctx.fuelPlan`; 373 green.

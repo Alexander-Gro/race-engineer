@@ -1,55 +1,86 @@
 import { selectLlmProvider } from '@race-engineer/ai';
 import type { EngineerEvent } from '@race-engineer/core';
-import type { SnapshotTransport } from '@race-engineer/engineer-core';
+import type { EngineerSnapshot, SnapshotTransport } from '@race-engineer/engineer-core';
 import type { ProactivityLevel } from '@race-engineer/radio';
+import type { VoiceProviderConfig } from '@race-engineer/voice';
 import { AskResponder, type MainToWorkerMessage, type WorkerMessage } from '../src/ask';
+import type { AudioOutMessage } from '../src/audio-bridge';
 import { createSyntheticEngineerCore } from '../src/host';
+import { voiceRouteIsCloud } from '../src/voice-route';
 import type { EngineerVoice } from '../src/voice-engine';
 
 /**
  * Engineer Core worker (build-plan T6.1 + Track A voice path) — runs in the Electron utility process
- * so the tick pipeline stays **off the UI thread**. It `postMessage`s throttled snapshots to the
- * main process (forwarded to the renderer), answers **text questions** via the free/no-key
- * {@link AskResponder} (template mode — docs/15), and — when enabled — routes detected events to the
- * **proactive voice layer**. The AI brain stays off the UI thread alongside the pipeline.
+ * so the tick pipeline stays **off the UI thread**. It `postMessage`s throttled snapshots to the main
+ * process (forwarded to the renderer), answers **text questions** via the provider-aware
+ * {@link AskResponder}, and routes detected events + push-to-talk to the **voice layer**.
  * Read-only/advisory: the worker only reads telemetry and phrases output; no path to the game.
  *
- * Source is chosen by `ENGINEER_SOURCE`:
- *   - default → the offline **synthetic** scenario (paced + looped) so the app shows live values
- *     with no game (`pnpm dev`);
- *   - `lmu` → the real **shared-memory** source on the Windows rig (`pnpm dev:lmu`). The LMU wiring
- *     (koffi, Windows-only native) is **dynamically imported only when selected**, so the synthetic
- *     demo never loads koffi. Until LMU is in a session it emits nothing — the dashboard waits.
+ * Source is chosen by `ENGINEER_SOURCE`: default → offline **synthetic** (`pnpm dev`); `lmu` → the real
+ * **shared-memory** source (`pnpm dev:lmu`, koffi dynamically imported only when selected).
  *
- * `ENGINEER_VOICE=1` enables the proactive voice preview (free/offline). The voice queue now plays
- * through the **renderer audio-out bridge** (T10.1) — clips are posted as `audio` messages and the
- * renderer plays them; it's **audible once a real TTS fills the clip bytes** (next slice — the default
- * FakeTtsProvider plays silence but the queue drains). Off by default so the dashboard demo is
- * untouched, and the voice/radio/ai graph is **dynamically imported only when enabled**.
+ * **Voice layer (T10.1 slice 3b):** built/rebuilt from the configured **voice route** on each
+ * `configure` (so picking a cloud engine in Settings turns the real voice on live). It activates when
+ * the route selects a cloud engine ({@link voiceRouteIsCloud}) or `ENGINEER_VOICE=1` (the offline
+ * preview) — otherwise it stays off so the default `pnpm dev` demo is untouched and the voice/radio/ai
+ * graph is dynamically imported only when needed. A bad cloud key / offline pre-render falls back to the
+ * free offline voice rather than crashing (docs/16 §1 "never crash").
  */
 const responder = new AskResponder();
-// The proactive voice (built in the IIFE when ENGINEER_VOICE=1) + the latest configured chattiness.
-// `configure` may arrive before the voice is built (it's posted on `ready`), so hold the level and
-// apply it once the voice exists.
+// The voice layer + its bridge hooks, (re)built on configure; null until a route activates it.
 let voice: EngineerVoice | null = null;
-// Voice-bridge hooks, null until the voice is built: drain the audio-out queue, drive radio capture
-// (PTT edges), and feed captured mic frames into the STT stream.
 let handleAudioEnded: ((pid: number) => void) | null = null;
 let onPtt: ((down: boolean) => void) | null = null;
 let handleMicFrame: ((frame: Uint8Array) => void) | null = null;
 let proactivity: ProactivityLevel = 'normal';
+let latestSnapshot: EngineerSnapshot | null = null;
 
-// Main-relayed messages on the parent port: text questions, and the engineer-route config.
+const post = (audio: AudioOutMessage): void =>
+  process.parentPort.postMessage({ type: 'audio', audio } satisfies WorkerMessage);
+// The reactive reply + text-ask share this provider-aware brain (template or configured LLM, guarded).
+const answer = (question: string): Promise<string> => responder.answer(question);
+
+// Build the voice layer only when a cloud engine is selected (audible) or the offline preview is on.
+const shouldBuildVoice = (route: VoiceProviderConfig): boolean =>
+  voiceRouteIsCloud(route) || process.env['ENGINEER_VOICE'] === '1';
+
+// Rebuilds are serialized + de-duped by route, so rapid settings/secret saves can't race or rebuild
+// for an unchanged route (a rebuild re-pre-renders Tier-0, which for a cloud TTS costs network calls).
+let lastVoiceRouteKey: string | null = null;
+let voiceBuildChain: Promise<void> = Promise.resolve();
+
+const rebuildVoice = (route: VoiceProviderConfig): void => {
+  if (!shouldBuildVoice(route)) return;
+  const key = JSON.stringify(route);
+  if (key === lastVoiceRouteKey) return; // unchanged — keep the current voice
+  lastVoiceRouteKey = key;
+  voiceBuildChain = voiceBuildChain.then(async () => {
+    try {
+      const wv = await (await import('./worker-voice')).createWorkerVoice(post, answer, route);
+      voice = wv.voice;
+      handleAudioEnded = wv.handleAudioEnded;
+      onPtt = wv.onPtt;
+      handleMicFrame = wv.handleMicFrame;
+      voice.setProactivity(proactivity);
+      if (latestSnapshot) voice.onSnapshot(latestSnapshot); // catch up to the freshest telemetry
+      console.log(`[voice] layer ready (tts=${route.tts}, stt=${route.stt})`);
+    } catch (err) {
+      console.error('[voice] failed to build the voice layer — staying silent', err);
+    }
+  });
+};
+
+// Main-relayed messages on the parent port: text questions, engineer/voice config, audio + radio I/O.
 process.parentPort.on('message', (event: { data: MainToWorkerMessage }): void => {
   const msg = event.data;
   if (msg?.type === 'ask') {
     void responder
       .answer(msg.question)
-      .then((answer) => {
+      .then((reply) => {
         process.parentPort.postMessage({
           type: 'ask-reply',
           id: msg.id,
-          answer,
+          answer: reply,
         } satisfies WorkerMessage);
       })
       .catch((err) => {
@@ -71,16 +102,14 @@ process.parentPort.on('message', (event: { data: MainToWorkerMessage }): void =>
       responder.setProvider(null);
     }
     proactivity = msg.proactivity;
-    voice?.setProactivity(proactivity); // applied here, or after the voice is built (see below)
+    voice?.setProactivity(proactivity);
+    rebuildVoice(msg.voiceRoute); // (re)build the voice layer if the route activates/changed it
   } else if (msg?.type === 'audio-ended') {
-    // The renderer finished playing a clip → drain the voice queue's next utterance.
-    handleAudioEnded?.(msg.pid);
+    handleAudioEnded?.(msg.pid); // renderer finished a clip → drain the next utterance
   } else if (msg?.type === 'radio-ptt') {
-    // A push-to-talk edge from the renderer drives the radio capture lifecycle.
-    onPtt?.(msg.down);
+    onPtt?.(msg.down); // a PTT edge drives the radio capture lifecycle
   } else if (msg?.type === 'radio-frame') {
-    // A captured mic frame from the renderer → the active STT stream (dropped if not capturing).
-    handleMicFrame?.(msg.frame);
+    handleMicFrame?.(msg.frame); // a captured mic frame → the active STT stream
   }
 });
 
@@ -90,47 +119,27 @@ process.parentPort.postMessage({ type: 'ready' } satisfies WorkerMessage);
 void (async (): Promise<void> => {
   const source = process.env['ENGINEER_SOURCE'] === 'lmu' ? 'lmu' : 'synthetic';
 
-  // Proactive voice preview — opt-in, free/offline. The voice queue plays through the renderer over
-  // the audio bridge (commands posted as `audio` WorkerMessages); audible once a real TTS fills the
-  // clip bytes (next slice — the FakeTtsProvider default plays silence but the queue still drains).
-  if (process.env['ENGINEER_VOICE'] === '1') {
-    const workerVoice = await (
-      await import('./worker-voice')
-    ).createWorkerVoice(
-      (audio) => process.parentPort.postMessage({ type: 'audio', audio } satisfies WorkerMessage),
-      // The reactive reply uses the same provider-aware brain as the text-ask (template or the
-      // configured LLM, hallucination-guarded) — voiced instead of typed.
-      (question) => responder.answer(question),
-    );
-    voice = workerVoice.voice;
-    handleAudioEnded = workerVoice.handleAudioEnded;
-    onPtt = workerVoice.onPtt;
-    handleMicFrame = workerVoice.handleMicFrame;
-  }
-  voice?.setProactivity(proactivity); // apply any config that arrived before the voice was built
-  const activeVoice = voice; // a const so the closures below narrow `null` away (configure uses `voice`)
-
   const transport: SnapshotTransport = (snapshot): void => {
+    latestSnapshot = snapshot;
     responder.update(snapshot);
-    activeVoice?.onSnapshot(snapshot);
+    voice?.onSnapshot(snapshot); // mutable — picks up a voice (re)built mid-stream
     process.parentPort.postMessage({ type: 'snapshot', snapshot } satisfies WorkerMessage);
   };
 
-  const onEvent = activeVoice
-    ? (events: readonly EngineerEvent[]): void => {
-        // Fire-and-forget off the tick thread; a synth/TTS failure must never crash the worker
-        // (docs/16 §1 "never crash; the radio is the core feature") — log and move on.
-        void activeVoice
-          .routeEvents(events)
-          .then((outcomes) => {
-            for (const o of outcomes) {
-              const detail = o.kind === 'skipped' ? o.reason : `priority ${o.priority}`;
-              console.log(`[voice] ${o.event.type} → ${o.kind} (${detail})`);
-            }
-          })
-          .catch((err) => console.error('[voice] proactive routing failed', err));
-      }
-    : undefined;
+  // Always wired; routes only when a voice layer exists. Fire-and-forget off the tick thread — a
+  // synth/TTS failure must never crash the worker (docs/16 §1) — log and move on.
+  const onEvent = (events: readonly EngineerEvent[]): void => {
+    if (!voice) return;
+    void voice
+      .routeEvents(events)
+      .then((outcomes) => {
+        for (const o of outcomes) {
+          const detail = o.kind === 'skipped' ? o.reason : `priority ${o.priority}`;
+          console.log(`[voice] ${o.event.type} → ${o.kind} (${detail})`);
+        }
+      })
+      .catch((err) => console.error('[voice] proactive routing failed', err));
+  };
 
   try {
     if (source === 'lmu') {

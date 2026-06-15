@@ -27,6 +27,7 @@ import { AUDIO_ENDED_CHANNEL, AUDIO_OUT_CHANNEL } from '../src/audio-bridge';
 import { RADIO_FRAME_CHANNEL, RADIO_PTT_CHANNEL } from '../src/mic-bridge';
 import { MIC_SETTINGS_DEEPLINK } from '../src/audio-io';
 import { resolveLlmRouteConfig } from '../src/llm-route';
+import { resolveVoiceRoute } from '../src/voice-route';
 import {
   formatPttBinding,
   PttMapper,
@@ -293,10 +294,12 @@ const main = (): void => {
       if (!worker) return;
       const settings = settingsStore.load();
       const llmRoute = resolveLlmRouteConfig(settings.llm, secretStore);
+      const voiceRoute = resolveVoiceRoute(settings.voice, secretStore);
       worker.postMessage({
         type: 'configure',
         llmRoute,
         proactivity: settings.proactivity,
+        voiceRoute, // TTS/STT engines + any cloud key — crosses main→worker only
       } satisfies ConfigureMessage);
     };
 
