@@ -11,6 +11,7 @@ import {
 import {
   ASK_CHANNEL,
   OPEN_MIC_SETTINGS_CHANNEL,
+  OVERLAY_TOGGLE_CHANNEL,
   SNAPSHOT_CHANNEL,
   type EngineerSnapshot,
 } from '@race-engineer/engineer-core';
@@ -107,6 +108,64 @@ const createWindow = (): BrowserWindow => {
   return window;
 };
 
+// The in-race overlay (T6.4, docs/09 §Overlay): a small always-on-top, transparent, click-through
+// window over the (borderless) game. Created lazily on first toggle and **hidden by default**. It
+// consumes the same read-only snapshot broadcast as the main window — no game write path.
+let overlayWindow: BrowserWindow | null = null;
+
+const createOverlayWindow = (): BrowserWindow => {
+  const overlay = new BrowserWindow({
+    width: 320,
+    height: 240,
+    x: 24,
+    y: 24,
+    show: false, // default off (docs/09 — opt-in)
+    frame: false,
+    transparent: true,
+    resizable: false,
+    minimizable: false,
+    maximizable: false,
+    fullscreenable: false,
+    skipTaskbar: true,
+    focusable: false, // never steal focus from the game
+    alwaysOnTop: true,
+    webPreferences: {
+      preload: path.join(__dirname, '../preload/index.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true,
+    },
+  });
+  // Float above borderless-fullscreen games (docs/09 caveat: not exclusive-fullscreen DirectX).
+  overlay.setAlwaysOnTop(true, 'screen-saver');
+  // Click-through: the overlay never intercepts the mouse — input passes to the game underneath.
+  overlay.setIgnoreMouseEvents(true, { forward: true });
+  overlay.on('closed', () => {
+    overlayWindow = null;
+  });
+  // Paint immediately on (re)load with the freshest snapshot.
+  overlay.webContents.on('did-finish-load', () => {
+    if (lastSnapshot && !overlay.isDestroyed())
+      overlay.webContents.send(SNAPSHOT_CHANNEL, lastSnapshot);
+  });
+  const devUrl = process.env['ELECTRON_RENDERER_URL'];
+  if (devUrl) void overlay.loadURL(`${devUrl}/overlay.html`);
+  else void overlay.loadFile(path.join(__dirname, '../renderer/overlay.html'));
+  return overlay;
+};
+
+/** Show/hide the overlay (creating it on first use); returns its new visibility. */
+const toggleOverlay = (): boolean => {
+  if (!overlayWindow || overlayWindow.isDestroyed()) overlayWindow = createOverlayWindow();
+  if (overlayWindow.isVisible()) {
+    overlayWindow.hide();
+  } else {
+    overlayWindow.showInactive(); // show without focusing — keep the game focused
+    if (lastSnapshot) overlayWindow.webContents.send(SNAPSHOT_CHANNEL, lastSnapshot);
+  }
+  return overlayWindow.isVisible();
+};
+
 /** One worker for the app's lifetime, broadcasting snapshots to every open window. */
 const startEngineerWorker = (): void => {
   // The worker runs the tick pipeline; the bundler emits `engineer-worker.js` alongside main.
@@ -170,6 +229,10 @@ const main = (): void => {
   // Mic-denied recovery (docs/16 §1): open the OS mic-privacy page. The URL is a fixed constant —
   // nothing from the renderer is interpolated, so this can't become an open-anything hole.
   ipcMain.handle(OPEN_MIC_SETTINGS_CHANNEL, () => shell.openExternal(MIC_SETTINGS_DEEPLINK));
+
+  // Show/hide the in-race overlay (docs/09 §Overlay, T6.4). View-only toggle — the overlay reads the
+  // same snapshot stream; there is no game-write path.
+  ipcMain.handle(OVERLAY_TOGGLE_CHANNEL, () => toggleOverlay());
 
   void app.whenReady().then(() => {
     // Settings + secrets (T6.3). Stores live in the user-data dir (resolved after `ready`); keys are
@@ -270,6 +333,8 @@ const main = (): void => {
   app.on('will-quit', () => {
     pttMapper?.dispose();
     pttMapper = null;
+    overlayWindow?.destroy();
+    overlayWindow = null;
     worker?.kill();
     worker = null;
   });

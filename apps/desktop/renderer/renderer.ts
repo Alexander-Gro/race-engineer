@@ -388,6 +388,23 @@ const wireCallouts = (): void => {
 wireCallouts();
 
 /**
+ * The in-race overlay toggle (T6.4, docs/09 §Overlay). Shows/hides a small always-on-top, transparent,
+ * click-through HUD over the (borderless) game — off by default. Main owns the overlay window; this
+ * button just flips its visibility and reflects the returned state. View-only — no game path.
+ */
+const wireOverlayToggle = (): void => {
+  const button = document.getElementById('overlay-toggle') as HTMLButtonElement | null;
+  if (!button) return;
+  button.addEventListener('click', () => {
+    void window.engineer.toggleOverlay().then((visible) => {
+      button.textContent = visible ? '🪟 Overlay on' : '🪟 Overlay';
+      button.setAttribute('aria-pressed', String(visible));
+    });
+  });
+};
+wireOverlayToggle();
+
+/**
  * The voice-I/O affordances (T4.5 / docs/16 §1): a mic check that surfaces clear guidance (and an
  * "open settings" deep-link) when capture is denied — never a crash — and an output-device picker
  * that routes the engineer voice to a chosen device. Mic capture is read-only and gated; the text

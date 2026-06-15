@@ -2,6 +2,7 @@ import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron';
 import {
   ASK_CHANNEL,
   OPEN_MIC_SETTINGS_CHANNEL,
+  OVERLAY_TOGGLE_CHANNEL,
   SNAPSHOT_CHANNEL,
   type EngineerBridge,
   type EngineerSnapshot,
@@ -45,6 +46,9 @@ const bridge: EngineerBridge = {
   },
   openMicSettings(): Promise<void> {
     return ipcRenderer.invoke(OPEN_MIC_SETTINGS_CHANNEL) as Promise<void>;
+  },
+  toggleOverlay(): Promise<boolean> {
+    return ipcRenderer.invoke(OVERLAY_TOGGLE_CHANNEL) as Promise<boolean>;
   },
 };
 

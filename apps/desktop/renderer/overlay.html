@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; style-src 'unsafe-inline'"
+    />
+    <title>Race Engineer — overlay</title>
+    <style>
+      :root {
+        --good: #3fb950;
+        --caution: #e3b341;
+        --critical: #ff7b72;
+        --text: #e6edf3;
+        --muted: #9aa4ad;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      /* Transparent so only the card shows over the (borderless) game. */
+      html,
+      body {
+        margin: 0;
+        background: transparent;
+        overflow: hidden;
+        font:
+          13px/1.3 ui-monospace,
+          monospace;
+        color: var(--text);
+        -webkit-user-select: none;
+        user-select: none;
+      }
+      .overlay {
+        margin: 8px;
+        padding: 10px 12px;
+        border-radius: 10px;
+        /* Semi-opaque dark panel — readable over light or dark scenery, still peripheral. */
+        background: rgba(11, 15, 20, 0.72);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        backdrop-filter: blur(2px);
+        width: 296px;
+      }
+      .fuel {
+        display: flex;
+        align-items: baseline;
+        gap: 8px;
+        margin-bottom: 6px;
+      }
+      .fuel-num {
+        font-size: 34px;
+        font-weight: 700;
+        line-height: 1;
+        font-variant-numeric: tabular-nums;
+      }
+      .fuel-label {
+        color: var(--muted);
+        font-size: 11px;
+      }
+      .row {
+        display: flex;
+        justify-content: space-between;
+        gap: 8px;
+        padding: 2px 0;
+        font-variant-numeric: tabular-nums;
+      }
+      .row .k {
+        color: var(--muted);
+      }
+      .row .v {
+        text-align: right;
+      }
+      .alert {
+        margin-top: 6px;
+        padding: 3px 8px;
+        border-radius: 6px;
+        font-size: 12px;
+        border: 1px solid rgba(255, 255, 255, 0.12);
+      }
+      .warn {
+        margin-top: 6px;
+        color: var(--caution);
+        font-size: 11px;
+      }
+      .sev-good {
+        color: var(--good);
+      }
+      .sev-caution {
+        color: var(--caution);
+      }
+      .sev-critical {
+        color: var(--critical);
+      }
+      .sev-neutral {
+        color: var(--text);
+      }
+      .sev-unknown {
+        color: var(--muted);
+      }
+      .alert.sev-critical {
+        border-color: var(--critical);
+      }
+      .alert.sev-caution {
+        border-color: var(--caution);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="overlay" id="overlay">
+      <div class="fuel">
+        <span class="fuel-num sev-unknown" id="fuel">—</span>
+        <span class="fuel-label">laps fuel</span>
+      </div>
+      <div class="row"><span class="k">Pos</span><span class="v" id="pos">—</span></div>
+      <div class="row"><span class="k">Ahead</span><span class="v" id="ahead">—</span></div>
+      <div class="row"><span class="k">Behind</span><span class="v" id="behind">—</span></div>
+      <div class="row"><span class="k">Last</span><span class="v" id="last">—</span></div>
+      <div class="row"><span class="k">Flag / pit</span><span class="v" id="flagpit">—</span></div>
+      <div class="warn" id="warn" hidden>⚠ Faster class approaching</div>
+      <div class="alert" id="alert" hidden></div>
+    </div>
+    <script type="module" src="./overlay.ts"></script>
+  </body>
+</html>

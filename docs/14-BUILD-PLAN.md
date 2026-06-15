@@ -667,9 +667,27 @@ half) and **the worker actually instantiating + using** the resolved provider/vo
 (the "mode switch takes effect" half) — lands with T10.1.
 Context: [15-COST-AND-FREE-OPERATION](15-COST-AND-FREE-OPERATION.md), [16-PLATFORM-PREREQUISITES](16-PLATFORM-PREREQUISITES.md), [08-INPUT-AND-CONTROLS](08-INPUT-AND-CONTROLS.md).
 
-**T6.4 — Overlay window** · _Claude Code_ · deps: T6.2
-Build: always-on-top transparent click-through overlay with a minimal widget set.
-Verify: overlay renders over a borderless window (human); off by default.
+**T6.4 — Overlay window** · _Claude Code (over-the-game verify human-assisted)_ · deps: T6.2 · **done (logic + window; over-the-game verify is the human half)**
+Build: ✅ a pure `buildOverlayModel(snapshot)` in `apps/desktop/src/overlay-model.ts` that **reuses
+`buildDashboardModel`** and projects the minimal docs/09 §Overlay widget set (fuel laps-left hero,
+nearest car ahead/behind with class + gap, faster-class strip, flag, next pit window, last lap, latest
+call-out) — every value already formatted/severity-classified/state-honest there, so the overlay
+re-derives no number. A second renderer entry (`renderer/overlay.html` + `overlay.ts`) paints it from the
+**same read-only snapshot stream** via the shared preload `EngineerBridge` (`textContent` only, strict
+CSP). `electron/main.ts` owns the overlay `BrowserWindow` — **transparent, frameless, always-on-top
+(`screen-saver` level), click-through (`setIgnoreMouseEvents`), `focusable:false`, `skipTaskbar`, hidden
+by default** — created lazily on first toggle; a view-only `OVERLAY_TOGGLE_CHANNEL` + `toggleOverlay()`
+on `EngineerBridge` (mirroring `openMicSettings`) show/hide it; an 🪟 Overlay button in the main window.
+**Read-only/advisory — the overlay only displays snapshots; the toggle carries no data toward the game
+(rule 5); click-through passes input to the game, never injects it.**
+Verify: ✅ `buildOverlayModel` unit-tested against the canonical fixtures (fuel hero severity, unknown →
+`—`, compact multi-class rivals + faster-class flag, latest call-out vs none) (5 tests; 545 green);
+typecheck (incl. electron) + lint green; electron-vite build emits `overlay.html` and the renderer stays
+lean (no ai/voice/radio/core runtime); compliance PASS. **Human (dev machine — borderless game):** toggle
+the overlay, confirm it floats over a **borderless/windowed** game and is click-through (docs/09 caveat:
+not exclusive-fullscreen DirectX). _Deferred (follow-up):_ drag-to-reposition, opacity/size presets, and
+a live "engineer speaking/listening" indicator (docs/09).
+Context: [09-UI-UX](09-UI-UX.md).
 
 ---
 

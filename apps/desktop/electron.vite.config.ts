@@ -49,7 +49,13 @@ export default defineConfig({
   renderer: {
     root: resolve(__dirname, 'renderer'),
     build: {
-      rollupOptions: { input: { index: resolve(__dirname, 'renderer/index.html') } },
+      rollupOptions: {
+        input: {
+          index: resolve(__dirname, 'renderer/index.html'),
+          // The in-race overlay (T6.4) — a second, separate HTML entry served by the same preload.
+          overlay: resolve(__dirname, 'renderer/overlay.html'),
+        },
+      },
     },
   },
 });

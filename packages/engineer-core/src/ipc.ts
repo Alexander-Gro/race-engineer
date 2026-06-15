@@ -50,9 +50,16 @@ export const ASK_CHANNEL = 'engineer:ask' as const;
 export const OPEN_MIC_SETTINGS_CHANNEL = 'engineer:open-mic-settings' as const;
 
 /**
+ * Renderer → main request to show/hide the in-race overlay window (docs/09 §Overlay, build-plan T6.4).
+ * A view concern, not a game-write path — main owns the always-on-top transparent overlay `BrowserWindow`
+ * (which consumes the same read-only snapshot stream) and just toggles its visibility.
+ */
+export const OVERLAY_TOGGLE_CHANNEL = 'engineer:toggle-overlay' as const;
+
+/**
  * The read-only API the preload script exposes to the renderer via `contextBridge`. The renderer can
- * *subscribe* to snapshots, *ask* the engineer a text question, and *open* the OS mic-settings page —
- * all read-only/advisory; it can never send anything toward the game.
+ * *subscribe* to snapshots, *ask* the engineer a text question, *open* the OS mic-settings page, and
+ * *toggle* the overlay window — all read-only/advisory; it can never send anything toward the game.
  */
 export interface EngineerBridge {
   /** Subscribe to throttled snapshots; returns an unsubscribe function. */
@@ -64,6 +71,8 @@ export interface EngineerBridge {
   ask(question: string): Promise<string>;
   /** Open the OS microphone-privacy settings page (mic-denied recovery, docs/16 §1). */
   openMicSettings(): Promise<void>;
+  /** Show/hide the in-race overlay (docs/09 §Overlay); resolves with its new visibility. */
+  toggleOverlay(): Promise<boolean>;
 }
 
 /**
