@@ -40,3 +40,5 @@ models/
 #   Trimmed test fixtures ARE committed explicitly, under packages/**/fixtures or test/fixtures.
 /recordings/
 *.replay.raw
+# Loose recordings dropped at the repo root (e.g. `pnpm record` output). Subdir fixtures are unaffected.
+/*.jsonl

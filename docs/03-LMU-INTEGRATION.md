@@ -700,6 +700,46 @@ race green-flag start). Closes most of the "still to verify" list above.
   against the in-game HUD whether this is the front or rear figure so T2.3 maps
   `aids.brakeBias.frontPct` correctly.
 
+## S1 — live confirmation #3 (recorded multi-class stint — 2026-06-15)
+
+First capture via **`pnpm record`** — so this validates the **canonical `RaceState`** (post-Normalizer,
+what the app/strategy actually consume), not raw struct fields. GT3 in a **53-car, 3-class**
+(`Hyper`/`LMP2`/`GT3`) race at Circuit de la Sarthe; ~10 min, **6400 frames @ 10 Hz**; the driver
+toggled TC/ABS/brake-bias on the fly. (164 MB raw — git-ignored, never committed.)
+
+**Confirmed (canonical)**
+- **Gap sign — CONFIRMED `− = ahead, + = behind`.** Cross-checked against race position over all 6400
+  frames: the car at `position − 1` (immediately ahead) had **negative `gapToPlayerS` in 6391/6400
+  frames (99.9%)**; the car at `position + 1` (behind) was **positive in 4922/4973 (99%)**. So the
+  undercut ahead/behind split (T7.4) and traffic forecasting (T7.5) use the right sign. ✓
+- **Lap times populate** — `lastLapS`/`bestLapS` non-null in 5468/6400 frames (after the first of 3
+  completed laps); sentinels → null correctly. ✓ (closes the S1#2 open item)
+- **Multi-class** `Hyper`/`LMP2`/`GT3` across 52 distinct cars. ✓
+- **Brake bias reads and tracks adjustments** — `aids.brakeBias.frontPct` moved **52.50 → 53.25** as the
+  driver changed it (canonical; raw `mRearBrakeBias` ~47–48 ⇒ Normalizer reports `frontPct ≈ 100 − rear`).
+- **Fuel reads** — full tank **84 L** (23/6400 frames glitched transiently to `0`).
+
+**New findings**
+- **TC / ABS / engine map are NOT readable** — `aids.tc`, `aids.abs`, `engine.map` were **null in all
+  6400 frames even though the driver toggled them live.** Definitive: not in the telemetry/scoring
+  buffers we decode today, so the dashboard correctly shows "—"; reading them is outstanding **S3** work.
+  Brake bias is the only aid currently read.
+- **`closingRateMps` has outlier spikes** — ~**14.5%** of per-car samples exceed `|50 m/s|` (up to
+  ±167 m/s), concentrated on **distant cars near the lap boundary** (gaps > 1 km): the
+  `(|prevGap| − |gap|)/dt` derivation spikes when the gap jumps discontinuously. The bulk (59% < 10 m/s)
+  is clean, and T7.5 only reads near cars, so the practical impact is small — but the field should be
+  **clamped/filtered in the Normalizer** (follow-up task).
+- **Fuel-per-lap / strategy did not compute** — only 3 laps + the 23 zero-fuel glitches starved the
+  rolling per-lap delta (`perLapAvgLiters`/`lapsRemainingEst` stayed null). Needs a clean multi-lap green
+  run; the zero-glitches are worth guarding in the Normalizer.
+
+**Still open**
+- **Spotter lateral sign** — `lateralPos` reads (±13–17 m across the grid) but no annotated side-by-side
+  was noted, so `+lateral = right` (T3.4) is still unconfirmed; needs a "car on my left at mm:ss" note.
+- **Brake-bias front/rear** — need the in-game **front** brake-bias % to confirm our `52.5–53.25` is the
+  front figure (leaning front — it's > 50%, typical for GT3).
+- **FCY / pit enums** — clean green throughout, no pit stop; still need a yellow + pit session.
+
 ## Rig verification backlog (consolidated)
 
 > Single actionable list for the next rig session(s). Pulls together the still-open spike
@@ -708,26 +748,24 @@ race green-flag start). Closes most of the "still to verify" list above.
 > lives in [14-BUILD-PLAN.md](14-BUILD-PLAN.md).
 
 ### A. Signs & conventions (cheap to confirm; high blast-radius if wrong)
-- [ ] **Gap sign** `gapToPlayerS` / `gapToPlayerM` is **+ = behind / − = ahead** — confirm
-  against one known car ahead and one behind. Underpins the undercut `rival: ahead|behind`
-  split (T7.4) and traffic approaching-behind-vs-slower-ahead (T7.5). The S1#2 capture saw
-  gaps *change* but did not annotate ahead/behind. (docs/04 documents the intended sign.)
-- [ ] **Spotter lateral sign** `+mPathLateral = driver's right` (T3.4 `rightIsPositive`) —
-  needs a capture where the user notes "car was on my left/right" (still open from S1#2).
-- [ ] **Brake-bias front/rear** — is `mRearBrakeBias` (~48–52%) the front or rear figure?
-  (T2.3 `aids.brakeBias.frontPct`; still open from S1#2.)
-- [ ] **Closing-rate end-to-end** — `closingRateMps` is Normalizer-derived
-  (`(|prevGap| − |gap|)/dt`, so **+ = closing** by construction, not an LMU field). Validate
-  on a recorded multi-class stint that a lapping car shows a clearly positive rate and an
-  escapee a negative one (T7.5). Lower risk — a recording check, not a HUD read.
+- [x] **Gap sign** `gapToPlayerS` / `gapToPlayerM` is **+ = behind / − = ahead** — **CONFIRMED S1#3**
+  (cross-checked vs race position over 6400 frames: car ahead 99.9% negative, car behind 99% positive).
+  Underpins the undercut ahead/behind split (T7.4) and traffic forecasting (T7.5).
+- [ ] **Spotter lateral sign** `+mPathLateral = driver's right` (T3.4 `rightIsPositive`) — still open
+  (S1#3 `lateralPos` reads ±13–17 m but no annotated side-by-side); needs a "car on my left/right" note.
+- [ ] **Brake-bias front/rear** — S1#3 canonical `frontPct` reads **52.5–53.25** (raw `mRearBrakeBias`
+  ~47–48 ⇒ `frontPct ≈ 100 − rear`); confirm vs the in-game **front** figure (T2.3 `aids.brakeBias.frontPct`).
+- [~] **Closing-rate end-to-end** — `closingRateMps` (`(|prevGap| − |gap|)/dt`, **+ = closing**) computes,
+  but S1#3 found **~14.5% outlier spikes** (`|rate| > 50 m/s`) on distant cars near the lap boundary →
+  **clamp/filter in the Normalizer** before T7.5 trusts it. Near-car values (the ones T7.5 uses) are clean.
 
 ### B. Enums & sentinels (need the right session to occur)
 - [ ] **FCY / yellow / pit-state enums** `mGamePhase` / `mYellowFlagState` / `mPitState` /
   `mUnderYellow` / `mFlag` — capture a session with a full-course yellow and a pit entry.
   Gates the FCY/SC opportunism work (T7.6) and `flags.global` mapping (T2.3).
 - [ ] **Sector-flag enum** `mSectorFlag` (observed 1 and 11) — decode meanings.
-- [ ] **Lap-time population** — confirm `mLastLapTime`/`mBestLapTime` populate with real
-  values (only the `0.000`/`-1.000` sentinels seen so far; low risk, sentinels → null in T2.3).
+- [x] **Lap-time population** — **CONFIRMED S1#3**: `lastLapS`/`bestLapS` populate with real values
+  after the first completed lap (5468/6400 frames non-null); sentinels → null correctly.
 
 ### C. Strategy-model calibration inputs (real values the pure models need to be *useful*)
 > The T7.x models are unit-tested with caller-supplied numbers; in production these inputs
@@ -987,8 +1025,11 @@ Get-ChildItem -Path $SET -Recurse -Filter *.svm | Sort-Object LastWriteTime -des
     (`mTractionControl`, `mAntiLockBrakes`, `mStabilityControl` as `unsigned char`) — **not**
     the in-car TC1–6 / ABS / engine-map *index* the driver toggles on the wheel. So the
     cockpit aid *levels* likely come from the REST API (S2) or the setup file (S4).
-    **NEEDS LIVE VERIFICATION:** that LMU populates `mRearBrakeBias`, and whether any
-    extended/REST field exposes the current TC/ABS/map index in LMU. See S3.
+    **LIVE-CONFIRMED (S1#3, 2026-06-15):** `mRearBrakeBias` **populates** (canonical `frontPct`
+    52.5–53.25, tracks the driver's adjustments), and **TC/ABS/engine-map stayed `null` even while the
+    driver toggled them on the wheel** — so the cockpit aid *levels* are confirmed **not** in telemetry
+    and must come from REST (S2) or the setup file (S4). Front-vs-rear identity still needs the in-game
+    HUD number. See S3 / S1#3.
 - [ ] **S2** REST base URL/port, endpoint list, payload schemas, read-only?
   - *desk-research (confirmed from public tool sources — see "S2 / S4 desk-research
     findings"):* **Base URL `http://localhost:6397`** (corroborated by the LMU community REST
