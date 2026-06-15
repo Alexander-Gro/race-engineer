@@ -15,7 +15,13 @@ import {
   SNAPSHOT_CHANNEL,
   type EngineerSnapshot,
 } from '@race-engineer/engineer-core';
-import type { AskRequestMessage, ConfigureMessage, WorkerMessage } from '../src/ask';
+import type {
+  AskRequestMessage,
+  AudioEndedRelayMessage,
+  ConfigureMessage,
+  WorkerMessage,
+} from '../src/ask';
+import { AUDIO_ENDED_CHANNEL, AUDIO_OUT_CHANNEL } from '../src/audio-bridge';
 import { MIC_SETTINGS_DEEPLINK } from '../src/audio-io';
 import { resolveLlmRouteConfig } from '../src/llm-route';
 import {
@@ -55,6 +61,9 @@ import { fsSettingsStorage, SafeStorageSecretStore } from './stores';
  */
 
 let worker: UtilityProcess | null = null;
+// The main window — the single audio output target (the overlay never plays audio, to avoid double
+// playback). Assigned in createWindow; the audio bridge sends play/stop commands here only.
+let mainWindow: BrowserWindow | null = null;
 // The most recent snapshot, replayed to any window once it finishes loading so a freshly-opened or
 // reloaded window paints immediately instead of waiting for the next throttled tick.
 let lastSnapshot: EngineerSnapshot | null = null;
@@ -104,6 +113,10 @@ const createWindow = (): BrowserWindow => {
     if (lastSnapshot && !window.isDestroyed()) {
       window.webContents.send(SNAPSHOT_CHANNEL, lastSnapshot);
     }
+  });
+  mainWindow = window; // the audio bridge's output target
+  window.on('closed', () => {
+    if (mainWindow === window) mainWindow = null;
   });
   return window;
 };
@@ -190,6 +203,12 @@ const startEngineerWorker = (): void => {
         pendingAsks.delete(message.id);
         resolve(message.answer);
       }
+    } else if (message.type === 'audio') {
+      // The voice queue (worker) wants the renderer to play/stop a clip. Send to the main window
+      // only — the overlay shares the snapshot feed but must not double up the audio.
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send(AUDIO_OUT_CHANNEL, message.audio);
+      }
     } else if (message.type === 'ready') {
       // The worker attached its listener — safe to send the engineer route now (no fork race).
       pushEngineerConfig?.();
@@ -233,6 +252,14 @@ const main = (): void => {
   // Show/hide the in-race overlay (docs/09 §Overlay, T6.4). View-only toggle — the overlay reads the
   // same snapshot stream; there is no game-write path.
   ipcMain.handle(OVERLAY_TOGGLE_CHANNEL, () => toggleOverlay());
+
+  // Renderer reports a clip finished playing → relay to the worker so the voice queue drains the next
+  // utterance (T10.1 audio-out bridge). Fire-and-forget (`on`, not `handle`); carries no game data.
+  ipcMain.on(AUDIO_ENDED_CHANNEL, (_event, pid: unknown) => {
+    if (typeof pid === 'number') {
+      worker?.postMessage({ type: 'audio-ended', pid } satisfies AudioEndedRelayMessage);
+    }
+  });
 
   void app.whenReady().then(() => {
     // Settings + secrets (T6.3). Stores live in the user-data dir (resolved after `ready`); keys are

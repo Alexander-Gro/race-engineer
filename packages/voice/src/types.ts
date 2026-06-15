@@ -16,12 +16,27 @@ export interface AudioChunk {
   data: Uint8Array;
 }
 
+/** Raw synthesized audio for playback. Opaque to the queue; the sink/renderer decodes + plays it. */
+export interface AudioData {
+  /** The synthesized audio bytes (a full clip; structured-clone-safe across the worker↔renderer IPC). */
+  data: Uint8Array;
+  /** Container/codec hint for the decoder (e.g. `audio/wav`, `audio/mpeg`); a decoder may sniff if absent. */
+  mimeType?: string;
+}
+
 /** A playable, possibly pre-rendered, audio item. */
 export interface AudioClip {
   id: string;
   /** Human-readable label (the phrase / transcript snippet) — handy for tests/logs. */
   label?: string;
   durationMs?: number;
+  /**
+   * The synthesized audio bytes, once a TTS provider produces them (sentence-streamed replies via
+   * `synthesizeClip`; pre-rendered Tier-0 clips once the real provider retains them). Absent ⇒
+   * metadata-only (the fakes, or a not-yet-synthesized phrase) → the sink plays silence for
+   * `durationMs`, so the queue still drains.
+   */
+  audio?: AudioData;
 }
 
 /** A handle to in-progress playback. */

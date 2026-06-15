@@ -8,6 +8,12 @@ import {
   type EngineerSnapshot,
 } from '@race-engineer/engineer-core';
 import {
+  AUDIO_ENDED_CHANNEL,
+  AUDIO_OUT_CHANNEL,
+  type AudioOutApi,
+  type AudioOutMessage,
+} from '../src/audio-bridge';
+import {
   PTT_EVENT_CHANNEL,
   PTT_GET_CHANNEL,
   PTT_MAP_BEGIN_CHANNEL,
@@ -30,9 +36,11 @@ import {
 /**
  * Preload (build-plan T6.1 / Track A text-ask + T6.3 settings + T10.1 PTT mapping). Exposes three
  * read-only/advisory bridges via `contextBridge`: `window.engineer` (subscribe to snapshots, ask a text
- * question, open the OS mic-settings page), `window.settings` (config CRUD + BYO-key management), and
- * `window.ptt` (map the push-to-talk wheel button). None can send anything toward the game (CLAUDE.md
- * rule 5). `contextIsolation` keeps Node out of the renderer.
+ * question, open the OS mic-settings page), `window.settings` (config CRUD + BYO-key management),
+ * `window.ptt` (map the push-to-talk wheel button), and `window.audioOut` (play the engineer's voice
+ * clips + report completion — T10.1 audio-out bridge). None can send anything toward the game (CLAUDE.md
+ * rule 5) — `audioOut` carries the engineer's own audio out + an ended ack. `contextIsolation` keeps
+ * Node out of the renderer.
  */
 const bridge: EngineerBridge = {
   onSnapshot(listener: (snapshot: EngineerSnapshot) => void): () => void {
@@ -78,6 +86,20 @@ const ptt: PttApi = {
   },
 };
 
+// Audio-out bridge (T10.1): the worker's voice queue drives playback here; we play the clips and ack
+// completion so the queue drains. Output-only — no data flows toward the game.
+const audioOut: AudioOutApi = {
+  onCommand(listener: (msg: AudioOutMessage) => void): () => void {
+    const handler = (_event: IpcRendererEvent, msg: AudioOutMessage): void => listener(msg);
+    ipcRenderer.on(AUDIO_OUT_CHANNEL, handler);
+    return () => ipcRenderer.removeListener(AUDIO_OUT_CHANNEL, handler);
+  },
+  ended(pid: number): void {
+    ipcRenderer.send(AUDIO_ENDED_CHANNEL, pid);
+  },
+};
+
 contextBridge.exposeInMainWorld('engineer', bridge);
 contextBridge.exposeInMainWorld('settings', settings);
 contextBridge.exposeInMainWorld('ptt', ptt);
+contextBridge.exposeInMainWorld('audioOut', audioOut);

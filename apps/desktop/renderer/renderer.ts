@@ -1,4 +1,6 @@
 import type { EngineerBridge } from '@race-engineer/engineer-core';
+import type { AudioClip, AudioSink, PlaybackHandle } from '@race-engineer/voice';
+import { createAudioReceiver, type AudioOutApi } from '../src/audio-bridge';
 import {
   applyOutputDevice,
   listOutputDevices,
@@ -46,6 +48,7 @@ declare global {
     engineer: EngineerBridge;
     settings: SettingsApi;
     ptt: PttApi;
+    audioOut: AudioOutApi;
   }
 }
 
@@ -470,6 +473,75 @@ const wireVoiceBar = (): void => {
   refreshOutputs();
 };
 wireVoiceBar();
+
+/**
+ * The tiered voice output (T10.1 audio-out bridge, docs/07). The Core **worker** runs the
+ * {@link VoicePlayer} (priority queue, preemption, barge-in) off the UI thread, but a utility process
+ * has no audio device — so it drives playback *here* over `window.audioOut`. Each clip plays on the
+ * shared `engineer-audio` element (so the output-device picker routes the engineer's voice), and its
+ * completion is reported back so the queue drains the next utterance. A metadata-only clip (no
+ * synthesized bytes yet — the free FakeTtsProvider default) "plays" silently for its `durationMs`; the
+ * real cloud/local TTS that fills the bytes is the next slice. Output-only — no game path (rule 5).
+ */
+const wireAudioOut = (): void => {
+  if (!window.audioOut) return;
+  const audio = document.getElementById('engineer-audio') as HTMLAudioElement | null;
+  if (!audio) return;
+
+  const backend: AudioSink = {
+    play(clip: AudioClip, opts: { volume: number; onEnded: () => void }): PlaybackHandle {
+      if (!clip.audio) {
+        // No synthesized bytes: keep the queue moving by completing after the estimated duration.
+        const timer = window.setTimeout(() => opts.onEnded(), clip.durationMs ?? 0);
+        return { stop: () => window.clearTimeout(timer), setVolume: () => {} };
+      }
+      // Copy into a fresh ArrayBuffer-backed view (the IPC-cloned bytes are `ArrayBufferLike`, which
+      // the DOM `BlobPart` type rejects) — cheap for a sentence-sized clip.
+      const blob = new Blob(
+        [new Uint8Array(clip.audio.data)],
+        clip.audio.mimeType ? { type: clip.audio.mimeType } : undefined,
+      );
+      const url = URL.createObjectURL(blob);
+      let done = false;
+      const cleanup = (): void => {
+        if (done) return;
+        done = true;
+        audio.removeEventListener('ended', onEnded);
+        audio.removeEventListener('error', onError);
+        URL.revokeObjectURL(url);
+      };
+      const onEnded = (): void => {
+        cleanup();
+        opts.onEnded();
+      };
+      // Never strand the queue on a decode/playback error — treat it as a (silent) completion.
+      const onError = (): void => {
+        cleanup();
+        opts.onEnded();
+      };
+      audio.addEventListener('ended', onEnded);
+      audio.addEventListener('error', onError);
+      audio.src = url;
+      audio.volume = opts.volume;
+      void audio.play().catch(onError);
+      return {
+        // stop() = preempt/barge-in: halt playback, no onEnded (matches the AudioSink contract).
+        stop: () => {
+          audio.pause();
+          cleanup();
+        },
+        setVolume: (v: number) => {
+          audio.volume = v;
+        },
+      };
+    },
+    setOutputDevice: (id: string) => void applyOutputDevice(audio, id),
+  };
+
+  const receive = createAudioReceiver(backend, (m) => window.audioOut.ended(m.pid));
+  window.audioOut.onCommand(receive);
+};
+wireAudioOut();
 
 /**
  * The settings panel (T6.3): profile / engineer (LLM) / proactivity persist via `window.settings`,

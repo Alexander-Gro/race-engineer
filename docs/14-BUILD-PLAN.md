@@ -201,10 +201,30 @@ in a small, reviewable, green-tested change.
   payload-number/LLM phrasing being the premium `templatePhraser`/native path). No number invented — the
   Core already detected the event (rule 1). Imports are **type-only** so the renderer pulls no
   ai/voice/radio/core runtime (build-verified: 10 modules, no AI graph). 12 tests, 540 green; compliance
-  PASS (rule 2 Tier-0 fix applied + re-reviewed).) **Remaining T10.1 (native/rig):** real Piper/Kokoro
-  TTS + faster-whisper STT engines, the **mic→STT input** path, and the renderer↔worker audio streaming
-  for the tiered `VoicePlayer` pipeline (wiring the configured provider + `selectTtsProvider` into the
-  reactive loop) — the premium/native voice path the free Web-Speech call-outs above stand in for.
+  PASS (rule 2 Tier-0 fix applied + re-reviewed).) ~~**audio-out bridge**~~ (done 2026-06-15 — the
+  tiered `VoicePlayer` now plays through the **renderer↔worker audio bridge**, the first of three
+  voice-loop slices. New **`apps/desktop/src/audio-bridge.ts`**: a pure `IpcAudioSink` (worker-side
+  `AudioSink` that serializes `play`/`stop`/`volume`/`device` to the renderer over an injected `post`,
+  correlating completion by a monotonic **playback id** — clip ids aren't unique since Tier-0 clips are
+  reused) + `createAudioReceiver` (renderer-side: drives a real `AudioSink` backend and posts `ended`
+  back), both **unit-tested over injected ports** incl. a round-trip through a real `VoicePlayer`
+  (queue drain on renderer-reported end + SPOTTER-preempts-CHATTER across the bridge; 9 tests, 582
+  green). `AudioClip` gained an optional `audio` byte payload and `synthesizeClip` now **retains** the
+  synthesized bytes (it discarded them before). Wired Electron: worker posts `audio` messages via
+  `parentPort`; `main` relays them to the **main window only** (the overlay never plays audio) and
+  relays the renderer's `audio-ended` back; `preload` exposes `window.audioOut`; the renderer plays
+  clip bytes via Web Audio (Blob URL) on the shared `engineer-audio` element so the output-device
+  picker routes the engineer voice. Replaces the old silent `headlessAudioSink`. Read-only/advisory —
+  audio out + an ended ack only, no game path; compliance PASS (rules 5/2/6). **Not yet audible:** the
+  default `FakeTtsProvider` produces metadata-only clips (the queue drains silently); audibility needs
+  a real TTS to fill the bytes — the next slice. _Verify split (per [[windows-only-runtime-mac-dev]]):_
+  the Web-Audio playback + bridge verify on the dev **Mac**; the OS audio sink + device routing are a
+  Windows-runtime verify.) **Remaining T10.1 (next slices):** (1) **mic→STT input** path (renderer
+  `getUserMedia` → worker STT; the key stays in main/worker, never the renderer) and (2)
+  **provider-wiring** — a real TTS/STT into the reactive loop (`selectTtsProvider` + the configured
+  provider): **cloud BYO-key** is the fastest audible path on the dev Mac, **local Piper/Kokoro +
+  faster-whisper** is the free default (native binaries — the rig/native half). Once those land the
+  premium voice path supersedes the free Web-Speech call-outs the renderer uses today.
   M7.7–M7.9 / M8 / M9 offline-strategy depth are paused until the app is launchable. (Offline glue
   done: `get_stint_plan` + `project_pit_window` are now wired into the AI read-only tool surface,
   reading a precomputed `ctx.stintPlan` (T7.3) like `get_fuel_plan` reads `ctx.fuelPlan`; 373 green.

@@ -27,20 +27,43 @@ export const splitSentences = (text: string): string[] => {
 
 let clipSeq = 0;
 
+/** Concatenate streamed chunks into one buffer (a buffered clip for the current buffered sink). */
+const concatChunks = (chunks: readonly Uint8Array[], total: number): Uint8Array => {
+  const out = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    out.set(chunk, offset);
+    offset += chunk.length;
+  }
+  return out;
+};
+
 /**
  * Drain a {@link TtsProvider} stream into a single playable clip. The clip's `label` is the
  * spoken text (so the transcript log and tests can see exactly what was said); `durationMs` is
- * a rough estimate from the synthesized byte count (display only).
+ * a rough estimate from the synthesized byte count (display only). The synthesized bytes are
+ * **retained** on `clip.audio` so a real sink can play them (a metadata-only clip — zero bytes —
+ * leaves `audio` undefined and plays silent).
  */
 export const synthesizeClip = async (
   tts: TtsProvider,
   text: string,
   voice: VoiceId,
 ): Promise<AudioClip> => {
+  const chunks: Uint8Array[] = [];
   let bytes = 0;
-  for await (const chunk of tts.synthesizeStream(text, voice)) bytes += chunk.data.length;
+  for await (const chunk of tts.synthesizeStream(text, voice)) {
+    chunks.push(chunk.data);
+    bytes += chunk.data.length;
+  }
   clipSeq += 1;
-  return { id: `tts-${clipSeq}`, label: text, durationMs: Math.max(40, bytes * 8) };
+  const clip: AudioClip = {
+    id: `tts-${clipSeq}`,
+    label: text,
+    durationMs: Math.max(40, bytes * 8),
+  };
+  if (bytes > 0) clip.audio = { data: concatChunks(chunks, bytes) };
+  return clip;
 };
 
 export interface SpeakOptions {

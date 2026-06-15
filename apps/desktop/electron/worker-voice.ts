@@ -1,36 +1,33 @@
-import {
-  FakeTtsProvider,
-  prerenderTier0,
-  type AudioClip,
-  type AudioSink,
-  type PlaybackHandle,
-} from '@race-engineer/voice';
+import { FakeTtsProvider, prerenderTier0, type VoiceId } from '@race-engineer/voice';
+import { IpcAudioSink, type AudioOutMessage } from '../src/audio-bridge';
 import { EngineerVoice } from '../src/voice-engine';
 
 /**
- * The worker's **free/offline proactive voice** (Track A voice path). It runs the radio layer in
- * the shell today with **no key, no LLM, and no audio device** — so the proactive call-out routing
- * is exercised end-to-end (logged) while the real OS audio sink, mic, wheel PTT, and a configured
- * provider land in T4.5/T6.3/T10.1. Read-only/advisory — produces (silent) audio only.
+ * The worker's **proactive voice** (Track A voice path, build-plan T10.1). It runs the radio layer
+ * in the Core worker with no key and no LLM (free/offline default = `templatePhraser`), and now
+ * drives a **real audio sink across the renderer↔worker bridge**: the {@link IpcAudioSink} serializes
+ * the {@link VoicePlayer}'s play/stop commands to the renderer (over `post`), which plays them via Web
+ * Audio and reports completion back through {@link WorkerVoice.handleAudioEnded}.
+ *
+ * Audible once a real TTS fills the clip bytes (`AudioClip.audio`); the default {@link FakeTtsProvider}
+ * produces metadata-only clips, so the queue drains (renderer completes by `durationMs`) but plays
+ * silence — the cloud/local TTS wiring is the next slice. Read-only/advisory — audio out only, no game
+ * path.
  */
+export interface WorkerVoice {
+  voice: EngineerVoice;
+  /** Feed a renderer-reported natural clip completion back to the queue (drains the next utterance). */
+  handleAudioEnded: (pid: number) => void;
+}
 
-/**
- * A no-op {@link AudioSink}: it "plays" a clip by completing it after its (optional) duration, so
- * the priority queue drains exactly as it will with a real device — but emits no sound. Replaced by
- * the OS/Electron output device in T4.5/T10.1.
- */
-const headlessAudioSink = (): AudioSink => ({
-  play(clip: AudioClip, opts: { volume: number; onEnded: () => void }): PlaybackHandle {
-    const timer = setTimeout(opts.onEnded, clip.durationMs ?? 0);
-    return { stop: () => clearTimeout(timer), setVolume: () => {} };
-  },
-  setOutputDevice: () => {},
-});
-
-/** Build the free proactive voice (template phraser + fake TTS + headless sink). Reactive PTT = T4.5. */
-export const createWorkerVoice = async (): Promise<EngineerVoice> => {
+/** Build the proactive voice over the renderer audio bridge. `post` ships commands to the renderer. */
+export const createWorkerVoice = async (
+  post: (msg: AudioOutMessage) => void,
+): Promise<WorkerVoice> => {
   const tts = new FakeTtsProvider();
-  const voice = 'engineer-1';
+  const voice: VoiceId = 'engineer-1';
   const tier0Clips = await prerenderTier0(tts, voice);
-  return new EngineerVoice({ tts, sink: headlessAudioSink(), tier0Clips, voice });
+  const sink = new IpcAudioSink(post);
+  const engineerVoice = new EngineerVoice({ tts, sink, tier0Clips, voice });
+  return { voice: engineerVoice, handleAudioEnded: (pid) => sink.handleEnded(pid) };
 };

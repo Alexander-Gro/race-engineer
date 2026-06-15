@@ -8,6 +8,7 @@ export type {
   VoiceId,
   AudioChunk,
   AudioClip,
+  AudioData,
   PlaybackHandle,
   AudioSink,
   TtsProvider,

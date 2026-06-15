@@ -8,6 +8,7 @@ import {
 } from '@race-engineer/ai';
 import type { EngineerSnapshot } from '@race-engineer/engineer-core';
 import type { ProactivityLevel } from '@race-engineer/radio';
+import type { AudioOutMessage } from './audio-bridge';
 
 /**
  * The free/no-key "ask the engineer" glue for the desktop app (Track A — "it answers you"). It
@@ -83,7 +84,9 @@ export class AskResponder {
 export type WorkerMessage =
   | { type: 'snapshot'; snapshot: EngineerSnapshot }
   | { type: 'ask-reply'; id: number; answer: string }
-  | { type: 'ready' };
+  | { type: 'ready' }
+  // The voice queue (in the worker) asks the renderer to play/stop a clip — main relays it.
+  | { type: 'audio'; audio: AudioOutMessage };
 
 /** A renderer ask relayed to the Core, correlated by `id`. */
 export interface AskRequestMessage {
@@ -100,5 +103,11 @@ export interface ConfigureMessage {
   proactivity: ProactivityLevel;
 }
 
+/** Main → worker: the renderer reported a clip finished playing (drains the voice queue). */
+export interface AudioEndedRelayMessage {
+  type: 'audio-ended';
+  pid: number;
+}
+
 /** Everything main can send the worker. */
-export type MainToWorkerMessage = AskRequestMessage | ConfigureMessage;
+export type MainToWorkerMessage = AskRequestMessage | ConfigureMessage | AudioEndedRelayMessage;

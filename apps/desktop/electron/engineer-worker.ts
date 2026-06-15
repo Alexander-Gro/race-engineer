@@ -21,15 +21,19 @@ import type { EngineerVoice } from '../src/voice-engine';
  *     (koffi, Windows-only native) is **dynamically imported only when selected**, so the synthetic
  *     demo never loads koffi. Until LMU is in a session it emits nothing — the dashboard waits.
  *
- * `ENGINEER_VOICE=1` enables the proactive voice preview (free/offline; **audio is silent until the
- * real OS sink lands in T4.5/T10.1** — routed call-outs are logged). Off by default so the dashboard
- * demo is untouched, and the voice/radio/ai graph is **dynamically imported only when enabled**.
+ * `ENGINEER_VOICE=1` enables the proactive voice preview (free/offline). The voice queue now plays
+ * through the **renderer audio-out bridge** (T10.1) — clips are posted as `audio` messages and the
+ * renderer plays them; it's **audible once a real TTS fills the clip bytes** (next slice — the default
+ * FakeTtsProvider plays silence but the queue drains). Off by default so the dashboard demo is
+ * untouched, and the voice/radio/ai graph is **dynamically imported only when enabled**.
  */
 const responder = new AskResponder();
 // The proactive voice (built in the IIFE when ENGINEER_VOICE=1) + the latest configured chattiness.
 // `configure` may arrive before the voice is built (it's posted on `ready`), so hold the level and
 // apply it once the voice exists.
 let voice: EngineerVoice | null = null;
+// Feeds renderer-reported clip completions back to the voice queue; null until the voice is built.
+let handleAudioEnded: ((pid: number) => void) | null = null;
 let proactivity: ProactivityLevel = 'normal';
 
 // Main-relayed messages on the parent port: text questions, and the engineer-route config.
@@ -65,6 +69,9 @@ process.parentPort.on('message', (event: { data: MainToWorkerMessage }): void =>
     }
     proactivity = msg.proactivity;
     voice?.setProactivity(proactivity); // applied here, or after the voice is built (see below)
+  } else if (msg?.type === 'audio-ended') {
+    // The renderer finished playing a clip → drain the voice queue's next utterance.
+    handleAudioEnded?.(msg.pid);
   }
 });
 
@@ -74,11 +81,18 @@ process.parentPort.postMessage({ type: 'ready' } satisfies WorkerMessage);
 void (async (): Promise<void> => {
   const source = process.env['ENGINEER_SOURCE'] === 'lmu' ? 'lmu' : 'synthetic';
 
-  // Proactive voice preview — opt-in, free/offline, silent until T4.5 wires a real audio sink.
-  voice =
-    process.env['ENGINEER_VOICE'] === '1'
-      ? await (await import('./worker-voice')).createWorkerVoice()
-      : null;
+  // Proactive voice preview — opt-in, free/offline. The voice queue plays through the renderer over
+  // the audio bridge (commands posted as `audio` WorkerMessages); audible once a real TTS fills the
+  // clip bytes (next slice — the FakeTtsProvider default plays silence but the queue still drains).
+  if (process.env['ENGINEER_VOICE'] === '1') {
+    const workerVoice = await (
+      await import('./worker-voice')
+    ).createWorkerVoice((audio) =>
+      process.parentPort.postMessage({ type: 'audio', audio } satisfies WorkerMessage),
+    );
+    voice = workerVoice.voice;
+    handleAudioEnded = workerVoice.handleAudioEnded;
+  }
   voice?.setProactivity(proactivity); // apply any config that arrived before the voice was built
   const activeVoice = voice; // a const so the closures below narrow `null` away (configure uses `voice`)
 
