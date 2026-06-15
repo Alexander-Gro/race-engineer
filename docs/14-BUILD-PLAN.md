@@ -164,6 +164,11 @@ in a small, reviewable, green-tested change.
   system runs live in the app now — the proactive *voice* routing of those events is still the radio
   layer. Feeding strategy into the AI `ctx.fuelPlan`/`ctx.stintPlan` lands with the radio loop;
   stint/undercut need the per-track calibration inputs (rig backlog).
+  **Template-mode answering done (2026-06-15):** `templateAnswer(question, ctx)` in `ai` — the
+  free/offline/no-key reactive engineer (docs/15): matches a question to an intent, reads the
+  read-only tools, and phrases a grounded answer (fuel/pit/tyres/position/lap-time/aids) quoting tool
+  numbers verbatim, no LLM. Returns null on no match → caller falls back to a configured LLM. Next:
+  wire it to a text-ask UI + the snapshot→`RaceContext` glue ("it answers you", free, no key).
 - **Track B (needs the Windows rig + LMU) — app can now drive it (2026-06-15):** the launchable app
   is the test harness. **`pnpm dev:lmu`** drives the dashboard from the **live LMU shared-memory
   source** (`apps/desktop/src/lmu-host.ts` — `LmuAdapter` + `createLmuNormalizer`, dynamically loaded

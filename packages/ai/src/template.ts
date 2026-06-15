@@ -1,0 +1,123 @@
+import type { RaceContext } from './context';
+import { toolRegistry } from './tools';
+
+/**
+ * Template-mode reactive answering (docs/15 §free routes) — the **free, offline, no-key** default
+ * for "ask the engineer". A pure, deterministic responder: it matches a typed/spoken question to an
+ * intent, reads the **read-only tools** (the same ones the LLM uses), and phrases a short answer that
+ * quotes the tool numbers **verbatim**. No LLM, so no hallucination risk and nothing to pay for
+ * (CLAUDE.md rule 1 holds trivially — the strategy math is the tools', never invented here).
+ *
+ * Returns `null` when no intent matches, so a caller can fall back to a configured LLM (Ollama/cloud)
+ * or a "didn't catch that". Read-only/advisory throughout.
+ */
+
+const registry = toolRegistry();
+const tool = (name: string, ctx: RaceContext): Record<string, unknown> =>
+  registry.get(name)!.handler({}, ctx) as Record<string, unknown>;
+
+const n = (v: unknown): number | null => (typeof v === 'number' && Number.isFinite(v) ? v : null);
+const round = (v: unknown, digits = 0): string => {
+  const x = n(v);
+  return x === null ? '—' : x.toFixed(digits);
+};
+
+interface Intent {
+  readonly test: RegExp;
+  readonly respond: (ctx: RaceContext) => string;
+}
+
+const INTENTS: readonly Intent[] = [
+  {
+    // Pit / stint timing — check before "fuel" so "when do I pit" routes here. Bare "stop" is too
+    // ambiguous ("stop saving", "stop pushing"), so it's left to fall through to the LLM.
+    test: /\b(pit|box|stint)\b/,
+    respond: (ctx) => {
+      const pw = tool('project_pit_window', ctx);
+      if (pw.available) {
+        const target = n(pw.recommendedLap);
+        return `Next pit window is lap ${round(pw.earliestLap)} to ${round(pw.latestLap)}${
+          target !== null ? `, aim for lap ${round(target)}` : ''
+        }.`;
+      }
+      if (tool('get_stint_plan', ctx).available) {
+        return 'On the current plan you can run to the flag without another stop.';
+      }
+      return "No pit plan yet — I'm still working out your consumption.";
+    },
+  },
+  {
+    test: /\bfuel\b|laps?\s+(of\s+fuel|left|remaining)|how\s+much\s+fuel/,
+    respond: (ctx) => {
+      const fp = tool('get_fuel_plan', ctx);
+      if (!fp.available) return 'Still learning your fuel use — give me a couple more green laps.';
+      let s = `About ${round(fp.lapsRemainingOnFuel)} laps of fuel left, ${round(fp.perLapLiters, 2)} per lap.`;
+      if (n(fp.litersToAddNextStop) !== null) {
+        s += ` Plan to add ${round(fp.litersToAddNextStop)} litres at the next stop.`;
+      }
+      if (n(fp.fuelSaveTargetLitersPerLap) !== null) {
+        s += ` Save ${round(fp.fuelSaveTargetLitersPerLap, 2)} a lap to stretch it.`;
+      }
+      return s;
+    },
+  },
+  {
+    // Word-bounded so it can't fire inside "attempts" / "tempo" / "swear".
+    test: /\b(tyre|tire|wear|temp)s?\b/,
+    respond: (ctx) => {
+      const wheels = tool('get_tire_status', ctx).wheels as Array<Record<string, unknown>>;
+      const wears = wheels.map((w) => n(w.wear01)).filter((x): x is number => x !== null);
+      const compound = wheels[0]?.compound;
+      const worst = wears.length > 0 ? Math.min(...wears) : null;
+      const prefix = typeof compound === 'string' ? `${compound} tyres` : 'Tyres';
+      return worst === null
+        ? `${prefix} — no wear reading yet.`
+        : `${prefix}, most-worn corner around ${Math.round(worst * 100)}%.`;
+    },
+  },
+  {
+    test: /\b(position|where\s+am\s+i|gap|ahead|behind|rival|who'?s?)\b/,
+    respond: (ctx) => {
+      const rs = tool('get_race_state', ctx);
+      let s = `You're P${round(rs.position)}`;
+      if (n(rs.classPosition) !== null) s += ` (P${round(rs.classPosition)} in class)`;
+      s += '.';
+      if (n(rs.carAheadGapS) !== null)
+        s += ` ${round(Math.abs(n(rs.carAheadGapS)!), 1)}s to the car ahead.`;
+      if (n(rs.carBehindGapS) !== null)
+        s += ` ${round(n(rs.carBehindGapS), 1)}s to the one behind.`;
+      return s;
+    },
+  },
+  {
+    test: /\b(last\s+lap|best\s+lap|lap\s+time|pace)\b/,
+    respond: (ctx) => {
+      const rs = tool('get_race_state', ctx);
+      if (n(rs.lastLapS) === null) return 'No lap time yet.';
+      let s = `Last lap ${round(rs.lastLapS, 1)}`;
+      if (n(rs.bestLapS) !== null) s += `, best ${round(rs.bestLapS, 1)}`;
+      return `${s}.`;
+    },
+  },
+  {
+    test: /\b(tc|abs|traction|brake\s*bias|engine\s*map|aids?)\b/,
+    respond: (ctx) => {
+      const a = tool('get_current_aids', ctx);
+      const tc = a.tc as { value?: unknown } | null;
+      const abs = a.abs as { value?: unknown } | null;
+      return `TC ${round(tc?.value)}, ABS ${round(abs?.value)}, brake bias ${round(a.brakeBiasFrontPct, 1)}%, map ${round(a.engineMap)}.`;
+    },
+  },
+];
+
+/**
+ * Answer a question from the read-only tools without an LLM (docs/15 template mode), or `null` when
+ * no intent matches. Numbers are quoted verbatim from the tools — never recomputed.
+ */
+export const templateAnswer = (question: string, ctx: RaceContext): string | null => {
+  const q = question.toLowerCase();
+  for (const intent of INTENTS) {
+    if (intent.test.test(q)) return intent.respond(ctx);
+  }
+  return null;
+};
