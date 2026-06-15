@@ -67,6 +67,15 @@ describe('templatePhraser', () => {
     );
     expect(templatePhraser(ev('lap_completed'))).toBeNull();
   });
+
+  it('phrases the strategy pit-window call-outs from the payload (T7.9)', () => {
+    expect(
+      templatePhraser(ev('pit_window_open', { earliestLap: 8, latestLap: 22 }, { tier: 2 })),
+    ).toBe("Pit window's open — lap 8 to 22.");
+    expect(templatePhraser(ev('box_this_lap', { latestLap: 22 }, { tier: 1 }))).toBe(
+      'Box this lap.',
+    );
+  });
 });
 
 describe('defaultVoicePriority', () => {
@@ -78,6 +87,13 @@ describe('defaultVoicePriority', () => {
       VoicePriority.WARNING,
     );
     expect(defaultVoicePriority(ev('fuel_low', { thresholdLaps: 4 }, { tier: 1 }))).toBe(
+      VoicePriority.STRATEGY,
+    );
+  });
+
+  it('routes the strategy call-outs: box_this_lap is urgent, pit_window_open is a heads-up', () => {
+    expect(defaultVoicePriority(ev('box_this_lap', {}, { tier: 1 }))).toBe(VoicePriority.WARNING);
+    expect(defaultVoicePriority(ev('pit_window_open', {}, { tier: 2 }))).toBe(
       VoicePriority.STRATEGY,
     );
   });

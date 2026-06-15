@@ -3,6 +3,7 @@ import {
   fuelLowRule,
   lapCompletedRule,
   spotterRule,
+  strategyCalloutRule,
   trafficRule,
   type EventRule,
 } from '@race-engineer/core';
@@ -13,13 +14,15 @@ import {
  * nothing here writes to the game. Audio/voice routing of these events is the radio layer (T5.4),
  * not the Core. Override via `EngineerCoreOptions.eventRules` (e.g. to tune thresholds per session).
  *
- * Spotter first (Tier-0 reflex), then traffic / FCY / fuel (Tier-1), then `lap_completed` (the lap
- * marker other layers — strategy, persistence — key off).
+ * Spotter first (Tier-0 reflex), then traffic / FCY / fuel (Tier-1), the strategy pit-window
+ * call-outs (T7.9 — reads the always-on stint plan via the detection context), then `lap_completed`
+ * (the lap marker other layers — strategy, persistence — key off).
  */
 export const defaultEventRules = (): EventRule[] => [
   spotterRule(),
   trafficRule(),
   fcyRule(),
   fuelLowRule(),
+  strategyCalloutRule(),
   lapCompletedRule(),
 ];

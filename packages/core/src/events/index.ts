@@ -5,3 +5,4 @@ export * from './rules/fuel-low';
 export * from './rules/spotter';
 export * from './rules/traffic';
 export * from './rules/fcy';
+export * from './rules/strategy';

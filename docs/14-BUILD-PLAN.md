@@ -662,8 +662,16 @@ the full stint plan (boundaries, fuel loads, pit windows, expected-degradation w
 cars ahead/behind with gap + closing + same-class highlight) — all formatted/severity-classified +
 state-honest, presenting numbers the Core already computes (no math here). Renderer gains **Strategy** +
 **Rivals** cards; fixture-tested (474 green); compliance PASS. Tailwind/shadcn reskin still deferred.) →
-T7.9 proactive strategy call-outs. Each pure-math task is unit-tested with doc-05 examples and
-validated on recorded endurance sessions (replay eval set).
+~~T7.9 proactive strategy call-outs~~ (done — `strategyCalloutRule` in core turns the always-on stint
+plan into spoken call-outs: edge-triggered `pit_window_open` (Tier 2) on crossing the next window's
+earliest lap and `box_this_lap` (Tier 1) on the deadline, **gated by a fuel-plan confidence floor**
+(docs/05 §8 "trustworthy or silent"), de-jittered by cooldown, silent in-pit / with no plan. Threaded
+via a new optional `DetectionContext.strategy`; engineer-core feeds the cached emit-cadence summary so
+the heavy model stays off the per-tick hot path; the radio `templatePhraser` speaks both from the
+payload and `defaultVoicePriority` routes them (box→WARNING, open→STRATEGY). The dashboard already
+labels them in the alerts feed. 487 green; compliance PASS. **This completes M7 / Phase-2 logic.** Live
+on-rig calibration of pit windows + the replay eval set land with T1.5.). Each pure-math task is
+unit-tested with doc-05 examples and validated on recorded endurance sessions (replay eval set).
 Gate: Phase 2 acceptance (fuel-to-finish ±1 lap by mid-stint; pit calls match labeled set;
 multi-class warnings precede encounters).
 Context: [05-STRATEGY-ENGINE](05-STRATEGY-ENGINE.md).

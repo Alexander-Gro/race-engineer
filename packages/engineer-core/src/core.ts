@@ -8,7 +8,7 @@ import {
   type RaceState,
 } from '@race-engineer/core';
 import { defaultEventRules } from './event-rules';
-import type { EngineerSnapshot, SnapshotTransport } from './ipc';
+import type { EngineerSnapshot, SnapshotTransport, StrategySummary } from './ipc';
 import { StrategyEngine } from './strategy';
 import { intervalForHz, Throttle } from './throttle';
 
@@ -50,6 +50,8 @@ export class EngineerCore<TFrame> {
   readonly #detector: EventDetector;
   /** Events fired since the last emitted snapshot (drained on emit). */
   #pendingEvents: EngineerEvent[] = [];
+  /** The most recent strategy summary (computed at emit cadence), fed to strategy-aware event rules. */
+  #lastSummary: StrategySummary | null = null;
   #seq = 0;
 
   constructor(options: EngineerCoreOptions<TFrame>) {
@@ -89,7 +91,9 @@ export class EngineerCore<TFrame> {
         // Run per tick: strategy needs every lap boundary; the detector's cooldown/dedupe is
         // measured on the full-rate clock. Events buffer until the next throttled snapshot.
         this.#strategy.observe(state);
-        const events = this.#detector.process(state);
+        // Feed the strategy-aware rules the last computed plan (emit-cadence; ≤1 snapshot stale,
+        // fine for lap-granular pit-window call-outs — keeps the heavy strategy model off every tick).
+        const events = this.#detector.process(state, this.#lastSummary ?? undefined);
         if (events.length > 0) {
           this.#pendingEvents.push(...events);
           // Immediate, off-throttle delivery for the proactive voice layer (Tier-0 latency).
@@ -114,11 +118,14 @@ export class EngineerCore<TFrame> {
   #emit(state: RaceState): void {
     const events = this.#pendingEvents;
     this.#pendingEvents = [];
+    // Cache the summary so the next tick's strategy-aware rules (T7.9) read the freshest plan.
+    const strategy = this.#strategy.summary(state);
+    this.#lastSummary = strategy;
     const snapshot: EngineerSnapshot = {
       seq: this.#seq,
       monotonicMs: state.monotonicMs,
       raceState: state,
-      strategy: this.#strategy.summary(state),
+      strategy,
       ...(events.length > 0 ? { events } : {}),
     };
     this.#seq += 1;

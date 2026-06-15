@@ -1,5 +1,5 @@
 import type { EngineerEvent, RaceState } from '../schema';
-import type { EventRule } from './types';
+import type { DetectionStrategy, EventRule } from './types';
 
 /**
  * The Event Detector framework (docs/04 §Events). It runs a set of rules over consecutive
@@ -23,8 +23,8 @@ export class EventDetector {
     this.#rules = rules;
   }
 
-  process(curr: RaceState): EngineerEvent[] {
-    const ctx = { prev: this.#prev, curr };
+  process(curr: RaceState, strategy?: DetectionStrategy): EngineerEvent[] {
+    const ctx = { prev: this.#prev, curr, strategy };
     const emitted: EngineerEvent[] = [];
 
     for (const rule of this.#rules) {

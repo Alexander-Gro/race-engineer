@@ -44,6 +44,7 @@ export const defaultVoicePriority = (event: EngineerEvent): number => {
       : VoicePriority.STRATEGY;
   }
   if (event.type === 'box_this_lap' || event.type === 'blue_flag') return VoicePriority.WARNING;
+  if (event.type === 'pit_window_open') return VoicePriority.STRATEGY; // strategy heads-up, not chatter
   if (event.tier >= 2) return VoicePriority.CHATTER;
   return VoicePriority.STRATEGY; // `clear` + other Tier-1 proactive call-outs
 };
@@ -62,6 +63,15 @@ export const templatePhraser: ProactivePhraser = (event) => {
         ? 'Fuel critical — box this lap.'
         : `Fuel's low — about ${whole} laps left.`;
     }
+    case 'pit_window_open': {
+      const earliest = event.payload.earliestLap;
+      const latest = event.payload.latestLap;
+      return typeof earliest === 'number' && typeof latest === 'number'
+        ? `Pit window's open — lap ${earliest} to ${latest}.`
+        : 'Pit window is open.';
+    }
+    case 'box_this_lap':
+      return 'Box this lap.';
     default:
       return null;
   }
