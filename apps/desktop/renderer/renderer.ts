@@ -14,6 +14,11 @@ import {
   type RivalReading,
 } from '../src/dashboard/model';
 import {
+  buildStrategyModel,
+  type StrategyModel,
+  type StrategyRivalRow,
+} from '../src/dashboard/strategy-model';
+import {
   LLM_PROVIDER_IDS,
   PROACTIVITY_LEVELS,
   PROFILES,
@@ -193,7 +198,62 @@ const alertsStrip = (alerts: readonly AlertReading[]): HTMLElement => {
   return strip;
 };
 
-const render = (model: DashboardModel): void => {
+// Strategy panel (T7.8): the full stint plan + pit windows the Core computes, beyond the dashboard's
+// single "next pit" reading.
+const strategyCard = (m: StrategyModel): HTMLElement => {
+  const body: HTMLElement[] = [];
+  if (!m.hasPlan) {
+    body.push(el('div', 'rival-empty', 'Learning your pace — no plan yet.'));
+  } else {
+    const table = el('div', 'stints');
+    for (const s of m.stints) {
+      const rowCls = `stint${s.current ? ' stint-current' : ''}`;
+      const r = el('div', rowCls);
+      r.append(el('div', 'stint-laps', `S${s.index} · L${s.laps}`));
+      const fuel = el('div', `stint-fuel sev-${s.fuelAdd.severity}`, `+${s.fuelAdd.value}`);
+      const deg = el(
+        'div',
+        `stint-deg sev-${s.degradation.severity}`,
+        `deg ${s.degradation.value}`,
+      );
+      deg.dataset['severity'] = s.degradation.severity;
+      r.append(fuel, deg);
+      table.append(r);
+    }
+    body.push(table);
+    const wins = m.pitWindows.map((w) => `${w.laps}`).join(', ');
+    body.push(metric('Pit window (lap)', { value: wins || '—', severity: 'neutral' }));
+    body.push(metric('Mandatory stops', m.mandatoryStops));
+  }
+  const grid = el('div', 'grid-2');
+  grid.append(metric('To finish', m.lapsToFinish), metric('Save target', m.fuelSaveTarget));
+  body.push(grid);
+  return card('Strategy', ...body);
+};
+
+const RIVAL_REL: Record<StrategyRivalRow['relation'], string> = { ahead: '▲', behind: '▼' };
+
+// Rival tracker (T7.8): nearest cars on track, across classes, with gap + closing.
+const rivalsCard = (m: StrategyModel): HTMLElement => {
+  const body: HTMLElement[] = [];
+  if (m.rivals.length === 0) {
+    body.push(el('div', 'rival-empty', 'No cars nearby.'));
+  } else {
+    for (const r of m.rivals) {
+      const row = el('div', `rival${r.sameClass ? ' rival-sameclass' : ''}`);
+      row.append(el('div', 'rival-label', `${RIVAL_REL[r.relation]} ${r.position}`));
+      const name = `${r.name}${r.className ? ` (${r.className})` : ''}`;
+      row.append(el('div', 'rival-name', name));
+      row.append(el('div', 'rival-gap', r.gap.value));
+      if (CLOSING_GLYPH[r.closing])
+        row.append(el('div', 'rival-closing', CLOSING_GLYPH[r.closing]));
+      body.push(row);
+    }
+  }
+  return card('Rivals', ...body);
+};
+
+const render = (model: DashboardModel, strategy: StrategyModel): void => {
   const app = document.getElementById('app');
   if (!app) return;
   if (model.alerts.length > 0)
@@ -205,6 +265,8 @@ const render = (model: DashboardModel): void => {
   cards.append(
     fuelCard(model.fuel),
     standingsCard(model.standings),
+    strategyCard(strategy),
+    rivalsCard(strategy),
     tyresCard(model.tyres),
     brakesCard(model.brakes),
     aidsCard(model.aids),
@@ -217,7 +279,9 @@ const render = (model: DashboardModel): void => {
   if (meta) meta.textContent = `snapshot #${model.seq} · t=${model.elapsedS.toFixed(0)} s`;
 };
 
-window.engineer.onSnapshot((snapshot) => render(buildDashboardModel(snapshot)));
+window.engineer.onSnapshot((snapshot) =>
+  render(buildDashboardModel(snapshot), buildStrategyModel(snapshot)),
+);
 
 /**
  * The free/no-key "ask the engineer" bar (Track A). Wired once — it lives outside `#app`, so the

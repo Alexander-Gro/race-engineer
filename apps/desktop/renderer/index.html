@@ -141,6 +141,39 @@
       .rival-empty {
         color: var(--muted);
       }
+      /* A same-class rival (direct competitor) stands out from lapped/lapping traffic. */
+      .rival-sameclass {
+        border-left: 2px solid var(--good);
+        padding-left: 6px;
+      }
+      /* Strategy stint plan (T7.8). */
+      .stints {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        margin-bottom: 10px;
+      }
+      .stint {
+        display: grid;
+        grid-template-columns: 1fr auto auto;
+        gap: 8px;
+        align-items: baseline;
+        padding: 3px 6px;
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        font-variant-numeric: tabular-nums;
+      }
+      .stint-current {
+        border-color: var(--good);
+        background: rgba(63, 185, 80, 0.08);
+      }
+      .stint-laps {
+        font-size: 12px;
+      }
+      .stint-fuel,
+      .stint-deg {
+        font-size: 11px;
+      }
       /* Engineer call-out feed (recent events). */
       .alerts {
         display: flex;

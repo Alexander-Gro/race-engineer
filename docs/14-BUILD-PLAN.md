@@ -650,7 +650,13 @@ completed stint's fitted slope+intercept into Welford running stats, accumulates
 `tirePriorFromStats`/`tirePriorFromRecord` → a `TirePrior` that `fitTireDegradation` (T7.1) blends —
 null until learned, weight saturates at the cap, prior-only fit reports confidence 0. Pure/deterministic,
 clock injected; 463 green; compliance PASS. _Still pending:_ wiring the tyre prior into the live
-`StrategyEngine` + the replay-eval on recorded stints, with T1.5.) → T7.8 strategy UI + rival tracker →
+`StrategyEngine` + the replay-eval on recorded stints, with T1.5.) → ~~T7.8 strategy UI + rival
+tracker~~ (done — pure `buildStrategyModel(snapshot)` in `apps/desktop/src/dashboard/strategy-model.ts`:
+the full stint plan (boundaries, fuel loads, pit windows, expected-degradation with severity, the
+**current-stint** flag), fuel to-finish + save target, and a **multi-class rival tracker** (nearest N
+cars ahead/behind with gap + closing + same-class highlight) — all formatted/severity-classified +
+state-honest, presenting numbers the Core already computes (no math here). Renderer gains **Strategy** +
+**Rivals** cards; fixture-tested (474 green); compliance PASS. Tailwind/shadcn reskin still deferred.) →
 T7.9 proactive strategy call-outs. Each pure-math task is unit-tested with doc-05 examples and
 validated on recorded endurance sessions (replay eval set).
 Gate: Phase 2 acceptance (fuel-to-finish ±1 lap by mid-stint; pit calls match labeled set;
