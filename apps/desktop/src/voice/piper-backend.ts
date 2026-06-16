@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { spawn as nodeSpawn } from 'node:child_process';
+import { pcmToWav } from '@race-engineer/voice';
 import type { AudioChunk, LocalTtsConfig, LocalTtsBackend, VoiceId } from '@race-engineer/voice';
 
 /**
@@ -79,41 +80,6 @@ const concat = (parts: readonly Uint8Array[], total: number): Uint8Array => {
     out.set(p, offset);
     offset += p.length;
   }
-  return out;
-};
-
-/**
- * Wrap raw 16-bit mono (or N-channel) PCM in a canonical 44-byte WAV header so a buffered audio sink
- * can decode it. Pure + exported for unit testing. Little-endian, PCM format (1).
- */
-export const pcmToWav = (
-  pcm: Uint8Array,
-  fmt: { sampleRate: number; channels?: number; bitsPerSample?: number },
-): Uint8Array => {
-  const channels = fmt.channels ?? 1;
-  const bitsPerSample = fmt.bitsPerSample ?? 16;
-  const blockAlign = channels * (bitsPerSample / 8);
-  const byteRate = fmt.sampleRate * blockAlign;
-  const buf = new ArrayBuffer(44 + pcm.length);
-  const view = new DataView(buf);
-  const writeAscii = (offset: number, s: string): void => {
-    for (let i = 0; i < s.length; i += 1) view.setUint8(offset + i, s.charCodeAt(i));
-  };
-  writeAscii(0, 'RIFF');
-  view.setUint32(4, 36 + pcm.length, true); // file size minus the first 8 bytes
-  writeAscii(8, 'WAVE');
-  writeAscii(12, 'fmt ');
-  view.setUint32(16, 16, true); // PCM fmt-chunk size
-  view.setUint16(20, 1, true); // audio format = PCM
-  view.setUint16(22, channels, true);
-  view.setUint32(24, fmt.sampleRate, true);
-  view.setUint32(28, byteRate, true);
-  view.setUint16(32, blockAlign, true);
-  view.setUint16(34, bitsPerSample, true);
-  writeAscii(36, 'data');
-  view.setUint32(40, pcm.length, true);
-  const out = new Uint8Array(buf);
-  out.set(pcm, 44);
   return out;
 };
 

@@ -51,7 +51,11 @@ describe('whisperCppBackend', () => {
 
     expect(res.transcript).toBe('Box this lap.'); // collapsed/trimmed
     expect(fakeFs.writes[0]?.path).toBe(WAV);
-    expect(fakeFs.writes[0]?.data).toEqual(new Uint8Array([1, 2, 3])); // frames concatenated
+    // The PTT frames are wrapped in a 16 kHz WAV container — RIFF header + the concatenated PCM payload.
+    const written = fakeFs.writes[0]!.data;
+    expect(String.fromCharCode(...written.subarray(0, 4))).toBe('RIFF');
+    expect(new DataView(written.buffer).getUint32(24, true)).toBe(16000); // sample rate
+    expect(Array.from(written.subarray(44))).toEqual([1, 2, 3]); // frames concatenated
     expect(calls[0]?.command).toBe('/opt/whisper/whisper-cli');
     expect(calls[0]?.args).toEqual(['-m', '/models/ggml-small.bin', '-f', WAV, '-nt']);
   });

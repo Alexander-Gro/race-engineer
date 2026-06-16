@@ -1,6 +1,7 @@
 import { writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { MIC_SAMPLE_RATE_HZ, pcmToWav } from '@race-engineer/voice';
 import type { LocalSttBackend, LocalSttConfig, SttResult, SttStream } from '@race-engineer/voice';
 import type { SpawnFn } from './piper-backend';
 
@@ -87,7 +88,8 @@ export const whisperCppBackend = (opts: WhisperBackendOptions = {}): LocalSttBac
           throw new Error('whisper: binaryPath + modelPath not configured (set them from T4.6)');
         }
         const file = join(dir, `re-stt-${now()}.wav`);
-        await fsLike.writeFile(file, concat(chunks));
+        // The renderer streams 16 kHz mono PCM frames; wrap them in a WAV container whisper-cli decodes.
+        await fsLike.writeFile(file, pcmToWav(concat(chunks), { sampleRate: MIC_SAMPLE_RATE_HZ }));
         try {
           const args = [
             '-m',

@@ -46,3 +46,4 @@ export type {
 } from './providers/local-stt';
 export { DEFAULT_VOICE_PROFILE, selectTtsProvider, selectSttProvider } from './profile';
 export type { VoiceProviderConfig, TtsEngineId, SttEngineId } from './profile';
+export { pcmToWav, MIC_SAMPLE_RATE_HZ } from './wav';

@@ -640,7 +640,7 @@ wireAudioOut();
 
 /**
  * Push-to-talk radio input (T10.1 voice loop slice 2, docs/07 §PTT flow). Holding the button captures
- * the mic (`getUserMedia` → `MediaRecorder`) and streams frames to the Core **worker** over
+ * the mic (`getUserMedia` → Web Audio, 16 kHz mono PCM) and streams frames to the Core **worker** over
  * `window.radioIn`, where the STT runs (the key never reaches the renderer — rule 6). The PTT edges
  * drive the worker's capture lifecycle. Capture runs **only while held** (privacy-friendly, no wake
  * word). The mapped wheel button is the rig PTT; this hold-button is the dev trigger. Input-only — no
@@ -649,21 +649,30 @@ wireAudioOut();
 const wireRadioInput = (): void => {
   const button = document.getElementById('radio-ptt') as HTMLButtonElement | null;
   if (!button || !window.radioIn) return;
-  // Mic capture needs getUserMedia + MediaRecorder; hide the control where they're unavailable.
-  if (typeof MediaRecorder === 'undefined' || !navigator.mediaDevices?.getUserMedia) {
+  // Mic capture needs getUserMedia + Web Audio; hide the control where they're unavailable.
+  if (!navigator.mediaDevices?.getUserMedia || typeof AudioContext === 'undefined') {
     button.hidden = true;
     return;
   }
 
-  // getUserMedia → MediaRecorder capture backend (DOM glue). Guards a release that beats the async
-  // permission grant, so the mic is never left open.
+  // getUserMedia → Web Audio capture backend producing **16 kHz mono PCM** frames (what whisper.cpp
+  // wants; the cloud STT wraps the same PCM to WAV). The `AudioContext` resamples the mic to 16 kHz, a
+  // `ScriptProcessorNode` hands us Float32 blocks, and we ship them as little-endian Int16. Routed
+  // through a zero-gain node so the processor runs without mic→speaker feedback. Guards a release that
+  // beats the async permission grant, so the mic is never left open. Input-only — no game path.
   const makeMicCapture = (): MicCaptureBackend => {
     let active = false;
-    let recorder: MediaRecorder | null = null;
+    let ctx: AudioContext | null = null;
     let stream: MediaStream | null = null;
+    let node: ScriptProcessorNode | null = null;
+    let source: MediaStreamAudioSourceNode | null = null;
     const teardown = (): void => {
-      if (recorder && recorder.state !== 'inactive') recorder.stop();
-      recorder = null;
+      node?.disconnect();
+      source?.disconnect();
+      if (ctx) void ctx.close();
+      ctx = null;
+      node = null;
+      source = null;
       stream?.getTracks().forEach((t) => t.stop());
       stream = null;
     };
@@ -671,19 +680,32 @@ const wireRadioInput = (): void => {
       start(onFrame: (frame: Uint8Array) => void): void {
         active = true;
         void navigator.mediaDevices
-          .getUserMedia({ audio: true })
+          .getUserMedia({
+            audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true },
+          })
           .then((s) => {
             if (!active) {
               s.getTracks().forEach((t) => t.stop()); // released before the grant — don't open the mic
               return;
             }
             stream = s;
-            recorder = new MediaRecorder(s);
-            recorder.ondataavailable = (e): void => {
-              if (e.data.size > 0)
-                void e.data.arrayBuffer().then((buf) => onFrame(new Uint8Array(buf)));
+            ctx = new AudioContext({ sampleRate: 16000 }); // 16 kHz — see MIC_SAMPLE_RATE_HZ
+            source = ctx.createMediaStreamSource(s);
+            node = ctx.createScriptProcessor(4096, 1, 1);
+            const mute = ctx.createGain();
+            mute.gain.value = 0;
+            node.onaudioprocess = (e: AudioProcessingEvent): void => {
+              const input = e.inputBuffer.getChannelData(0); // Float32 @ 16 kHz
+              const pcm = new Int16Array(input.length);
+              for (let i = 0; i < input.length; i += 1) {
+                const x = Math.max(-1, Math.min(1, input[i] ?? 0));
+                pcm[i] = x < 0 ? x * 0x8000 : x * 0x7fff;
+              }
+              onFrame(new Uint8Array(pcm.buffer.slice(0))); // copy — the buffer is reused next block
             };
-            recorder.start(250); // emit a chunk ~4×/s while held
+            source.connect(node);
+            node.connect(mute);
+            mute.connect(ctx.destination);
           })
           .catch(() => {
             active = false; // denied / no device — the 🎤 Test mic button surfaces the guidance

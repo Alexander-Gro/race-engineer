@@ -1,4 +1,5 @@
 import type { SttProvider, SttResult, SttStream } from '../types';
+import { MIC_SAMPLE_RATE_HZ, pcmToWav } from '../wav';
 
 /**
  * Cloud STT provider (build-plan T10.1 slice 3b-iii, docs/07 §STT, docs/15 §premium BYO-key). Transcribes
@@ -32,28 +33,21 @@ export interface CloudSttConfig {
   baseUrl?: string;
   /** Transcription model, default `gpt-4o-mini-transcribe`. */
   model?: string;
-  /** MIME of the captured audio (renderer `MediaRecorder` is usually webm/opus). Default `audio/webm`. */
-  mimeType?: string;
   /** Injectable fetch (tests / non-global runtimes); defaults to `globalThis.fetch`. */
   fetch?: SttFetchLike;
 }
-
-const extFromMime = (mime: string): string =>
-  mime.includes('ogg') ? 'ogg' : mime.includes('mp4') || mime.includes('mpeg') ? 'mp4' : 'webm';
 
 export class CloudSttProvider implements SttProvider {
   readonly name = 'openai-stt';
   readonly #apiKey: string;
   readonly #baseUrl: string;
   readonly #model: string;
-  readonly #mimeType: string;
   readonly #fetch: SttFetchLike;
 
   constructor(config: CloudSttConfig) {
     this.#apiKey = config.apiKey;
     this.#baseUrl = (config.baseUrl ?? 'https://api.openai.com/v1').replace(/\/+$/, '');
     this.#model = config.model ?? 'gpt-4o-mini-transcribe';
-    this.#mimeType = config.mimeType ?? 'audio/webm';
     const f = config.fetch ?? (globalThis as { fetch?: SttFetchLike }).fetch;
     if (!f) throw new Error(`${this.name}: no fetch available on this runtime; pass config.fetch`);
     this.#fetch = f;
@@ -69,8 +63,6 @@ export class CloudSttProvider implements SttProvider {
     const url = `${this.#baseUrl}/audio/transcriptions`;
     const apiKey = this.#apiKey;
     const model = this.#model;
-    const mimeType = this.#mimeType;
-    const filename = `audio.${extFromMime(mimeType)}`;
     const name = this.name;
 
     const chunks: Uint8Array[] = [];
@@ -85,16 +77,17 @@ export class CloudSttProvider implements SttProvider {
       },
       async finish(): Promise<SttResult> {
         if (cancelled || chunks.length === 0) return { transcript: '' };
-        // Concatenate the held-PTT frames into one fresh ArrayBuffer-backed buffer (a clean `BlobPart`).
+        // The renderer streams 16 kHz mono PCM frames; wrap them in a WAV container the endpoint decodes.
         const total = chunks.reduce((n, c) => n + c.length, 0);
-        const audio = new Uint8Array(total);
+        const pcm = new Uint8Array(total);
         let offset = 0;
         for (const c of chunks) {
-          audio.set(c, offset);
+          pcm.set(c, offset);
           offset += c.length;
         }
+        const wav = pcmToWav(pcm, { sampleRate: MIC_SAMPLE_RATE_HZ });
         const form = new FormData();
-        form.append('file', new Blob([audio], { type: mimeType }), filename);
+        form.append('file', new Blob([wav], { type: 'audio/wav' }), 'audio.wav');
         form.append('model', model);
         form.append('response_format', 'json');
         const res = await post(url, {
