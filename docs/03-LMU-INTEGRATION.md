@@ -763,6 +763,12 @@ toggled TC/ABS/brake-bias on the fly. (164 MB raw — git-ignored, never committ
 > items above plus the new dependencies introduced by the M7 strategy work (T7.2–T7.5).
 > Tick items here and write the result back into the relevant spike section. Track-B pointer
 > lives in [14-BUILD-PLAN.md](14-BUILD-PLAN.md).
+>
+> **One-shot capture (do this first on the rig):** `pnpm capture [--svm <path>]` (tools/capture.ts)
+> GETs every read-only REST endpoint + (optionally) a `.svm` and writes `lmu-capture.json` — the raw
+> payloads + a per-endpoint key index + the parsed `.svm` section/keys + a confirm-these checklist.
+> Paste it back to confirm/narrow the LIVE-VERIFY field names for **Virtual Energy** (T11.3),
+> **aids** (T8.1), and **setup** (T9.1) in one pass, rather than probing endpoint-by-endpoint.
 
 ### A. Signs & conventions (cheap to confirm; high blast-radius if wrong)
 - [x] **Gap sign** `gapToPlayerS` / `gapToPlayerM` is **+ = behind / − = ahead** — **CONFIRMED S1#3**

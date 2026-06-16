@@ -337,7 +337,9 @@ in a small, reviewable, green-tested change.
   source** (`apps/desktop/src/lmu-host.ts` — `LmuAdapter` + `createLmuNormalizer`, dynamically loaded
   only when `ENGINEER_SOURCE=lmu`; koffi stays external; the synthetic demo never touches it). So rig
   validation now happens by *watching the dashboard* with LMU running, not PowerShell. When it
-  resumes: **T1.5** `pnpm record` a real stint → trimmed fixture; **T2.2
+  resumes: **`pnpm capture`** (one-shot REST + `.svm` dump → `lmu-capture.json`, the first rig step —
+  confirms the LIVE-VERIFY field names for VE / aids / setup in one pass); **T1.5** `pnpm record` a
+  real stint → trimmed fixture; **T2.2
   live** REST probe → finish REST→`RaceState` mapping + settle S3 aids; **T1.3/T1.4** aids/setup reads;
   confirm the gap/`lateralPos`/closing signs + brake-bias front/rear + FCY/pit enums. **Full
   actionable list:** the **Rig verification backlog (consolidated)** in

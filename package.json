@@ -23,6 +23,7 @@
     "replay": "tsx tools/inspect.ts replay",
     "shm-dump": "tsx packages/adapters/lmu/src/cli/dump.ts",
     "record": "tsx tools/record.ts",
+    "capture": "tsx tools/capture.ts",
     "eval": "tsx tools/eval.ts"
   },
   "devDependencies": {
