@@ -72,3 +72,10 @@ const REAL_FIXTURE = fileURLToPath(
 );
 export const loadRealRecording = async (): Promise<RaceState[]> =>
   parseReplay(await readFile(REAL_FIXTURE, 'utf8'));
+
+/** A committed real GT3 stint **with fuel burn** (T1.5, fuel consumption on) — downsampled for git. */
+const FUEL_STINT_FIXTURE = fileURLToPath(
+  new URL('../../../adapters/sim-replay/fixtures/lemans-fuel-stint.replay.jsonl', import.meta.url),
+);
+export const loadFuelStint = async (): Promise<RaceState[]> =>
+  parseReplay(await readFile(FUEL_STINT_FIXTURE, 'utf8'));

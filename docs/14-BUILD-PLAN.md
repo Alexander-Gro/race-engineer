@@ -479,11 +479,16 @@ Verify: ✅ parsed values match the in-game garage / live REST baseline (ABS `9 
 but LMU **embeds the display string in the `//` comment**, so it's recoverable per-entry.
 Output: ✅ location + format notes → doc 03 §"S4 — live confirmation".
 
-**T1.5 — Record a real session** · _human-assisted_ · deps: T1.1 → **tooling ready (T2.4)**
-Build: dump a full short stint to a replay file; commit a trimmed version as a test fixture.
-The recorder now exists — on the rig run `pnpm record [--frames N] [--hz H] [--out file]`
-(Adapter → Normalizer → Recorder → canonical-`RaceState` JSONL).
-Verify: `pnpm replay <file>` runs it through the M0 pipeline. _Human:_ capture on the rig + commit a trimmed fixture.
+**T1.5 — Record a real session** · _human-assisted_ · deps: T1.1 → **tooling ready (T2.4)** · **done (fuel-burn fixture); full convergence gate deferred**
+Build: ✅ captured a real GT3 stint **with fuel consumption on** (`pnpm record`), added `tools/trim-fixture.ts`
+(downsample + prune cars + **scrub the player's name** — PII-safe), and committed a trimmed fixture
+`packages/adapters/sim-replay/fixtures/lemans-fuel-stint.replay.jsonl` (146 frames, ~750 KB, 3 green laps).
+Verify: ✅ `pnpm replay` / `pnpm eval replay` run it through the pipeline; the fuel-accuracy eval is now
+**non-silent on real data** and recovers a realistic **~3.0 L/lap** ground truth (CI test added) — the
+first genuine fuel-burn telemetry through the eval. **Still open:** the docs/10 Phase-2 **±1-lap-by-mid-
+stint convergence gate** does *not* pass on this 3-lap stint (one a standing-start partial — too few clean
+green laps to converge); closing it needs a **≥5-lap clean green stint** (rig backlog — driver has since
+closed LMU). The earlier "pass" was a frozen-tail artifact (sim paused) and was corrected.
 
 ---
 

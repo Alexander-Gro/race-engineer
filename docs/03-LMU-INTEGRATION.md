@@ -838,14 +838,15 @@ and shake out anything the earlier (mostly stationary / short) captures missed.
 - [x] **T1.5** record a real green stint → commit a trimmed fixture — **done S1#3**
   (`packages/adapters/sim-replay/fixtures/lemans-multiclass.replay.jsonl`, replay-tested). A longer
   *clean multi-lap* stint is still wanted for the tyre/pace calibration (§C) + replay-eval of T7.1/T7.3.
-- [ ] **Multi-lap stint with real fuel burn → run the T10.4 eval.** The committed fixture is a
-  60-frame side-by-side slice (flat fuel, no lap completes), so the `@race-engineer/eval`
-  fuel-accuracy *numbers* run today only on synthetic ground truth; the real flat-fuel slice
-  correctly reports **silent**. To close the docs/10 Phase-2 gate ("fuel-to-finish within ±1 lap by
-  mid-stint **on a recorded endurance race**"), capture a ~5–10-lap green stint with fuel
-  decrementing (`pnpm record --frames N`), commit a trimmed copy, then `pnpm eval replay <file>` —
-  it scores the live `StrategyEngine` vs the recording's own measured per-lap burn. Same recording
-  also feeds §C tyre/pace calibration.
+- [~] **Multi-lap stint with real fuel burn → run the T10.4 eval.** **Partly done (T1.5, 2026-06-16):**
+  a real GT3 stint with **fuel consumption on** is now committed
+  (`packages/adapters/sim-replay/fixtures/lemans-fuel-stint.replay.jsonl`, 3 green laps), and the
+  fuel-accuracy eval is **non-silent** on it, recovering a realistic **~3.0 L/lap**. **But the docs/10
+  Phase-2 ±1-lap-by-mid-stint convergence gate does NOT pass** on 3 laps (one a standing-start partial —
+  the rolling estimator needs more clean green laps to settle). **Still need a ≥5-lap clean green stint**
+  (`pnpm record`), then `pnpm eval replay <file>` to close the gate. Same longer recording also feeds §C
+  tyre/pace calibration. (Lesson: the recorder only saves at its frame cap — a paused/short session leaves
+  a frozen tail; trim to the live window. A save-on-interrupt for the recorder is a worthwhile T2.4 add.)
 - [x] **T2.2 live** REST probe → capture Swagger payloads — **done (T1.2, S2 live 2026-06-16):**
   full endpoint list + payloads captured; base URL, GET-only avoid-list, VE/standings/aids sources
   confirmed (see "S2 — live confirmation"). *Remaining (mapping, T2.2/T2.3):* wire VE/standings/
