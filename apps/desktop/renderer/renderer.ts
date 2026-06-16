@@ -361,10 +361,14 @@ const render = (model: DashboardModel, strategy: StrategyModel, handling: Handli
 // The proactive call-out speaker (free Web-Speech path), assigned by wireCallouts() below. The snapshot
 // handler voices the same events the dashboard paints as alert chips.
 let calloutSpeaker: CalloutSpeaker | null = null;
+// True once the worker's real voice (Piper/cloud) is voicing call-outs — then the free Web-Speech
+// fallback stays silent so we never double-speak (a robotic echo over the real voice). Set by the
+// worker's `voice-active` signal over the audio bridge (wireAudioOut below).
+let workerVoicingCallouts = false;
 
 window.engineer.onSnapshot((snapshot) => {
   render(buildDashboardModel(snapshot), buildStrategyModel(snapshot), buildHandlingModel(snapshot));
-  if (snapshot.events?.length) calloutSpeaker?.announce(snapshot.events);
+  if (!workerVoicingCallouts && snapshot.events?.length) calloutSpeaker?.announce(snapshot.events);
 });
 
 /**
@@ -610,7 +614,21 @@ const wireAudioOut = (): void => {
   };
 
   const receive = createAudioReceiver(backend, (m) => window.audioOut.ended(m.pid));
-  window.audioOut.onCommand(receive);
+  window.audioOut.onCommand((msg) => {
+    // The worker's real voice (Piper/cloud) coming online owns proactive call-outs — silence the free
+    // Web-Speech fallback so the two voices don't overlap (robotic echo). A fake/silent worker voice
+    // (active:false) leaves the Web-Speech call-outs as the only voice.
+    if (msg.kind === 'voice-active') {
+      workerVoicingCallouts = msg.active;
+      if (msg.active) {
+        calloutSpeaker?.setEnabled(false);
+        const toggle = document.getElementById('callout-toggle');
+        if (toggle) toggle.hidden = true; // the engine voice owns call-outs; the toggle is moot
+      }
+      return;
+    }
+    receive(msg);
+  });
 };
 wireAudioOut();
 

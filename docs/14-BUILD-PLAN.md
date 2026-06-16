@@ -335,9 +335,17 @@ in a small, reviewable, green-tested change.
   an **ASCII path**, so the model manager (T4.6) must install/copy there rather than straight into the
   non-ASCII `userData` dir. (2) Capturing Piper's binary stdout must use `child_process` (the app's path) —
   a PowerShell `1>` redirect corrupts the bytes (text pipeline) into static, a test-harness trap only.
-  **Still to make it talk *in the app*:** seed `voice.local` with the Piper binary+model paths (no Settings
-  path picker yet) and launch — the worker then builds the audible Piper voice. The cloud loop already
-  supersedes the free Web-Speech call-outs.
+  ~~Now talks *in the app* 2026-06-16 (driver-confirmed: British Piper voice for the proactive call-outs).~~
+  Two more bugs our audio path surfaced + fixed: (a) the renderer plays clips through an `<audio>` element
+  whose **CSP** (`default-src 'self'`) blocked the `blob:` audio URL → silent; added `media-src 'self' blob:`
+  to `renderer/index.html` (+ `autoplayPolicy: 'no-user-gesture-required'` so call-outs play without a
+  click). (b) The renderer's free **Web-Speech** call-out fallback (`CalloutSpeaker`) double-spoke over the
+  real voice in a robotic OS voice; the worker now posts a `voice-active` signal over the audio bridge and
+  the renderer **mutes the Web-Speech fallback when the real (Piper/cloud) voice is live** — keeping it only
+  as the no-worker-voice fallback. 793 green; compliance PASS. _Still:_ a Settings path picker for
+  `voice.local` (paths are seeded by editing `settings.json` for now), and the typed ask-bar reply still
+  uses Web-Speech (only proactive call-outs + PTT replies use the Piper path) — a follow-up to route it
+  through the worker voice too.
   M7.7–M7.9 / M8 / M9 offline-strategy depth are paused until the app is launchable. (Offline glue
   done: `get_stint_plan` + `project_pit_window` are now wired into the AI read-only tool surface,
   reading a precomputed `ctx.stintPlan` (T7.3) like `get_fuel_plan` reads `ctx.fuelPlan`; 373 green.

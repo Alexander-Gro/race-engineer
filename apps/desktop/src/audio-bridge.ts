@@ -33,7 +33,10 @@ export type AudioOutMessage =
   | { kind: 'play'; pid: number; clip: AudioClip; volume: number }
   | { kind: 'stop'; pid: number }
   | { kind: 'volume'; pid: number; volume: number }
-  | { kind: 'device'; deviceId: string };
+  | { kind: 'device'; deviceId: string }
+  // The worker's real voice layer is (in)active. When active, it voices proactive call-outs through
+  // this bridge, so the renderer's free Web-Speech call-out fallback must step aside (no double-speak).
+  | { kind: 'voice-active'; active: boolean };
 
 /** Renderer → worker: a clip finished **naturally** (a `stop`/preempt never reports back). */
 export interface AudioEndedMessage {

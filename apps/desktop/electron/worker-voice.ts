@@ -40,11 +40,6 @@ export interface WorkerVoice {
 
 const VOICE: VoiceId = 'engineer-1';
 
-/** The configured TTS, or the offline fake when it isn't ready (no key / no native backend). */
-const pickTts = (route: VoiceProviderConfig): TtsProvider => {
-  const selected = selectTtsProvider(route);
-  return selected.available === false ? new FakeTtsProvider() : selected;
-};
 /** The configured STT, or the offline fake when it isn't ready. */
 const pickStt = (route: VoiceProviderConfig): SttProvider => {
   const selected = selectSttProvider(route);
@@ -57,9 +52,13 @@ export const createWorkerVoice = async (
   route: VoiceProviderConfig,
 ): Promise<WorkerVoice> => {
   // Supply the native local backends (Piper/whisper.cpp) for local engines whose binary path is
-  // configured; otherwise the local shells stay not-ready and pickTts/pickStt fall back to the fake.
+  // configured; otherwise the local shells stay not-ready and we fall back to the fake.
   const wired = attachLocalBackends(route);
-  let tts = pickTts(wired);
+  const selectedTts = selectTtsProvider(wired);
+  // `audible` = a real TTS is producing sound (not the silent fake fallback). The renderer uses this to
+  // decide whether to mute its free Web-Speech call-out fallback (avoid a robotic double-voice).
+  let audible = selectedTts.available !== false;
+  let tts: TtsProvider = audible ? selectedTts : new FakeTtsProvider();
   const stt = pickStt(wired);
 
   // Pre-render the Tier-0 spotter clips once (a cloud TTS makes ~6 calls here). If that fails (bad key
@@ -70,6 +69,7 @@ export const createWorkerVoice = async (
   } catch (err) {
     console.error('[voice] TTS pre-render failed — falling back to the offline voice', err);
     tts = new FakeTtsProvider();
+    audible = false;
     tier0Clips = await prerenderTier0(tts, VOICE);
   }
 
@@ -85,6 +85,10 @@ export const createWorkerVoice = async (
     bargeIn: () => engineerVoice.bargeIn(),
     onEvent: (e) => console.log(`[radio] ${e.kind}: "${e.text}"`),
   });
+
+  // Tell the renderer whether we're voicing call-outs audibly, so it can mute its Web-Speech fallback
+  // (a real voice → renderer stays quiet; the silent fake → renderer keeps the free Web-Speech voice).
+  post({ kind: 'voice-active', active: audible });
 
   return {
     voice: engineerVoice,

@@ -104,6 +104,8 @@ const createWindow = (): BrowserWindow => {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
+      // The engineer's proactive call-outs play without a click; allow programmatic audio playback.
+      autoplayPolicy: 'no-user-gesture-required',
     },
   });
   // Dev: electron-vite serves the renderer with HMR and sets ELECTRON_RENDERER_URL.

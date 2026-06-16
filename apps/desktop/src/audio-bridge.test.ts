@@ -101,6 +101,15 @@ describe('createAudioReceiver — renderer side', () => {
     expect(() => receive({ kind: 'stop', pid: 99 })).not.toThrow();
   });
 
+  it('ignores a voice-active status message (it is handled by the renderer, not the audio backend)', () => {
+    const backend = new MockAudioSink();
+    const endedBack: AudioEndedMessage[] = [];
+    const receive = createAudioReceiver(backend, (m) => endedBack.push(m));
+    expect(() => receive({ kind: 'voice-active', active: true })).not.toThrow();
+    expect(backend.started).toEqual([]); // no playback triggered
+    expect(endedBack).toEqual([]);
+  });
+
   it('routes volume + output-device commands to the backend', () => {
     const calls: string[] = [];
     const backend: AudioSink = {
