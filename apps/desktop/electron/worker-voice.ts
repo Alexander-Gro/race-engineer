@@ -50,6 +50,8 @@ export const createWorkerVoice = async (
   post: (msg: AudioOutMessage) => void,
   answer: (question: string) => Promise<string>,
   route: VoiceProviderConfig,
+  /** Surface a completed radio exchange (heard + reply) to the UI; the worker relays it to the renderer. */
+  onRadioLog?: (msg: { heard: string; reply: string }) => void,
 ): Promise<WorkerVoice> => {
   // Supply the native local backends (Piper/whisper.cpp) for local engines whose binary path is
   // configured; otherwise the local shells stay not-ready and we fall back to the fake.
@@ -78,12 +80,19 @@ export const createWorkerVoice = async (
 
   const mic = new BridgedMicSource();
   const capture = new RadioCapture({ stt, mic });
+  let lastHeard = '';
   const reply = createRadioReply({
     capture,
     answer,
     speak: (text) => void engineerVoice.speakReply(text),
     bargeIn: () => engineerVoice.bargeIn(),
-    onEvent: (e) => console.log(`[radio] ${e.kind}: "${e.text}"`),
+    onEvent: (e) => {
+      console.log(`[radio] ${e.kind}: "${e.text}"`);
+      if (e.kind === 'heard') lastHeard = e.text;
+      // Surface the exchange to the UI on the reply (so the driver sees what was heard + the answer,
+      // even when the spoken reply is preempted by higher-priority call-outs or recognition was rough).
+      else if (e.kind === 'reply') onRadioLog?.({ heard: lastHeard, reply: e.text });
+    },
   });
 
   // Tell the renderer whether we're voicing call-outs audibly, so it can mute its Web-Speech fallback

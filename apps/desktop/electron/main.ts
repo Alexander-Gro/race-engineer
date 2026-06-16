@@ -24,7 +24,7 @@ import type {
   WorkerMessage,
 } from '../src/ask';
 import { AUDIO_ENDED_CHANNEL, AUDIO_OUT_CHANNEL } from '../src/audio-bridge';
-import { RADIO_FRAME_CHANNEL, RADIO_PTT_CHANNEL } from '../src/mic-bridge';
+import { RADIO_FRAME_CHANNEL, RADIO_LOG_CHANNEL, RADIO_PTT_CHANNEL } from '../src/mic-bridge';
 import { MIC_SETTINGS_DEEPLINK } from '../src/audio-io';
 import { resolveLlmRouteConfig } from '../src/llm-route';
 import { resolveVoiceRoute, voiceRouteIsReady } from '../src/voice-route';
@@ -230,6 +230,14 @@ const startEngineerWorker = (): void => {
       // only — the overlay shares the snapshot feed but must not double up the audio.
       if (mainWindow && !mainWindow.isDestroyed()) {
         mainWindow.webContents.send(AUDIO_OUT_CHANNEL, message.audio);
+      }
+    } else if (message.type === 'radio') {
+      // A completed push-to-talk exchange — show it in the main window (heard + spoken reply).
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send(RADIO_LOG_CHANNEL, {
+          heard: message.heard,
+          reply: message.reply,
+        });
       }
     } else if (message.type === 'ready') {
       // The worker attached its listener — safe to send the engineer route now (no fork race).

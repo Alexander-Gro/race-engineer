@@ -13,7 +13,13 @@ import {
   type AudioOutApi,
   type AudioOutMessage,
 } from '../src/audio-bridge';
-import { RADIO_FRAME_CHANNEL, RADIO_PTT_CHANNEL, type RadioInApi } from '../src/mic-bridge';
+import {
+  RADIO_FRAME_CHANNEL,
+  RADIO_LOG_CHANNEL,
+  RADIO_PTT_CHANNEL,
+  type RadioInApi,
+  type RadioLogMessage,
+} from '../src/mic-bridge';
 import {
   PTT_EVENT_CHANNEL,
   PTT_GET_CHANNEL,
@@ -108,6 +114,11 @@ const radioIn: RadioInApi = {
   },
   frame(bytes: Uint8Array): void {
     ipcRenderer.send(RADIO_FRAME_CHANNEL, bytes);
+  },
+  onLog(listener: (msg: RadioLogMessage) => void): () => void {
+    const handler = (_event: IpcRendererEvent, msg: RadioLogMessage): void => listener(msg);
+    ipcRenderer.on(RADIO_LOG_CHANNEL, handler);
+    return () => ipcRenderer.removeListener(RADIO_LOG_CHANNEL, handler);
   },
 };
 

@@ -724,6 +724,14 @@ const wireRadioInput = (): void => {
     postPtt: (down) => window.radioIn.ptt(down),
   });
 
+  // Show each completed exchange (what STT heard → the engineer's reply) in the answer area, so the
+  // driver gets visible feedback even when the spoken reply is preempted by a higher-priority call-out
+  // or recognition was rough. Output-only.
+  const radioAnswer = document.getElementById('ask-answer');
+  window.radioIn.onLog((msg) => {
+    if (radioAnswer) radioAnswer.textContent = `🎙 “${msg.heard}” → ${msg.reply}`;
+  });
+
   const setHeld = (held: boolean): void => button.setAttribute('aria-pressed', String(held));
   button.addEventListener('pointerdown', () => {
     radio.pttDown();

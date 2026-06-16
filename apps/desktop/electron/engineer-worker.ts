@@ -58,7 +58,15 @@ const rebuildVoice = (route: VoiceProviderConfig): void => {
   lastVoiceRouteKey = key;
   voiceBuildChain = voiceBuildChain.then(async () => {
     try {
-      const wv = await (await import('./worker-voice')).createWorkerVoice(post, answer, route);
+      const wv = await (
+        await import('./worker-voice')
+      ).createWorkerVoice(post, answer, route, (msg) =>
+        process.parentPort.postMessage({
+          type: 'radio',
+          heard: msg.heard,
+          reply: msg.reply,
+        } satisfies WorkerMessage),
+      );
       voice = wv.voice;
       handleAudioEnded = wv.handleAudioEnded;
       onPtt = wv.onPtt;

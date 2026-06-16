@@ -23,6 +23,14 @@ import type { MicSource } from '@race-engineer/voice';
 export const RADIO_PTT_CHANNEL = 'radio:ptt';
 /** Electron channel: renderer → main (→ worker), one captured mic audio frame (opaque bytes). */
 export const RADIO_FRAME_CHANNEL = 'radio:frame';
+/** Electron channel: worker → main → renderer, a completed radio exchange (heard + spoken reply). */
+export const RADIO_LOG_CHANNEL = 'radio:log';
+
+/** A completed push-to-talk exchange surfaced to the UI: what STT heard + the engineer's reply. */
+export interface RadioLogMessage {
+  heard: string;
+  reply: string;
+}
 
 /**
  * Worker-side {@link MicSource} fed by renderer frames. `start`/`stop` (called by `RadioCapture` on the
@@ -95,4 +103,6 @@ export interface RadioInApi {
   ptt(down: boolean): void;
   /** Send one captured mic frame to the worker. */
   frame(bytes: Uint8Array): void;
+  /** Subscribe to completed radio exchanges (worker → UI): what was heard + the engineer's reply. */
+  onLog(listener: (msg: RadioLogMessage) => void): () => void;
 }

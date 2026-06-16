@@ -87,7 +87,9 @@ export type WorkerMessage =
   | { type: 'ask-reply'; id: number; answer: string }
   | { type: 'ready' }
   // The voice queue (in the worker) asks the renderer to play/stop a clip — main relays it.
-  | { type: 'audio'; audio: AudioOutMessage };
+  | { type: 'audio'; audio: AudioOutMessage }
+  // A completed push-to-talk exchange (what STT heard + the spoken reply) for the renderer to display.
+  | { type: 'radio'; heard: string; reply: string };
 
 /** A renderer ask relayed to the Core, correlated by `id`. */
 export interface AskRequestMessage {
