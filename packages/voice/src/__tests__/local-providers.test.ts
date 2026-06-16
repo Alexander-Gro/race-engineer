@@ -46,6 +46,10 @@ describe('local TTS shells (Piper / Kokoro)', () => {
     const clips = await piper.prerender(['Car left.', 'Clear.'], 'v1');
     expect(clips.get('Car left.')?.label).toBe('Car left.');
     expect(clips.size).toBe(2);
+    // Bytes are retained so the Tier-0 clip is actually audible (was metadata-only before).
+    const audio = clips.get('Car left.')?.audio?.data;
+    expect(audio).toBeInstanceOf(Uint8Array);
+    expect(new TextDecoder().decode(audio)).toBe('Carleft.'); // the fake backend's per-word chunks
   });
 });
 

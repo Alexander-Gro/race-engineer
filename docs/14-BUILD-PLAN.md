@@ -323,7 +323,21 @@ in a small, reviewable, green-tested change.
   free pair is piper+whisper-cpp); and a **Mac/Windows smoke-test** with a real Piper voice + whisper model.
   The OS audio sink is already bridged. _Runtime note:_ whisper-cli wants 16 kHz mono WAV/PCM, so the local
   STT path needs the mic captured as WAV/PCM (or a whisper build with ffmpeg) — a rig/runtime alignment,
-  docs/07.) The cloud loop already supersedes the free Web-Speech call-outs.
+  docs/07.) ~~Local Piper voice made audible 2026-06-16 (Windows, rig-verified)~~ — the Piper backend now
+  buffers Piper's *headerless* raw PCM and emits it **WAV-wrapped** (sample rate read from the voice
+  `<model>.onnx.json`, injected for tests) so the renderer `<audio>` element decodes it (raw PCM was
+  silent); `LocalTtsProvider.prerender` now **retains** the synthesized bytes like the cloud provider, so
+  Tier-0 clips are audible (were metadata-only). Verified end-to-end on the rig: real `en_GB-alan-medium`
+  Piper output through the **app-identical `pcmToWav`** plays as clear speech (driver-confirmed). +4 tests
+  (792 green); typecheck + lint + electron build green; compliance PASS (rules 5/6/2). **Two rig findings:**
+  (1) Piper/onnxruntime **crash on a non-ASCII install path** — this profile is `…\Alexander Grønning\…`,
+  and onnxruntime mangles the `ø` (`Gr�nning`) and dies loading the model; local-voice models must live at
+  an **ASCII path**, so the model manager (T4.6) must install/copy there rather than straight into the
+  non-ASCII `userData` dir. (2) Capturing Piper's binary stdout must use `child_process` (the app's path) —
+  a PowerShell `1>` redirect corrupts the bytes (text pipeline) into static, a test-harness trap only.
+  **Still to make it talk *in the app*:** seed `voice.local` with the Piper binary+model paths (no Settings
+  path picker yet) and launch — the worker then builds the audible Piper voice. The cloud loop already
+  supersedes the free Web-Speech call-outs.
   M7.7–M7.9 / M8 / M9 offline-strategy depth are paused until the app is launchable. (Offline glue
   done: `get_stint_plan` + `project_pit_window` are now wired into the AI read-only tool surface,
   reading a precomputed `ctx.stintPlan` (T7.3) like `get_fuel_plan` reads `ctx.fuelPlan`; 373 green.

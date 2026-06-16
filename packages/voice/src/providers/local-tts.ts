@@ -11,6 +11,16 @@ import { ProviderNotReadyError } from './errors';
  * {@link ProviderNotReadyError} on use (so a profile falls back rather than crashing). With one
  * — wired in T10.1, or a fake in tests — the shell simply delegates. No network, no key, no game.
  */
+const concatChunks = (chunks: readonly Uint8Array[], total: number): Uint8Array => {
+  const out = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    out.set(chunk, offset);
+    offset += chunk.length;
+  }
+  return out;
+};
+
 export type LocalTtsEngine = 'piper' | 'kokoro';
 
 export interface LocalTtsConfig {
@@ -59,13 +69,22 @@ export class LocalTtsProvider implements TtsProvider {
   async prerender(phrases: readonly string[], voice: VoiceId): Promise<Map<string, AudioClip>> {
     const clips = new Map<string, AudioClip>();
     for (const phrase of phrases) {
+      // Retain the synthesized bytes (like the cloud provider) so the Tier-0 clips are actually
+      // audible — the backend already yields a self-describing container (e.g. Piper → WAV). A
+      // zero-byte synth leaves `audio` undefined and plays silent.
+      const parts: Uint8Array[] = [];
       let bytes = 0;
-      for await (const chunk of this.synthesizeStream(phrase, voice)) bytes += chunk.data.length;
-      clips.set(phrase, {
+      for await (const chunk of this.synthesizeStream(phrase, voice)) {
+        parts.push(chunk.data);
+        bytes += chunk.data.length;
+      }
+      const clip: AudioClip = {
         id: `${this.name}:${voice}:${phrase}`,
         label: phrase,
         durationMs: Math.max(40, bytes * 8),
-      });
+      };
+      if (bytes > 0) clip.audio = { data: concatChunks(parts, bytes) };
+      clips.set(phrase, clip);
     }
     return clips;
   }
