@@ -1,5 +1,5 @@
 import type { CarState, RaceState } from '@race-engineer/core';
-import { diagnoseHandling, proposeSetupChanges } from '@race-engineer/strategy';
+import { diagnoseHandling, integratedCoaching, proposeSetupChanges } from '@race-engineer/strategy';
 import type { RaceContext } from './context';
 import type { ToolSpec } from './types';
 
@@ -263,6 +263,17 @@ export const READ_ONLY_TOOLS: ToolDef[] = [
         confidence01: d.confidence01,
         note: 'advice only — the driver applies changes in the garage; the app never writes a setup',
       };
+    },
+  },
+  {
+    name: 'get_coaching',
+    description:
+      'Integrated coaching: cross-domain DRIVING advice that links the handling balance with tyre temps and the fuel/energy plan into a single corrective action (e.g. understeer + energy-limited → lift earlier, which helps both). Ordered, each note lists the domains it links + a confidence. Empty when nothing aligns. Driving advice only — never a setup or game change.',
+    parameters: NO_ARGS,
+    handler: (_args, ctx) => {
+      const handling = diagnoseHandling(ctx.raceState.player.tires);
+      const notes = integratedCoaching({ handling, fuelPlan: ctx.fuelPlan });
+      return { notes, confidence01: handling.confidence01 };
     },
   },
   {

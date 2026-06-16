@@ -125,6 +125,21 @@ const INTENTS: readonly Intent[] = [
     },
   },
   {
+    // Integrated coaching — cross-domain driving advice. Distinct keywords from setup/handling.
+    test: /\bcoach\b|what should i (focus|work) on|where am i losing|how (do|can) i (go|be) faster/,
+    respond: (ctx) => {
+      const r = tool('get_coaching', ctx);
+      const notes = (r.notes as Array<Record<string, unknown>>) ?? [];
+      const top = notes[0];
+      if (!top) {
+        return "Nothing jumping out — balance and energy look settled. Keep doing what you're doing.";
+      }
+      const focus = String(top.focus).replace(/\.$/, '');
+      const rationale = typeof top.rationale === 'string' ? top.rationale : '';
+      return rationale ? `${focus} — ${rationale}.` : `${focus}.`;
+    },
+  },
+  {
     // Setup-change advice — checked before the handling *read* so "how do I fix the understeer"
     // gets a suggestion, while "how's the handling" still describes the balance.
     test: /\bset-?up\b|what should i change|how (do|can) i fix|fix.{0,8}(under|over)steer|reduce.{0,14}(under|over)steer/,

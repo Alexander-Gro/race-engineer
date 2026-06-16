@@ -98,6 +98,7 @@ get_current_aids()      → current TC/ABS/brake-bias/engine-map (the advice bas
 get_setup_summary()     → current setup params (read-only)
 get_handling_diagnosis()→ understeer/oversteer balance, tire-temp spread, bottoming, lockups
 propose_setup_change()  → directional, relative setup advice from the diagnosis (advice only)
+get_coaching()          → integrated cross-domain driving advice (handling ⇄ tyres ⇄ energy)
 verify_change(change)   → did telemetry show the driver applied a suggested change?
 ```
 `propose_setup_change({param, delta, rationale})` exists only to **structure advice** for

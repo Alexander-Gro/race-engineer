@@ -173,6 +173,7 @@ describe('read-only invariant', () => {
         'get_tire_status',
         'get_handling_diagnosis',
         'propose_setup_change',
+        'get_coaching',
         'get_current_aids',
       ]),
     );

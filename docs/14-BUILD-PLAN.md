@@ -871,7 +871,16 @@ noisy early-stint plan; carries `confidence01` in the payload for downstream hed
 strategy engine's numbers (rule 1); the radio `templatePhraser` phrases it; proactivity gating (T8.5)
 caps it downstream. 9 rule tests + a phrasing test; 706 green; compliance PASS. _Scope note:_ richer headlines (undercut windows, traffic-cost) need
 the per-rival context the Core doesn't expose yet (same gap as `evaluate_undercut`) — a follow-up.
-**T8.3** (integrated coaching) remains — it builds on the now-readable aids (T8.1) + this strategist.
+~~**T8.3 integrated coaching done 2026-06-16**~~ — the **cross-domain** layer: `integratedCoaching({
+handling, fuelPlan })` in `strategy/coaching.ts` links the handling balance + tyre temps + the
+fuel/energy binding into a single corrective **driving** action, and **only when domains align** (so
+it adds insight, not chatter) — flagship case: understeer + energy-limited → "lift a touch earlier"
+(saves energy *and* eases the front push). Pure composition of the existing deterministic reads (rule
+1, no new math); read-only/advisory — coaches driving, never a setup/game change (rule 5); notes carry
+the diagnosis confidence. Wired as the read-only `get_coaching` AI tool + a free template answer ("what
+should I focus on?"). 5 strategy + 1 template test; 750 green; compliance PASS. **This completes M8's
+offline scope.** _Follow-up:_ more links (brakes, traffic) when those reads exist; the live-audible
+proactive version rides the voice layer.
 Context: [06-AI-ENGINEER](06-AI-ENGINEER.md), [08-INPUT-AND-CONTROLS](08-INPUT-AND-CONTROLS.md).
 
 **T8.4 — Advice verification from telemetry** · _Claude Code_ · deps: T0.3 (works on telemetry; live aid
