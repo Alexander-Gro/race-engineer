@@ -357,7 +357,12 @@ const main = (): void => {
       openReader: async (onMapped) => {
         // Dynamic import keeps koffi/SDL2 off the default path (the synthetic demo never loads it).
         const { InputReader, Sdl2Backend, MockBackend } = await import('@race-engineer/input');
-        const backend = process.platform === 'win32' ? new Sdl2Backend() : new MockBackend();
+        // `SDL2.dll` resolves next to the bundled exe in a packaged app; `ENGINEER_SDL2_DLL` overrides
+        // the path for dev/unbundled runs (e.g. a locally-downloaded SDL2.dll).
+        const backend =
+          process.platform === 'win32'
+            ? new Sdl2Backend(process.env['ENGINEER_SDL2_DLL'])
+            : new MockBackend();
         const reader = new InputReader({ backend, events: { onMapped } });
         reader.beginMapping('ptt');
         return {

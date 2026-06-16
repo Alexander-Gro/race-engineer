@@ -15,14 +15,17 @@ import type { ButtonRef, DeviceInfo, InputBackend } from '../types';
  *  - hot-plug handling (re-enumerate on SDL_JOYDEVICEADDED/REMOVED).
  */
 
+const SDL_INIT_VIDEO = 0x0000_0020;
 const SDL_INIT_JOYSTICK = 0x0000_0200;
 
 // koffi pointer handles are opaque to us; we only hand them back to SDL.
 type NativePtr = unknown;
 
 interface Sdl2Lib {
+  SDL_SetHint: (name: string, value: string) => number;
   SDL_Init: (flags: number) => number;
   SDL_Quit: () => void;
+  SDL_PumpEvents: () => void;
   SDL_JoystickUpdate: () => void;
   SDL_NumJoysticks: () => number;
   SDL_JoystickOpen: (index: number) => NativePtr;
@@ -35,8 +38,10 @@ interface Sdl2Lib {
 const loadSdl2 = (libPath: string): Sdl2Lib => {
   const lib = koffi.load(libPath);
   return {
+    SDL_SetHint: lib.func('SDL_SetHint', 'int', ['str', 'str']) as Sdl2Lib['SDL_SetHint'],
     SDL_Init: lib.func('SDL_Init', 'int', ['uint32']) as Sdl2Lib['SDL_Init'],
     SDL_Quit: lib.func('SDL_Quit', 'void', []) as Sdl2Lib['SDL_Quit'],
+    SDL_PumpEvents: lib.func('SDL_PumpEvents', 'void', []) as Sdl2Lib['SDL_PumpEvents'],
     SDL_JoystickUpdate: lib.func('SDL_JoystickUpdate', 'void', []) as Sdl2Lib['SDL_JoystickUpdate'],
     SDL_NumJoysticks: lib.func('SDL_NumJoysticks', 'int', []) as Sdl2Lib['SDL_NumJoysticks'],
     SDL_JoystickOpen: lib.func('SDL_JoystickOpen', 'void*', ['int']) as Sdl2Lib['SDL_JoystickOpen'],
@@ -68,8 +73,15 @@ export class Sdl2Backend implements InputBackend {
 
   constructor(libPath = 'SDL2.dll') {
     this.#sdl = loadSdl2(libPath);
-    if (this.#sdl.SDL_Init(SDL_INIT_JOYSTICK) !== 0) {
-      throw new Error('SDL_Init(SDL_INIT_JOYSTICK) failed');
+    // Hints must precede SDL_Init. Force DirectInput (pollable) over the default RAWINPUT driver, and
+    // allow reads while another app (the game) has focus — we only ever *read* the device (rule 5).
+    this.#sdl.SDL_SetHint('SDL_JOYSTICK_RAWINPUT', '0');
+    this.#sdl.SDL_SetHint('SDL_JOYSTICK_ALLOW_BACKGROUND_EVENTS', '1');
+    // VIDEO is required alongside JOYSTICK: it creates SDL's hidden message-only window + event pump
+    // that Windows device input needs. JOYSTICK alone enumerates devices but never sees button state
+    // in a process without its own message loop (rig-verified 2026-06-16 with a Fanatec wheel).
+    if (this.#sdl.SDL_Init(SDL_INIT_VIDEO | SDL_INIT_JOYSTICK) !== 0) {
+      throw new Error('SDL_Init(SDL_INIT_VIDEO | SDL_INIT_JOYSTICK) failed');
     }
     this.#enumerate();
   }
@@ -92,6 +104,7 @@ export class Sdl2Backend implements InputBackend {
   }
 
   pollPressed(): ButtonRef[] {
+    this.#sdl.SDL_PumpEvents(); // drain the OS message queue so device state is fresh (Windows)
     this.#sdl.SDL_JoystickUpdate();
     const pressed: ButtonRef[] = [];
     for (const j of this.#joysticks) {

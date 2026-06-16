@@ -638,16 +638,26 @@ Verify: synthetic side-by-side scenario produces correct, debounced events.
 
 ## M4 — Voice & input (the radio plumbing)
 
-**T4.1 — Input reader + PTT mapping** · _Claude Code (mapping verify human-assisted)_ · deps: T0.2 · **done (offline half)**
+**T4.1 — Input reader + PTT mapping** · _Claude Code (mapping verify human-assisted)_ · deps: T0.2 · **done (live-verified on the rig 2026-06-16)**
 Build: backend-agnostic `InputBackend` + `EdgeDetector` (lockout debounce), `BindingSet` +
 `ButtonCapture` (press-to-map), `InputReader` (PTT down/up + quick actions on press, own poll
 loop off the hot path), `MockBackend`. Windows-only `Sdl2Backend` (koffi, passive/non-exclusive
-joystick read) is a **scaffold** — loads `SDL2.dll` lazily, so it typechecks on macOS but is
-not run there.
-Verify: ✅ logic/debounce unit tests with a mock device (17 tests).
-_Human (Windows rig):_ install/bundle `SDL2.dll`; map a real wheel button live; complete the
-`Sdl2Backend` `TODO(rig)` items — stable device GUID (`SDL_JoystickGetGUIDString`) and hot-plug
-re-enumeration — and confirm passive reads don't disturb the game's own input.
+joystick read) loads `SDL2.dll` lazily, so it typechecks on macOS but is not run there.
+Verify: ✅ logic/debounce unit tests with a mock device (17 tests). **✅ Live-mapped a Fanatec wheel
+button in the running app (driver-confirmed).** Two rig fixes made it work: (1) init
+`SDL_INIT_VIDEO | SDL_INIT_JOYSTICK` — VIDEO creates SDL's hidden message-only window + event pump
+that Windows device input needs; JOYSTICK alone enumerates the wheel (Fanatec, 63+108 buttons) but
+reads **no** button state in a process without its own message loop. (2) Force DirectInput
+(`SDL_JOYSTICK_RAWINPUT=0`) — the default RAWINPUT driver needs a real window — plus
+`SDL_JOYSTICK_ALLOW_BACKGROUND_EVENTS=1` (read while the game has focus; we never grab the device —
+rule 5). `pollPressed` now `SDL_PumpEvents()` + `SDL_JoystickUpdate()`. `main` takes a
+`ENGINEER_SDL2_DLL` path override (else the bundled `SDL2.dll`). Compliance PASS (read-only: only
+enumerate/poll calls, no force-feedback/injection).
+_Remaining (packaging/polish, not blocking):_ **bundle `SDL2.dll`** with the installer (T10.5) so
+the bare-name default resolves; the `TODO(rig)` niceties — stable device GUID
+(`SDL_JoystickGetGUIDString`, currently name#index, fine for a fixed rig) and hot-plug
+re-enumeration. _Note:_ a single Fanatec base enumerates as 2 SDL devices (name#index distinguishes
+them); confirmed passive reads don't disturb the game's own input.
 Context: [08-INPUT-AND-CONTROLS](08-INPUT-AND-CONTROLS.md) §1.
 
 **T4.2 — TTS + audio playback + priority queue + Tier-0 pre-render** · _Claude Code_ · deps: T0.2 · **done (offline half)**
