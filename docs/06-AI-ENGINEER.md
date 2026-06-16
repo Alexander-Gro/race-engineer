@@ -9,9 +9,11 @@ official TypeScript SDK, using **tool use** to read live state and strategy. It 
 1. **No math in the model.** All numbers come from tool calls into the Strategy Engine
    ([05](05-STRATEGY-ENGINE.md)) and `RaceState` ([04](04-DATA-MODEL.md)). The model may
    compare and explain, but the authoritative figures are the tool outputs.
-2. **No reflex calls.** "Car left", "3-wide", "clear" are Tier-0 pre-rendered audio
-   triggered by the Event Detector, not the LLM. The LLM is for Tier 2/3 (and some Tier-1
-   phrasing offline-cached). Routing is decided by the event tier, not at runtime.
+2. **No reflex calls — but the LLM voices everything else.** "Car left", "3-wide", "clear" are
+   Tier-0 pre-rendered audio triggered by the Event Detector, **never** the LLM (< 300 ms safety).
+   **Every other tier (1–3) is LLM-generated from data, by default** — proactive strategy call-outs
+   *and* driver answers. Template phrasing is a **degraded fallback only** (no model / cost cap /
+   offline), never the default voice. Routing is by event tier, not a runtime decision.
 3. **Bounded and honest.** The model is instructed to defer to tool data, to hedge when
    `confidence01` is low, and to say "I don't have that" rather than invent.
 4. **Cheap by default.** Endurance races are long; token/character budgets and model
@@ -37,8 +39,12 @@ natural call-out *from structured data*:
 event {type: pit_window_open, payload: {...}} + RaceState summary
    → Claude (short system + compact context) → one or two sentences → TTS queue
 ```
-Latency budget is looser (Tier 1–3). For frequently-repeated phrasings we can cache or
-template to avoid an LLM call entirely.
+Latency budget is looser (Tier 1–3), so these are **LLM-generated from the structured data every
+time** — that is the product: an engineer reasoning about *this* moment, not reading a fixed phrase
+book. Template phrasing exists **only as a degraded fallback** when no model is available (no key /
+no local model / cost cap / offline); it is not the default, and not an optimization to reach for.
+A line the driver hears that the LLM didn't generate (above Tier-0) means the AI engineer isn't
+running — a bug, not the design.
 
 **Background strategist (always on).** The Strategy Engine recomputes every tick, so the
 engineer is *continuously* watching for opportunities, not just answering questions. When

@@ -117,8 +117,9 @@ Adapter.readFrame()           # raw rF2 structs + REST snapshot
    → EventDetector.diff(prev, next) → [Event...]
    → StrategyEngine.update(RaceState)        # cheap incremental update
         ├─ events routed by tier:
-        │    tier 0 (spotter)   → Voice (pre-rendered/templated) directly
-        │    tier 1 (strategic) → AI Engineer (proactive phrasing) → Voice
+        │    tier 0 (spotter)   → Voice (pre-rendered clips) directly — never the LLM
+        │    tier 1+ (strategic) → AI Engineer GENERATES the line from the event + data → Voice
+        │                          (template phrasing only as a degraded fallback)
         └─ RaceState + strategy snapshot → UI (throttled to ~10–15 Hz)
    → Persistence.appendIfLapBoundary()
 ```
@@ -136,13 +137,15 @@ PTT pressed → mic capture → STT (stream) → AI Engineer
 
 | Tier | Example | Mechanism | Budget |
 | --- | --- | --- | --- |
-| 0 Reflex | "Car left", "3-wide" | Pre-rendered audio clips, no network | < 300 ms |
-| 1 Templated | "Box this lap", "Fuel: 4 laps" | Template + cached/synthesized TTS | < 700 ms |
-| 2 Conversational | "Should I undercut the GTE ahead?" | STT → Claude(+tools) → streaming TTS | < 2 s to first audio |
-| 3 Deliberative | "Plan my whole stint sequence" | Claude with full context, may take seconds | best effort |
+| 0 Reflex | "Car left", "3-wide" | Pre-rendered audio clips, no network — **never the LLM** | < 300 ms |
+| 1 Proactive (strategic) | "Box this lap", "Energy's tight — save ~2% a lap" | **LLM generates from the event + data** → TTS; template phrasing only as a degraded fallback | < ~1.5 s (looser — non-reflex) |
+| 2 Conversational | "Should I undercut the GTE ahead?" | STT → LLM(+read-only tools) → streaming TTS | < 2 s to first audio |
+| 3 Deliberative | "Plan my whole stint sequence" | LLM with full context, may take seconds | best effort |
 
-The Event Detector tags each event with its tier so the right path is taken without a
-runtime decision in the hot loop.
+The Event Detector tags each event with its tier so the right path is taken without a runtime
+decision in the hot loop. **Tier-0 is the only pre-rendered tier; Tiers 1–3 are LLM-generated** —
+template phrasing is the *fallback* when no model is available (no key / no local model / cost cap /
+offline), not the default voice (see the north star in [CLAUDE.md](../CLAUDE.md) and [docs/06](06-AI-ENGINEER.md)).
 
 ## Failure & degradation
 

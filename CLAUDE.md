@@ -22,11 +22,36 @@ The product spec and engineering plan live in [docs/](docs/). The numbered files
 the source of truth. If code and docs disagree, the docs describe intent — reconcile
 explicitly rather than silently diverging.
 
+## Product vision (the north star — build toward this)
+
+**Every time the engineer speaks to the driver, an AI generated that line from the live data,
+and the voice model spoke it.** Not canned, threshold-triggered sentences played from a fixed
+phrase library. The AI continuously watches the telemetry + strategy state, decides when something
+is genuinely worth saying (or answers when asked), generates the words from the *real numbers*, and
+the TTS voices them. Judge **every** change against this: _does the engineer reason and speak like a
+real human race engineer, or is it reading a script?_
+
+- **The one deliberate exception — Tier-0 reflex spotter calls** ("car left", "3-wide", "clear").
+  These must land in **< 300 ms**, so they are **pre-rendered clips**, not a live LLM round-trip (a
+  late "car left" is useless). *Everything else* — fuel, energy, pit windows, traffic, coaching, and
+  every answer the driver asks — is **LLM-generated from data, by default**.
+- **Template / canned phrasing is a _degraded fallback only_** — for when no model is available (no
+  key, no local model, a cost cap hit, offline). It is **never** the intended default voice. If the
+  driver hears templated lines for anything above Tier-0, the AI engineer isn't actually running —
+  that's a **bug to fix**, not the design.
+- **Local-first ≠ template-first.** The free default (docs/15) runs a **local model (Qwen via
+  Ollama)** at $0 — that *is* the AI. Cloud Claude is the opt-in upgrade, not the only way to get a
+  real engineer.
+
 ## Current state
 
-Planning only. There is **no application code yet**. The immediate work is to validate
-the riskiest integration assumptions (see "Research spikes" below) and then scaffold
-the app per [docs/12-DEV-SETUP.md](docs/12-DEV-SETUP.md).
+The app is built and runs on the Windows rig: live + synthetic telemetry, dashboard, the
+deterministic strategy/event engines, voice I/O (Piper TTS + whisper.cpp STT), wheel/on-screen PTT,
+and the LMU adapter (SHM + REST) all work (~800 tests). **The current priority is re-pointing the
+*voice* to the vision above** — make the LLM the source of every Tier-1+ utterance (proactive
+call-outs *and* answers), with template only as the degraded fallback, and validate it on real LMU
+data with a real model. See the **"Re-point to the vision"** section in
+[docs/14-BUILD-PLAN.md](docs/14-BUILD-PLAN.md).
 
 ## Chosen stack (summary — full rationale in docs/02)
 
@@ -51,9 +76,12 @@ core is the one decision most likely to be revisited.
 
 1. **The LLM never computes numbers.** Fuel, stint, pit, and degradation math are pure,
    unit-tested TypeScript functions. The LLM *calls* them as tools and phrases results.
-2. **Tiered latency for voice** (see docs/06). Spotter call-outs ("car left") must be
-   pre-rendered/templated audio, never a live LLM round-trip. Strategic answers may use
-   the LLM. Never block the telemetry loop on network I/O.
+2. **The AI generates the words; the voice only speaks them** (the vision above; tiers in docs/06).
+   Every **Tier-1+ utterance — proactive call-outs *and* answers — is LLM-generated from the live
+   data by default.** Canned/template phrasing is a **degraded fallback only** (no model / cost cap
+   / offline), never the default. The **sole exception is Tier-0 reflex spotter calls** ("car left",
+   "3-wide", "clear"): pre-rendered clips, **never** a live LLM round-trip (< 300 ms safety). Never
+   block the telemetry loop on network I/O.
 3. **The telemetry read loop is the hot path.** Keep it allocation-light and off the UI
    thread. Normalize raw game structs into the canonical schema in [docs/04-DATA-MODEL.md](docs/04-DATA-MODEL.md)
    immediately; nothing downstream should know about rF2/LMU struct layouts.

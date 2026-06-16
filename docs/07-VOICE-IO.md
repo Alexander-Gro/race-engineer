@@ -8,8 +8,11 @@ it feel like a real team radio without distracting the driver.
 
 - **Push-to-talk, not always-listening.** Simpler, privacy-friendly, no wake word, no
   false triggers from engine noise. The driver holds a mapped wheel button to talk.
-- **Tiered output (see [01](01-ARCHITECTURE.md)).** Reflex spotter calls are pre-rendered
-  audio; conversational replies stream from TTS. Different budgets, different paths.
+- **Tiered output (see [01](01-ARCHITECTURE.md)).** Only the **Tier-0 reflex** spotter calls ("car
+  left / 3-wide / clear") are pre-rendered audio (< 300 ms, never the LLM). **Everything above Tier-0
+  — proactive call-outs and replies — is LLM-generated from data and streamed to TTS** (the north star
+  in [CLAUDE.md](../CLAUDE.md) / [06](06-AI-ENGINEER.md)); pre-rendered/templated phrasing for those is
+  a **degraded fallback only** (no model / cost cap / offline), not the default.
 - **Never block driving.** Audio is queued, preemptible, and ducked sensibly; the
   engineer stays quiet at the worst moments (mid-corner) unless it is urgent.
 - **Cloud for quality, local for endurance.** Long races must be runnable cheaply/offline.
@@ -130,9 +133,9 @@ interface VoicePlayer {
 
 | Path | Budget | How |
 | --- | --- | --- |
-| Spotter reflex | < 300 ms | pre-rendered clip, no network |
-| Templated strategy | < 700 ms | template text → cached/short TTS |
-| Conversational reply | < 2 s to first audio | streaming STT + streaming LLM + sentence-streamed TTS |
+| Spotter reflex (Tier 0) | < 300 ms | pre-rendered clip, no network — **never the LLM** |
+| Proactive strategy (Tier 1) | < ~1.5 s | **LLM generates from the event + data** → sentence-streamed TTS (template = degraded fallback) |
+| Conversational reply (Tier 2) | < 2 s to first audio | streaming STT + streaming LLM(+tools) + sentence-streamed TTS |
 
 ## Testing
 
