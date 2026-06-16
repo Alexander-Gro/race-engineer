@@ -289,7 +289,15 @@ in a small, reviewable, green-tested change.
   speaks back in a real cloud voice.** _Human-verify (you + OpenAI key + mic + speakers):_ confirm the
   end-to-end loop.) **Remaining T10.1:** the **local native backends** (Piper/Kokoro + faster-whisper
   binaries — the free, no-key default; rig/native) and the **wheel PTT** (SDL2.dll on the rig — the
-  on-screen 🎙 button needs no SDL2). The cloud loop already supersedes the free Web-Speech call-outs.
+  on-screen 🎙 button needs no SDL2). (~~Piper TTS backend done 2026-06-16~~ — `piperTtsBackend()` in
+  `apps/desktop/src/voice/piper-backend.ts` fills the `piperTts` injected-backend seam: spawns
+  `piper --output-raw --model …`, writes text to stdin, streams stdout PCM as `AudioChunk`s. The
+  spawner is **injected**, so it's unit-tested offline with a fake child process — no binary needed;
+  the real binary/model come from the model manager (T4.6). 7 tests; 757 green; compliance PASS.
+  **Next:** wire it into the worker (`worker-voice.ts` — pass the backend to `piperTts`/`kokoroTts`
+  when a binary path is configured), a whisper.cpp STT backend (same injected-spawn shape), and
+  Kokoro's ONNX backend; then a Mac smoke-test with a real Piper voice. The OS audio sink is already
+  bridged.) The cloud loop already supersedes the free Web-Speech call-outs.
   M7.7–M7.9 / M8 / M9 offline-strategy depth are paused until the app is launchable. (Offline glue
   done: `get_stint_plan` + `project_pit_window` are now wired into the AI read-only tool surface,
   reading a precomputed `ctx.stintPlan` (T7.3) like `get_fuel_plan` reads `ctx.fuelPlan`; 373 green.
