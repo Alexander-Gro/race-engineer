@@ -293,11 +293,18 @@ in a small, reviewable, green-tested change.
   `apps/desktop/src/voice/piper-backend.ts` fills the `piperTts` injected-backend seam: spawns
   `piper --output-raw --model …`, writes text to stdin, streams stdout PCM as `AudioChunk`s. The
   spawner is **injected**, so it's unit-tested offline with a fake child process — no binary needed;
-  the real binary/model come from the model manager (T4.6). 7 tests; 757 green; compliance PASS.
-  **Next:** wire it into the worker (`worker-voice.ts` — pass the backend to `piperTts`/`kokoroTts`
-  when a binary path is configured), a whisper.cpp STT backend (same injected-spawn shape), and
-  Kokoro's ONNX backend; then a Mac smoke-test with a real Piper voice. The OS audio sink is already
-  bridged.) The cloud loop already supersedes the free Web-Speech call-outs.
+  the real binary/model come from the model manager (T4.6). 7 tests; compliance PASS. ~~whisper.cpp STT
+  backend done 2026-06-16~~ — `whisperCppBackend()` in `apps/desktop/src/voice/whisper-backend.ts`
+  fills the `whisperCppStt`/`fasterWhisperStt` seam: batch-shaped (buffers held-PTT frames, on `finish`
+  writes a temp WAV, runs `whisper-cli -m … -f … -nt`, returns the stdout transcript); spawner **+** fs
+  **+** tmp/clock all injected, so it's unit-tested offline with fakes (no binary, no disk), cleans up
+  the temp file in a `finally`, and surfaces a spawn error rather than silent empties. 8 tests; 765
+  green; compliance PASS. **Next:** wire both into the worker (`worker-voice.ts` — pass the backends to
+  `piperTts`/`whisperCppStt` when binary paths are configured), Kokoro's ONNX backend; then a Mac
+  smoke-test with a real Piper voice. The OS audio sink is already bridged. _Runtime note:_ whisper-cli
+  wants 16 kHz mono WAV/PCM, so the local STT path needs the mic captured as WAV/PCM (or a whisper build
+  with ffmpeg) — a rig/runtime alignment, docs/07.) The cloud loop already supersedes the free
+  Web-Speech call-outs.
   M7.7–M7.9 / M8 / M9 offline-strategy depth are paused until the app is launchable. (Offline glue
   done: `get_stint_plan` + `project_pit_window` are now wired into the AI read-only tool surface,
   reading a precomputed `ctx.stintPlan` (T7.3) like `get_fuel_plan` reads `ctx.fuelPlan`; 373 green.
