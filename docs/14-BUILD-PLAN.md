@@ -918,7 +918,14 @@ the adapter (rule 4). 9 tests; 715 green; compliance PASS. **Live half (rig, per
 TC/ABS/brake-bias/aero/mechanical, the file location/nesting (docs/03 §S4.1), and wire the fs read; the
 `pnpm capture` script will grab a real `.svm`.) → ~~T9.2 handling
 diagnosis from telemetry~~ (done, pulled forward — it's the data-ready piece: tyre temps are already
-populated, no rig needed) → T9.3 setup screen (current values + safe ranges) → T9.4 AI
+populated, no rig needed) → T9.3 setup screen (~~view-model done 2026-06-16~~ — a pure
+`buildSetupModel(snapshot)` in `apps/desktop/src/dashboard/setup-model.ts`: the **aid baseline** the
+engineer advises from (TC/ABS with their schema range; brake bias %, engine map) + the **loaded setup
+params** grouped by `.svm` section (from T9.1). State-honest — unread aids `—`, and per-setting
+mechanical/aero **safe ranges** stay `—` until the rig provides the car data (docs/03 §S4.2); the model
+carries the structure so the screen renders them the moment they land. 7 tests; 722 green; compliance
+PASS. _Remaining:_ the dedicated screen UI lands with the deferred Tailwind/shadcn reskin; safe-range
+values come from the rig.) → T9.4 AI
 recommendations (`propose_setup_change`, advice only) → T9.5 before/after compare after the driver
 applies changes in the garage.
 
