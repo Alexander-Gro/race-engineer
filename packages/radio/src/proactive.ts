@@ -37,7 +37,7 @@ const URGENT_REFLEX = new Set<EventType>(['car_left', 'car_right', 'three_wide']
  */
 export const defaultVoicePriority = (event: EngineerEvent): number => {
   if (URGENT_REFLEX.has(event.type)) return VoicePriority.SPOTTER;
-  if (event.type === 'fuel_low') {
+  if (event.type === 'fuel_low' || event.type === 'energy_low') {
     const threshold = event.payload.thresholdLaps;
     return typeof threshold === 'number' && threshold <= 2
       ? VoicePriority.WARNING
@@ -62,6 +62,14 @@ export const templatePhraser: ProactivePhraser = (event) => {
       return whole <= 1
         ? 'Fuel critical — box this lap.'
         : `Fuel's low — about ${whole} laps left.`;
+    }
+    case 'energy_low': {
+      const laps = event.payload.lapsRemaining;
+      if (typeof laps !== 'number') return 'Virtual energy is getting low.';
+      const whole = Math.max(0, Math.floor(laps)); // conservative: at least this many full laps
+      return whole <= 1
+        ? 'Energy critical — box this lap.'
+        : `Energy's low — about ${whole} laps left.`;
     }
     case 'pit_window_open': {
       const earliest = event.payload.earliestLap;

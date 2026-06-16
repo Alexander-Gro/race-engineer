@@ -12,6 +12,7 @@ export const EventTypeSchema = z.enum([
   // Tier 1 — templated
   'lap_completed',
   'fuel_low',
+  'energy_low', // Virtual Energy running low (LMU) — the VE sibling of fuel_low
   'tire_temp_out_of_window',
   'pit_window_open',
   'box_this_lap',

@@ -357,7 +357,8 @@ in a small, reviewable, green-tested change.
   fuel answer VE-aware, and the system prompt flags the energy-limited case (641 green; compliance
   PASS). **T11.3 offline half done** — a tolerant REST→canonical VE mapper + RaceState merge seam
   (`virtualEnergyFromRest`/`withVirtualEnergyFromRest`), unit-tested (650 green; compliance PASS).
-  **M11 is now offline-complete**; all that remains is T11.3's **live half** — capturing the real
+  **M11 is now offline-complete** (incl. **T11.5** — a proactive `energy_low` voice call-out, the VE
+  sibling of `fuel_low`); all that remains is T11.3's **live half** — capturing the real
   `/rest/strategy/usage` payload on the rig to pin field names + wiring the ~2 Hz REST poll into the
   live host (rig backlog, docs/03 §C). See M11 below.
 
@@ -978,6 +979,17 @@ into-`RaceState` tests; typecheck + lint + 650 green; compliance PASS.
 `RepairAndRefuel` JSON to pin field names/units, narrow the candidate lists, and wire the ~2 Hz REST
 poll into `lmu-host.ts` off the SHM hot path (merge via `withVirtualEnergyFromRest`). Full checklist
 in [03-LMU-INTEGRATION.md](03-LMU-INTEGRATION.md) §C (Virtual Energy).
+
+**T11.5 — Proactive `energy_low` call-out** · _Claude Code_ · deps: T11.1, T11.2 · **done**
+Build: ✅ the Virtual-Energy sibling of `fuel_low` (T5.4) — a new `energy_low` `EventType`, an
+`energyLowRule` (`packages/core/src/events/rules/energy-low.ts`) that fires off the canonical
+`player.virtualEnergy.lapsRemainingEst` at escalating laps-left thresholds (default 4 → 2) with the
+framework cooldown, silent when VE is absent/unknown. Wired into `defaultEventRules`; the radio
+`templatePhraser` speaks it ("Energy's low — about N laps." / "Energy critical — box this lap.") and
+`defaultVoicePriority` routes it by urgency (≤2 laps → WARNING, else STRATEGY), exactly like fuel;
+the dashboard labels it "Energy low" in the alerts feed. Pure detection, no math, no write path.
+Verify: ✅ rule tests (one-shot arc / silent-when-no-VE / multi-threshold escalation) + radio
+phrasing + priority tests; typecheck + lint + 655 green; compliance PASS.
 **T11.4 — VE in the AI tool surface + template answers** · _Claude Code_ · deps: T11.1 · **done**
 Build: ✅ `get_fuel_plan` now returns the binding constraint + a `virtualEnergy` block as
 **percentages** (the LMU convention, so the LLM/guard quote figures directly, not raw 0..1), null

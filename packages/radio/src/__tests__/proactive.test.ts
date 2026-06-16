@@ -68,6 +68,15 @@ describe('templatePhraser', () => {
     expect(templatePhraser(ev('lap_completed'))).toBeNull();
   });
 
+  it('phrases energy_low from the payload number, going critical under ~1 lap (T11.5)', () => {
+    expect(templatePhraser(ev('energy_low', { lapsRemaining: 3.8, thresholdLaps: 4 }))).toBe(
+      "Energy's low — about 3 laps left.",
+    );
+    expect(templatePhraser(ev('energy_low', { lapsRemaining: 0.9, thresholdLaps: 2 }))).toBe(
+      'Energy critical — box this lap.',
+    );
+  });
+
   it('phrases the strategy pit-window call-outs from the payload (T7.9)', () => {
     expect(
       templatePhraser(ev('pit_window_open', { earliestLap: 8, latestLap: 22 }, { tier: 2 })),
@@ -87,6 +96,15 @@ describe('defaultVoicePriority', () => {
       VoicePriority.WARNING,
     );
     expect(defaultVoicePriority(ev('fuel_low', { thresholdLaps: 4 }, { tier: 1 }))).toBe(
+      VoicePriority.STRATEGY,
+    );
+  });
+
+  it('routes energy_low by urgency, exactly like fuel_low (T11.5)', () => {
+    expect(defaultVoicePriority(ev('energy_low', { thresholdLaps: 2 }, { tier: 1 }))).toBe(
+      VoicePriority.WARNING,
+    );
+    expect(defaultVoicePriority(ev('energy_low', { thresholdLaps: 4 }, { tier: 1 }))).toBe(
       VoicePriority.STRATEGY,
     );
   });

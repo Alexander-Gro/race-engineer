@@ -152,7 +152,7 @@ type EventType =
   // Tier 0 — reflex spotter (pre-rendered audio)
   | 'car_left' | 'car_right' | 'three_wide' | 'clear'
   // Tier 1 — templated
-  | 'lap_completed' | 'fuel_low' | 'tire_temp_out_of_window'
+  | 'lap_completed' | 'fuel_low' | 'energy_low' | 'tire_temp_out_of_window'
   | 'pit_window_open' | 'box_this_lap' | 'blue_flag'
   | 'faster_class_approaching' | 'flag_changed'
   // Tier 2/3 — conversational / deliberative (LLM-phrased or driver-initiated)

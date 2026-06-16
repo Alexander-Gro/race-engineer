@@ -157,6 +157,7 @@ const EVENT_LABELS: Partial<Record<EventType, string>> = {
   three_wide: 'Three wide',
   clear: 'Clear',
   fuel_low: 'Fuel low',
+  energy_low: 'Energy low',
   tire_temp_out_of_window: 'Tyres out of window',
   pit_window_open: 'Pit window open',
   box_this_lap: 'Box this lap',
