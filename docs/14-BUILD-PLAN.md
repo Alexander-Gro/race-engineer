@@ -909,7 +909,15 @@ Context: [08-INPUT-AND-CONTROLS](08-INPUT-AND-CONTROLS.md) §3, [09-UI-UX](09-UI
 T10.1 wire local STT/TTS (Piper/Kokoro + faster-whisper) + cost estimator → T10.2 full
 onboarding (profile choice + model download/GPU detect + mic permission + plugin-install
 helper + health UI, per [16](16-PLATFORM-PREREQUISITES.md) §5) → T10.3 crash isolation,
-graceful degradation, local diagnostics export → ~~T10.4 eval suites (latency + accuracy) in
+graceful degradation, **local diagnostics export** (~~diagnostics export done 2026-06-16~~ — a pure,
+secret-safe `buildDiagnosticsReport` in `apps/desktop/src/diagnostics.ts`: a redacted bug-report
+snapshot — app/version, platform, configured providers, source/health, recent event counts, and recent
+**scrubbed** errors. **No secrets ever** (rule 6): keys are reported as presence booleans, never values;
+errors pass through `redactSecrets`; device/PTT hardware ids reduce to booleans. Pure/input-injected,
+10 tests incl. a planted-key-never-survives check; 665 green; compliance PASS. _Remaining T10.3:_ the
+crash-isolation/auto-restart wiring + graceful-degradation surfacing in the Electron shell, and wiring
+the diagnostics export to a "Save report" button + a real version/platform/health collector — runtime
+pieces best verified live) → ~~T10.4 eval suites (latency + accuracy) in
 CI on recordings~~ (done — new **`@race-engineer/eval`** package + `pnpm eval` CLI. Three pure,
 deterministic eval suites that score the **same always-on machinery the app runs** against ground
 truth derived from the data itself: (a) **fuel accuracy** — replays a `RaceState` stream through
