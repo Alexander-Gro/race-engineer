@@ -299,12 +299,20 @@ in a small, reviewable, green-tested change.
   writes a temp WAV, runs `whisper-cli -m … -f … -nt`, returns the stdout transcript); spawner **+** fs
   **+** tmp/clock all injected, so it's unit-tested offline with fakes (no binary, no disk), cleans up
   the temp file in a `finally`, and surfaces a spawn error rather than silent empties. 8 tests; 765
-  green; compliance PASS. **Next:** wire both into the worker (`worker-voice.ts` — pass the backends to
-  `piperTts`/`whisperCppStt` when binary paths are configured), Kokoro's ONNX backend; then a Mac
-  smoke-test with a real Piper voice. The OS audio sink is already bridged. _Runtime note:_ whisper-cli
-  wants 16 kHz mono WAV/PCM, so the local STT path needs the mic captured as WAV/PCM (or a whisper build
-  with ffmpeg) — a rig/runtime alignment, docs/07.) The cloud loop already supersedes the free
-  Web-Speech call-outs.
+  green; compliance PASS. ~~worker/selector wiring done 2026-06-16~~ — `attachLocalBackends(route)`
+  (`apps/desktop/src/voice/local-backends.ts`) supplies the Piper/whisper backends to the route for
+  local engines **whose binary path is configured** (else the shell stays not-ready and the worker
+  falls back to the fake — honest readiness, no spawning a missing binary); `worker-voice.ts` applies
+  it before `selectTts/SttProvider`. 6 tests; 771 green; electron typecheck green; compliance PASS.
+  **Next:** the **model-path resolution + build-gate** (model manager T4.6 → `ttsConfig`/`sttConfig`
+  binary+model paths into the route, **and** widen the worker's voice build-gate
+  `voiceRouteIsCloud(route) || ENGINEER_VOICE=1` to also admit a ready *local* route — together these
+  flip the working free pair **piper+whisper-cpp** on), the
+  **Kokoro ONNX** + **faster-whisper** backends (the default-profile engines; until then the working
+  free pair is piper+whisper-cpp), and a **Mac smoke-test** with a real Piper voice. The OS audio sink
+  is already bridged. _Runtime note:_ whisper-cli wants 16 kHz mono WAV/PCM, so the local STT path needs
+  the mic captured as WAV/PCM (or a whisper build with ffmpeg) — a rig/runtime alignment, docs/07.) The
+  cloud loop already supersedes the free Web-Speech call-outs.
   M7.7–M7.9 / M8 / M9 offline-strategy depth are paused until the app is launchable. (Offline glue
   done: `get_stint_plan` + `project_pit_window` are now wired into the AI read-only tool surface,
   reading a precomputed `ctx.stintPlan` (T7.3) like `get_fuel_plan` reads `ctx.fuelPlan`; 373 green.

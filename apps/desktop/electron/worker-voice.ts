@@ -14,6 +14,7 @@ import {
 import { IpcAudioSink, type AudioOutMessage } from '../src/audio-bridge';
 import { BridgedMicSource } from '../src/mic-bridge';
 import { createRadioReply } from '../src/radio-reply';
+import { attachLocalBackends } from '../src/voice/local-backends';
 import { EngineerVoice } from '../src/voice-engine';
 
 /**
@@ -55,8 +56,11 @@ export const createWorkerVoice = async (
   answer: (question: string) => Promise<string>,
   route: VoiceProviderConfig,
 ): Promise<WorkerVoice> => {
-  let tts = pickTts(route);
-  const stt = pickStt(route);
+  // Supply the native local backends (Piper/whisper.cpp) for local engines whose binary path is
+  // configured; otherwise the local shells stay not-ready and pickTts/pickStt fall back to the fake.
+  const wired = attachLocalBackends(route);
+  let tts = pickTts(wired);
+  const stt = pickStt(wired);
 
   // Pre-render the Tier-0 spotter clips once (a cloud TTS makes ~6 calls here). If that fails (bad key
   // / offline), fall back to the free offline voice rather than leaving the engineer mute mid-race.

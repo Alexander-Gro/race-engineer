@@ -29,7 +29,8 @@ export interface PiperBackendOptions {
   spawn?: SpawnFn;
 }
 
-const defaultSpawn: SpawnFn = (command, args) =>
+/** The real `node:child_process` spawner (shared by the local voice backends). */
+export const defaultSpawn: SpawnFn = (command, args) =>
   nodeSpawn(command, [...args]) as unknown as SpawnedChild;
 
 /**
