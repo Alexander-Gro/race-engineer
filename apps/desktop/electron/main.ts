@@ -27,7 +27,7 @@ import { AUDIO_ENDED_CHANNEL, AUDIO_OUT_CHANNEL } from '../src/audio-bridge';
 import { RADIO_FRAME_CHANNEL, RADIO_PTT_CHANNEL } from '../src/mic-bridge';
 import { MIC_SETTINGS_DEEPLINK } from '../src/audio-io';
 import { resolveLlmRouteConfig } from '../src/llm-route';
-import { resolveVoiceRoute } from '../src/voice-route';
+import { resolveVoiceRoute, voiceRouteIsReady } from '../src/voice-route';
 import {
   formatPttBinding,
   PttMapper,
@@ -71,6 +71,19 @@ let mainWindow: BrowserWindow | null = null;
 // The most recent snapshot, replayed to any window once it finishes loading so a freshly-opened or
 // reloaded window paints immediately instead of waiting for the next throttled tick.
 let lastSnapshot: EngineerSnapshot | null = null;
+// Whether the worker will voice proactive call-outs audibly (a ready route). The renderer uses this to
+// mute its free Web-Speech call-out fallback so the two don't double-speak. Main sends it *early* (at
+// window load + on configure) to beat the first call-out — the worker's own post-build `voice-active`
+// arrives only after pre-render and would otherwise let a Tier-1 leak (e.g. "fuel low") slip through.
+let voiceActiveForRenderer = false;
+const sendVoiceActive = (): void => {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send(AUDIO_OUT_CHANNEL, {
+      kind: 'voice-active',
+      active: voiceActiveForRenderer,
+    });
+  }
+};
 
 // Pending text-ask requests, correlated by id: renderer → main (invoke) → worker → main → resolve.
 let askSeq = 0;
@@ -116,6 +129,9 @@ const createWindow = (): BrowserWindow => {
   // The renderer subscribes during load; the worker may already be mid-stream, so paint the latest
   // snapshot the moment the page is ready (and again after an HMR reload).
   window.webContents.on('did-finish-load', () => {
+    // Tell the renderer the voice status *before* the first snapshot, so it mutes its Web-Speech
+    // call-out fallback up front (no robotic "fuel low" leak before the worker's own signal lands).
+    sendVoiceActive();
     if (lastSnapshot && !window.isDestroyed()) {
       window.webContents.send(SNAPSHOT_CHANNEL, lastSnapshot);
     }
@@ -297,6 +313,12 @@ const main = (): void => {
       const settings = settingsStore.load();
       const llmRoute = resolveLlmRouteConfig(settings.llm, secretStore);
       const voiceRoute = resolveVoiceRoute(settings.voice, secretStore);
+      // Predict whether the worker will voice call-outs audibly (ready route or the offline preview) and
+      // tell the renderer now, so its Web-Speech fallback is muted before the first call-out. The worker
+      // corrects this to `false` if its build/pre-render actually fails (bad key / offline).
+      voiceActiveForRenderer =
+        voiceRouteIsReady(voiceRoute) || process.env['ENGINEER_VOICE'] === '1';
+      sendVoiceActive();
       worker.postMessage({
         type: 'configure',
         llmRoute,

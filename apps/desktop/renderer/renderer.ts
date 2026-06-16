@@ -620,10 +620,16 @@ const wireAudioOut = (): void => {
     // (active:false) leaves the Web-Speech call-outs as the only voice.
     if (msg.kind === 'voice-active') {
       workerVoicingCallouts = msg.active;
+      const toggle = document.getElementById('callout-toggle');
       if (msg.active) {
+        // The real engine voice owns call-outs — silence the Web-Speech fallback and hide its toggle.
         calloutSpeaker?.setEnabled(false);
-        const toggle = document.getElementById('callout-toggle');
-        if (toggle) toggle.hidden = true; // the engine voice owns call-outs; the toggle is moot
+        if (toggle) toggle.hidden = true;
+      } else {
+        // No audible worker voice (none configured, or its build failed) — the free Web-Speech
+        // fallback voices call-outs again.
+        calloutSpeaker?.setEnabled(true);
+        if (toggle) toggle.hidden = false;
       }
       return;
     }
