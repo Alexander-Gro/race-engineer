@@ -1,3 +1,4 @@
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import type { SpawnFn } from './piper-backend';
 import { whisperCppBackend, type WhisperFsLike } from './whisper-backend';
@@ -35,6 +36,9 @@ const makeFs = () => {
 
 const CONFIG = { binaryPath: '/opt/whisper/whisper-cli', modelPath: '/models/ggml-small.bin' };
 const FIXED = { tmpDir: '/tmp', now: () => 123 };
+// The backend builds the temp path with node:path `join`, so it is platform-native
+// (`/tmp/...` on POSIX, `\tmp\...` on Windows) — derive the expected path the same way.
+const WAV = join('/tmp', 're-stt-123.wav');
 
 describe('whisperCppBackend', () => {
   it('buffers PTT frames, transcribes them on finish, and returns the stdout text', async () => {
@@ -46,16 +50,10 @@ describe('whisperCppBackend', () => {
     const res = await stream.finish();
 
     expect(res.transcript).toBe('Box this lap.'); // collapsed/trimmed
-    expect(fakeFs.writes[0]?.path).toBe('/tmp/re-stt-123.wav');
+    expect(fakeFs.writes[0]?.path).toBe(WAV);
     expect(fakeFs.writes[0]?.data).toEqual(new Uint8Array([1, 2, 3])); // frames concatenated
     expect(calls[0]?.command).toBe('/opt/whisper/whisper-cli');
-    expect(calls[0]?.args).toEqual([
-      '-m',
-      '/models/ggml-small.bin',
-      '-f',
-      '/tmp/re-stt-123.wav',
-      '-nt',
-    ]);
+    expect(calls[0]?.args).toEqual(['-m', '/models/ggml-small.bin', '-f', WAV, '-nt']);
   });
 
   it('passes the language flag when configured', async () => {
@@ -100,7 +98,7 @@ describe('whisperCppBackend', () => {
     const stream = whisperCppBackend({ spawn, fs: fakeFs.fs, ...FIXED })({}, CONFIG);
     stream.pushAudio(new Uint8Array([1]));
     await expect(stream.finish()).rejects.toThrow(/ENOENT/);
-    expect(fakeFs.removed).toContain('/tmp/re-stt-123.wav'); // finally-block cleanup
+    expect(fakeFs.removed).toContain(WAV); // finally-block cleanup
   });
 
   it('cleans up the temp audio file on success too', async () => {
@@ -109,7 +107,7 @@ describe('whisperCppBackend', () => {
     const stream = whisperCppBackend({ spawn, fs: fakeFs.fs, ...FIXED })({}, CONFIG);
     stream.pushAudio(new Uint8Array([1]));
     await stream.finish();
-    expect(fakeFs.removed).toContain('/tmp/re-stt-123.wav');
+    expect(fakeFs.removed).toContain(WAV);
   });
 
   it('requires a spawn function (worker supplies node:child_process; tests inject a fake)', () => {

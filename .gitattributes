@@ -1,0 +1,21 @@
+# Line endings: LF in the repository and in every working tree.
+# Windows is the sole runtime target, but the toolchain enforces LF
+# (Prettier `endOfLine: lf`, ESLint), so a CRLF checkout fails the lint
+# gate on every file. Pin LF here so `core.autocrlf` can't reintroduce CRLF.
+* text=auto eol=lf
+
+# Known binary assets — never normalize (protects current/future fixtures,
+# voice models, and native addons from line-ending corruption).
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.gif   binary
+*.ico   binary
+*.wav   binary
+*.mp3   binary
+*.onnx  binary
+*.bin   binary
+*.node  binary
+*.dll   binary
+*.exe   binary
+*.zip   binary
