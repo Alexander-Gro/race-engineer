@@ -86,6 +86,15 @@ describe('templatePhraser', () => {
     );
   });
 
+  it('phrases the background strategist strategy_update by kind (T8.2)', () => {
+    expect(
+      templatePhraser(ev('strategy_update', { kind: 'energy-save', savePerLapPct: 1.8 })),
+    ).toMatch(/energy-limited.*1\.8% a lap/);
+    expect(
+      templatePhraser(ev('strategy_update', { kind: 'fuel-save', savePerLapLiters: 0.25 })),
+    ).toMatch(/fuel's tight.*0\.25 a lap/);
+  });
+
   it('phrases the strategy pit-window call-outs from the payload (T7.9)', () => {
     expect(
       templatePhraser(ev('pit_window_open', { earliestLap: 8, latestLap: 22 }, { tier: 2 })),

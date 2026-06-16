@@ -4,6 +4,7 @@ import {
   fuelLowRule,
   lapCompletedRule,
   spotterRule,
+  strategistRule,
   strategyCalloutRule,
   tireTempRule,
   trafficRule,
@@ -28,5 +29,6 @@ export const defaultEventRules = (): EventRule[] => [
   energyLowRule(),
   tireTempRule(),
   strategyCalloutRule(),
+  strategistRule(),
   lapCompletedRule(),
 ];

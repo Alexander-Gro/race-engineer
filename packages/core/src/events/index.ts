@@ -8,3 +8,4 @@ export * from './rules/spotter';
 export * from './rules/traffic';
 export * from './rules/fcy';
 export * from './rules/strategy';
+export * from './rules/strategist';

@@ -77,6 +77,22 @@ export const templatePhraser: ProactivePhraser = (event) => {
       if (dir === 'cold') return 'Tyres are below temperature — push to get some heat in.';
       return 'Tyres are out of their window.';
     }
+    case 'strategy_update': {
+      const kind = event.payload.kind;
+      if (kind === 'energy-save') {
+        const pct = event.payload.savePerLapPct;
+        return typeof pct === 'number'
+          ? `Strategy: you're energy-limited — save about ${pct.toFixed(1)}% a lap to make the window.`
+          : "Strategy: you're energy-limited — start saving to make the window.";
+      }
+      if (kind === 'fuel-save') {
+        const litres = event.payload.savePerLapLiters;
+        return typeof litres === 'number'
+          ? `Strategy: fuel's tight — save about ${litres.toFixed(2)} a lap to make the window.`
+          : "Strategy: fuel's tight — start saving to make the window.";
+      }
+      return 'Strategy update.';
+    }
     case 'pit_window_open': {
       const earliest = event.payload.earliestLap;
       const latest = event.payload.latestLap;

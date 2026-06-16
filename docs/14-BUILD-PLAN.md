@@ -857,8 +857,19 @@ fields SHM left null (prefer-SHM; brake bias stays SHM-sourced); returns nulls /
 not found — never a guessed index (rules 1/5). 6 tests; 696 green; compliance PASS. **Live half (rig,
 per [[build-rig-gated-offline-tolerant]]):** capture the garage JSON to confirm the aid-index source +
 field names (docs/03 §S3); if REST lacks them, wire the S4 setup-file fallback once T9.1 lands.
-**T8.2/T8.3** (the coaching/strategist **LLM** loops) remain — T8.2 needs a scope steer; T8.3 builds on
-the now-readable aids.
+~~**T8.2 background-strategist — done 2026-06-16**~~ — realised as a salience-gated event rule
+`strategistRule` (`events/rules/strategist.ts`) that **produces `strategy_update`** (a declared event
+type that previously had no producer): the proactive "thinking-ahead" layer that volunteers the single
+most useful forward-looking line — when you've fallen off the plan's pace and must save to reach the
+stop, and which resource binds (energy-save preferred when VE binds, else fuel-save). Tier-2,
+deduped per headline so it speaks **on change** then is cooldown-limited (not per-lap chatter), silent
+on-plan / while pitting / with no plan. **Confidence-gated** (docs/05 §8 "trustworthy or silent",
+`minConfidence01` default 0.4 like the sibling `strategyCalloutRule`) so it never volunteers off a
+noisy early-stint plan; carries `confidence01` in the payload for downstream hedging. Reads the
+strategy engine's numbers (rule 1); the radio `templatePhraser` phrases it; proactivity gating (T8.5)
+caps it downstream. 9 rule tests + a phrasing test; 706 green; compliance PASS. _Scope note:_ richer headlines (undercut windows, traffic-cost) need
+the per-rival context the Core doesn't expose yet (same gap as `evaluate_undercut`) — a follow-up.
+**T8.3** (integrated coaching) remains — it builds on the now-readable aids (T8.1) + this strategist.
 Context: [06-AI-ENGINEER](06-AI-ENGINEER.md), [08-INPUT-AND-CONTROLS](08-INPUT-AND-CONTROLS.md).
 
 **T8.4 — Advice verification from telemetry** · _Claude Code_ · deps: T0.3 (works on telemetry; live aid
