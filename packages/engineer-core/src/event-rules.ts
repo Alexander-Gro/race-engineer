@@ -5,6 +5,7 @@ import {
   lapCompletedRule,
   spotterRule,
   strategyCalloutRule,
+  tireTempRule,
   trafficRule,
   type EventRule,
 } from '@race-engineer/core';
@@ -25,6 +26,7 @@ export const defaultEventRules = (): EventRule[] => [
   fcyRule(),
   fuelLowRule(),
   energyLowRule(),
+  tireTempRule(),
   strategyCalloutRule(),
   lapCompletedRule(),
 ];

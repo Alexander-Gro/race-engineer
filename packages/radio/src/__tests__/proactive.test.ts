@@ -77,6 +77,15 @@ describe('templatePhraser', () => {
     );
   });
 
+  it('phrases tire_temp_out_of_window by direction (hot/cold)', () => {
+    expect(templatePhraser(ev('tire_temp_out_of_window', { direction: 'hot' }))).toMatch(
+      /overheating/i,
+    );
+    expect(templatePhraser(ev('tire_temp_out_of_window', { direction: 'cold' }))).toMatch(
+      /below temperature/i,
+    );
+  });
+
   it('phrases the strategy pit-window call-outs from the payload (T7.9)', () => {
     expect(
       templatePhraser(ev('pit_window_open', { earliestLap: 8, latestLap: 22 }, { tier: 2 })),

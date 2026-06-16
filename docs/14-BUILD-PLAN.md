@@ -529,6 +529,13 @@ Verify: unit tests using the doc-05 worked examples; property tests (monotonicit
 **T3.2 — Event detector core + framework** · _Claude Code_ · deps: T0.5
 Build: debounce/cooldown/dedupe framework; `lap_completed`, `fuel_low` events with tiers.
 Verify: synthetic fuel-low arc fires exactly one event with correct cooldown; tests.
+**Rule set since extended:** spotter (T3.4), traffic/FCY (T7.5/T7.6), strategy call-outs (T7.9),
+`energy_low` (T11.5), and ~~`tire_temp_out_of_window` (done 2026-06-16)~~ — a declared `EventType`
+that previously had no detector. `tireTempRule` (`events/rules/tire-temp.ts`) fires Tier-1 hot/cold
+call-outs when a player tyre's representative temp leaves the operating window (default 80–100 °C),
+one per direction per cooldown, **suppressed in the pit lane**; the radio `templatePhraser` speaks it
+("Tyres are overheating — ease off" / "below temperature — push to get heat in"). 7 rule tests + a
+phrasing test; 690 green; compliance PASS. (Magnitude window is rig-tunable per car/compound.)
 
 **T3.3 — Persistence (SQLite) + learning priors** · _Claude Code_ · deps: T3.1
 Build: better-sqlite3 repos; `sessions`/`laps`/`fuel_models`; prior blend feeds `confidence`.

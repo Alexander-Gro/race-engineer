@@ -71,6 +71,12 @@ export const templatePhraser: ProactivePhraser = (event) => {
         ? 'Energy critical — box this lap.'
         : `Energy's low — about ${whole} laps left.`;
     }
+    case 'tire_temp_out_of_window': {
+      const dir = event.payload.direction;
+      if (dir === 'hot') return 'Tyres are overheating — ease off to bring them back.';
+      if (dir === 'cold') return 'Tyres are below temperature — push to get some heat in.';
+      return 'Tyres are out of their window.';
+    }
     case 'pit_window_open': {
       const earliest = event.payload.earliestLap;
       const latest = event.payload.latestLap;
