@@ -68,6 +68,33 @@ describe('templatePhraser', () => {
     expect(templatePhraser(ev('lap_completed'))).toBeNull();
   });
 
+  it('phrases energy_low from the payload number, going critical under ~1 lap (T11.5)', () => {
+    expect(templatePhraser(ev('energy_low', { lapsRemaining: 3.8, thresholdLaps: 4 }))).toBe(
+      "Energy's low — about 3 laps left.",
+    );
+    expect(templatePhraser(ev('energy_low', { lapsRemaining: 0.9, thresholdLaps: 2 }))).toBe(
+      'Energy critical — box this lap.',
+    );
+  });
+
+  it('phrases tire_temp_out_of_window by direction (hot/cold)', () => {
+    expect(templatePhraser(ev('tire_temp_out_of_window', { direction: 'hot' }))).toMatch(
+      /overheating/i,
+    );
+    expect(templatePhraser(ev('tire_temp_out_of_window', { direction: 'cold' }))).toMatch(
+      /below temperature/i,
+    );
+  });
+
+  it('phrases the background strategist strategy_update by kind (T8.2)', () => {
+    expect(
+      templatePhraser(ev('strategy_update', { kind: 'energy-save', savePerLapPct: 1.8 })),
+    ).toMatch(/energy-limited.*1\.8% a lap/);
+    expect(
+      templatePhraser(ev('strategy_update', { kind: 'fuel-save', savePerLapLiters: 0.25 })),
+    ).toMatch(/fuel's tight.*0\.25 a lap/);
+  });
+
   it('phrases the strategy pit-window call-outs from the payload (T7.9)', () => {
     expect(
       templatePhraser(ev('pit_window_open', { earliestLap: 8, latestLap: 22 }, { tier: 2 })),
@@ -87,6 +114,15 @@ describe('defaultVoicePriority', () => {
       VoicePriority.WARNING,
     );
     expect(defaultVoicePriority(ev('fuel_low', { thresholdLaps: 4 }, { tier: 1 }))).toBe(
+      VoicePriority.STRATEGY,
+    );
+  });
+
+  it('routes energy_low by urgency, exactly like fuel_low (T11.5)', () => {
+    expect(defaultVoicePriority(ev('energy_low', { thresholdLaps: 2 }, { tier: 1 }))).toBe(
+      VoicePriority.WARNING,
+    );
+    expect(defaultVoicePriority(ev('energy_low', { thresholdLaps: 4 }, { tier: 1 }))).toBe(
       VoicePriority.STRATEGY,
     );
   });

@@ -383,6 +383,14 @@ struct rF2VehicleTelemetry {
 > aid indices are not in per-vehicle telemetry. `rF2Extended.mPhysics` has only sim
 > driving-aid difficulty flags (see §rF2Extended), not the in-car map index. So current
 > TC/ABS/engine-map levels probably come from REST (S2) or the setup file (S4). LIVE-VERIFY.
+>
+> **Offline half built (T8.1, 2026-06-16):** a tolerant `aidsFromRest(garage, repairRefuel)` +
+> `withAidsFromRest(state, rest)` (`packages/adapters/lmu/src/rest/aids.ts`) probes the REST garage
+> payloads for TC/ABS/engine-map indices and fills only the canonical aid fields SHM left null
+> (prefer-SHM; brake bias stays SHM-sourced). Field names are LIVE-VERIFY. **Rig steps:** capture
+> `/rest/garage/getPlayerGarageData` + `/rest/garage/UIScreen/*` JSON, confirm where the aid indices
+> live + their key names, narrow the candidate lists; if REST doesn't expose them, add the setup-file
+> (S4) fallback once `T9.1`'s parser lands. (The `pnpm capture` script will dump these in one pass.)
 
 #### rF2Telemetry (the wrapper / what the Telemetry MMF contains)
 ```cpp
@@ -793,6 +801,12 @@ and shake out anything the earlier (mostly stationary / short) captures missed.
 > items above plus the new dependencies introduced by the M7 strategy work (T7.2–T7.5).
 > Tick items here and write the result back into the relevant spike section. Track-B pointer
 > lives in [14-BUILD-PLAN.md](14-BUILD-PLAN.md).
+>
+> **One-shot capture (do this first on the rig):** `pnpm capture [--svm <path>]` (tools/capture.ts)
+> GETs every read-only REST endpoint + (optionally) a `.svm` and writes `lmu-capture.json` — the raw
+> payloads + a per-endpoint key index + the parsed `.svm` section/keys + a confirm-these checklist.
+> Paste it back to confirm/narrow the LIVE-VERIFY field names for **Virtual Energy** (T11.3),
+> **aids** (T8.1), and **setup** (T9.1) in one pass, rather than probing endpoint-by-endpoint.
 
 ### A. Signs & conventions (cheap to confirm; high blast-radius if wrong)
 - [x] **Gap sign** `gapToPlayerS` / `gapToPlayerM` is **+ = behind / − = ahead** — **CONFIRMED S1#3**
@@ -827,7 +841,20 @@ and shake out anything the earlier (mostly stationary / short) captures missed.
 - [ ] **Refuel rate (L/s) + tyre-change time (s)** (T7.2 `serviceTime`) — per car/series;
   check the REST `RepairAndRefuel` / `strategy/usage` payloads (S2) or measure a stop.
 - [ ] **Virtual Energy** mapping (endurance fuel/energy) from REST `strategy/usage` (S2.2) —
-  whether fuel-to-finish should be energy-based for Hypercar.
+  whether fuel-to-finish should be energy-based for Hypercar. **Offline half done (T11.3):** the
+  canonical `PlayerCar.virtualEnergy` field, the strategy/engine/dashboard/AI VE path (M11), and a
+  **tolerant REST→VE mapper** `virtualEnergyFromRest(strategyUsage, repairRefuel)` +
+  `withVirtualEnergyFromRest(state, rest)` (`packages/adapters/lmu/src/rest/virtual-energy.ts`) all
+  exist and are unit-tested. **Rig steps still needed:**
+  1. On the rig, GET `/rest/strategy/usage` and `/rest/garage/UIScreen/RepairAndRefuel` (Swagger/curl,
+     in-session) and **record the real JSON** — pin the actual field names + whether VE is a % (0..100)
+     or a 0..1 fraction. Then narrow the mapper's `LEVEL_KEYS`/`PER_LAP_KEYS` candidate lists to the
+     confirmed keys (the `toFraction01` heuristic already handles either scale).
+  2. Wire the live poll: in `apps/desktop/src/lmu-host.ts`, poll the REST client at ~2 Hz **off the
+     50 Hz SHM hot path**, cache the latest VE, and merge it into each normalized `RaceState` via
+     `withVirtualEnergyFromRest` (never block the telemetry loop on network I/O — CLAUDE.md rule 3).
+  3. Confirm in-app: the dashboard Virtual Energy card populates and the "Energy-limited" badge shows
+     when VE binds before fuel.
 - [ ] **Tyre life / max-stint-laps** (T7.3 `maxStintLapsByTire`) and **fresh-vs-worn pace
   delta** (T7.4 `freshTyreGainPerLapS`) — derive from a real green stint (feeds T7.1 fit;
   needs the T1.5 recording).
@@ -1119,6 +1146,14 @@ The `.svm` is a **human-readable text / INI-style** file (rF2 heritage), safe to
 - **LIVE-VERIFY on the rig:** the exact section/key names LMU emits, which keys map to
   **TC / ABS / brake bias / engine map / mixture** and to mechanical (springs, ARB, dampers,
   ride height) and aero (wing) settings, and whether any entry stores an absolute value.
+
+**Offline half built (T9.1, 2026-06-16):** a pure, tolerant parser
+`packages/adapters/lmu/src/setup/svm.ts` — `parseSvm(text)` → `{ sections: { KEY: [{key, index,
+display, raw}] } }`, `setupSummaryFromSvm(text, name)` → canonical `SetupSummary`, and
+`diffSetups(base, other)` → the changed setting **indices** (the reliable "which setting moved"
+capability). Pure (string in), read-only, unit-tested with a sample `.svm`. **Rig steps:** the
+`pnpm capture` script grabs a real `.svm`; then confirm the section/key names + the TC/ABS/brake-bias/
+aero/mechanical mapping, the file location/nesting (§S4.1), and wire the actual file read.
 
 ### S4.3 — Setup state via REST (alternative read source — LIVE-VERIFY)
 

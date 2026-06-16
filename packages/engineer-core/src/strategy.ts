@@ -1,5 +1,10 @@
 import type { RaceState } from '@race-engineer/core';
-import { computeFuelPlan, estimatePerLapConsumption, planStints } from '@race-engineer/strategy';
+import {
+  computeFuelPlan,
+  estimatePerLapConsumption,
+  estimatePerLapEnergy,
+  planStints,
+} from '@race-engineer/strategy';
 import type { StrategySummary } from './ipc';
 
 /**
@@ -17,20 +22,26 @@ const GREEN_LAP_WINDOW = 5;
 export class StrategyEngine {
   #lastLapsCompleted: number | null = null;
   #fuelAtLapStart: number | null = null;
+  /** VE at the current lap's start (0..1), or null when the source doesn't expose Virtual Energy. */
+  #energyAtLapStart: number | null = null;
   /** Has the in-progress lap run entirely green so far? Reset each lap; tainted by any non-green tick. */
   #currentLapGreen = true;
   readonly #fuelDeltas: number[] = [];
+  /** Per-lap Virtual-Energy burn (0..1), tracked exactly like fuel — VE is often the binding limit. */
+  readonly #energyDeltas01: number[] = [];
   readonly #greenLapTimes: number[] = [];
 
   /** Accumulate from one frame (cheap; called every tick). */
   observe(state: RaceState): void {
     const p = state.player;
     const green = state.flags.global === 'green';
+    const energy01 = p.virtualEnergy?.level01 ?? null;
     if (this.#fuelAtLapStart === null) this.#fuelAtLapStart = p.fuel.liters;
+    if (this.#energyAtLapStart === null) this.#energyAtLapStart = energy01;
 
     if (this.#lastLapsCompleted !== null && p.lapsCompleted < this.#lastLapsCompleted) {
       // Lap count went backwards — a session restart or a looped replay. Drop the stale history.
-      this.#reset(p.fuel.liters);
+      this.#reset(p.fuel.liters, energy01);
     } else if (this.#lastLapsCompleted !== null && p.lapsCompleted > this.#lastLapsCompleted) {
       // A lap (or more, if frames were dropped) just completed. Record only if it ran green
       // throughout, and average a multi-lap jump so one stall can't skew the estimate ~Nx.
@@ -39,10 +50,15 @@ export class StrategyEngine {
         const delta = this.#fuelAtLapStart - p.fuel.liters;
         if (delta > 0) this.#fuelDeltas.push(delta / lapsElapsed); // drops a refuel (negative)
       }
+      if (this.#currentLapGreen && green && this.#energyAtLapStart !== null && energy01 !== null) {
+        const delta01 = this.#energyAtLapStart - energy01;
+        if (delta01 > 0) this.#energyDeltas01.push(delta01 / lapsElapsed); // drops a VE refill
+      }
       if (this.#currentLapGreen && green && p.lastLapS !== null && p.lastLapS > 0) {
         this.#greenLapTimes.push(p.lastLapS);
       }
       this.#fuelAtLapStart = p.fuel.liters;
+      this.#energyAtLapStart = energy01;
       this.#currentLapGreen = true; // the new lap starts clean
     } else if (!green) {
       this.#currentLapGreen = false; // a non-green tick mid-lap taints the in-progress lap
@@ -50,10 +66,12 @@ export class StrategyEngine {
     this.#lastLapsCompleted = p.lapsCompleted;
   }
 
-  #reset(currentLiters: number): void {
+  #reset(currentLiters: number, currentEnergy01: number | null): void {
     this.#fuelDeltas.length = 0;
+    this.#energyDeltas01.length = 0;
     this.#greenLapTimes.length = 0;
     this.#fuelAtLapStart = currentLiters;
+    this.#energyAtLapStart = currentEnergy01;
     this.#currentLapGreen = true;
   }
 
@@ -77,7 +95,25 @@ export class StrategyEngine {
       state.session.isTimed && state.session.remainingS !== null && avgGreenLapS !== null
         ? { remainingS: state.session.remainingS, avgGreenLapS }
         : null;
-    const fuelPlan = computeFuelPlan({ fuelLiters: p.fuel.liters, consumption, race });
+
+    // Virtual Energy (LMU): track it exactly like fuel and let computeFuelPlan pick the binding
+    // constraint. Null when the source doesn't expose VE (then the plan is fuel-only, unchanged).
+    const ve = p.virtualEnergy;
+    const energy =
+      ve !== null
+        ? {
+            level01: ve.level01,
+            consumption: estimatePerLapEnergy({
+              greenLapEnergyDeltas01: this.#energyDeltas01,
+              prior:
+                ve.perLapAvg01 !== null && ve.perLapAvg01 > 0
+                  ? { meanPerLap01: ve.perLapAvg01, weight: 1 }
+                  : null,
+              window: GREEN_LAP_WINDOW,
+            }),
+          }
+        : null;
+    const fuelPlan = computeFuelPlan({ fuelLiters: p.fuel.liters, consumption, race, energy });
 
     // Fuel-bound stint plan for the rest of the race: needs laps-remaining + tank + per-lap. Tyre-life
     // / pit-loss bounds (and the fewer-vs-more-stops trade-off) need per-track calibration (rig backlog).

@@ -51,6 +51,12 @@ describe('strategy & event validation', () => {
     litersToFinish: 217,
     litersToAddNextStop: 80,
     fuelSaveTargetLitersPerLap: null,
+    perLapEnergy01: 0.06,
+    lapsRemainingOnEnergy: 12,
+    energyToFinish01: 4.2,
+    energyToAddNextStop01: 3.3,
+    energySaveTargetPerLap01: null,
+    bindingConstraint: 'energy',
     confidence01: 0.62,
   };
 

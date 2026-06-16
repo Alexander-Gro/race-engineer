@@ -2,8 +2,11 @@ import { describe, expect, it } from 'vitest';
 import { FuelPlanSchema } from '@race-engineer/core';
 import {
   computeFuelPlan,
+  energyDeltasFromReadings01,
   estimatePerLapConsumption,
+  estimatePerLapEnergy,
   fuelDeltasFromReadings,
+  type EnergyConsumption,
   type FuelConsumption,
 } from '../fuel';
 
@@ -16,6 +19,13 @@ const at = <T>(arr: readonly T[], i: number): T => {
 // A known consumption estimate, reused where we test the plan math directly.
 const known = (perLapLiters: number): FuelConsumption => ({
   perLapLiters,
+  confidence01: 0.8,
+  sampleCount: 5,
+});
+
+// A known Virtual-Energy burn estimate (0..1 of the budget / lap).
+const knownEnergy = (perLap01: number): EnergyConsumption => ({
+  perLap01,
   confidence01: 0.8,
   sampleCount: 5,
 });
@@ -102,6 +112,109 @@ describe('fuelDeltasFromReadings', () => {
   it('returns no deltas for empty or single-reading input', () => {
     expect(fuelDeltasFromReadings([])).toEqual([]);
     expect(fuelDeltasFromReadings([50])).toEqual([]);
+  });
+});
+
+describe('estimatePerLapEnergy', () => {
+  it('uses the same robust estimator as fuel, over the 0..1 VE budget', () => {
+    // 0.30 = a contaminated lap; the median rejects it.
+    const c = estimatePerLapEnergy({ greenLapEnergyDeltas01: [0.05, 0.051, 0.3, 0.049, 0.05] });
+    expect(c.perLap01).toBeCloseTo(0.05);
+    expect(c.sampleCount).toBe(5);
+    expect(c.confidence01).toBeCloseTo(5 / (5 + 3));
+  });
+
+  it('blends with a learned prior and falls back to it before any laps', () => {
+    expect(
+      estimatePerLapEnergy({
+        greenLapEnergyDeltas01: [0.06, 0.06, 0.06],
+        prior: { meanPerLap01: 0.04, weight: 3 },
+      }).perLap01,
+    ).toBeCloseTo(0.05); // (3*0.04 + 3*0.06) / 6
+    const cold = estimatePerLapEnergy({
+      greenLapEnergyDeltas01: [],
+      prior: { meanPerLap01: 0.045 },
+    });
+    expect(cold.perLap01).toBeCloseTo(0.045);
+    expect(cold.confidence01).toBe(0);
+  });
+
+  it('returns null per-lap with no data and no prior (never guesses VE)', () => {
+    expect(estimatePerLapEnergy({ greenLapEnergyDeltas01: [] }).perLap01).toBeNull();
+  });
+});
+
+describe('energyDeltasFromReadings01', () => {
+  it('derives per-lap VE deltas, excluding the refill jump at a stop', () => {
+    const deltas = energyDeltasFromReadings01([1.0, 0.95, 0.9, 1.0, 0.95]);
+    expect(deltas).toHaveLength(3); // the refill (0.9 -> 1.0) is excluded
+    expect(at(deltas, 0)).toBeCloseTo(0.05);
+  });
+});
+
+describe('computeFuelPlan — Virtual Energy binding constraint (docs/05 §VE)', () => {
+  it('leaves all VE fields null and bindingConstraint null when VE is not supplied', () => {
+    const plan = computeFuelPlan({ fuelLiters: 40, consumption: known(2.6) });
+    expect(plan?.perLapEnergy01).toBeNull();
+    expect(plan?.lapsRemainingOnEnergy).toBeNull();
+    expect(plan?.energyToFinish01).toBeNull();
+    expect(plan?.energyToAddNextStop01).toBeNull();
+    expect(plan?.energySaveTargetPerLap01).toBeNull();
+    expect(plan?.bindingConstraint).toBeNull();
+  });
+
+  it('fuel binds when fuel runs out before VE', () => {
+    const plan = computeFuelPlan({
+      fuelLiters: 30, // 30 / 2.6 = 11.5 laps on fuel
+      consumption: known(2.6),
+      energy: { level01: 0.9, consumption: knownEnergy(0.05) }, // 0.9 / 0.05 = 18 laps on VE
+    });
+    expect(plan?.lapsRemainingOnFuel).toBeCloseTo(11.54, 2);
+    expect(plan?.lapsRemainingOnEnergy).toBeCloseTo(18);
+    expect(plan?.bindingConstraint).toBe('fuel');
+  });
+
+  it('VE binds when energy runs out before fuel — the LMU case the user flagged', () => {
+    const plan = computeFuelPlan({
+      fuelLiters: 60, // 60 / 2.6 = 23 laps on fuel
+      consumption: known(2.6),
+      energy: { level01: 0.5, consumption: knownEnergy(0.05) }, // 0.5 / 0.05 = 10 laps on VE
+    });
+    expect(plan?.lapsRemainingOnEnergy).toBeCloseTo(10);
+    expect(plan?.bindingConstraint).toBe('energy');
+  });
+
+  it('computes VE-to-finish and VE-to-add at the next stop for a timed race', () => {
+    const plan = computeFuelPlan({
+      fuelLiters: 60,
+      consumption: known(2.6),
+      race: { remainingS: 3600, avgGreenLapS: 120 }, // 30 laps
+      energy: { level01: 0.5, consumption: knownEnergy(0.04), reserve01: 0.04 },
+    });
+    expect(plan?.energyToFinish01).toBeCloseTo(1.2); // 30 * 0.04
+    expect(plan?.energyToAddNextStop01).toBeCloseTo(1.2 - 0.5 + 0.04); // 0.74
+  });
+
+  it('emits a VE-save target when energy would run out before the planned stop', () => {
+    const plan = computeFuelPlan({
+      fuelLiters: 80, // plenty of fuel, so VE is the bind
+      consumption: known(2.6),
+      lapsUntilPlannedStop: 12,
+      energy: { level01: 0.5, consumption: knownEnergy(0.06) }, // 0.5/0.06 = 8.3 laps < 12
+    });
+    // need 0.5/12 = 0.04167 per lap; save = 0.06 - 0.04167
+    expect(plan?.energySaveTargetPerLap01 ?? 0).toBeCloseTo(0.06 - 0.5 / 12, 4);
+  });
+
+  it('leaves VE fields null when VE level is known but its per-lap burn is not', () => {
+    const plan = computeFuelPlan({
+      fuelLiters: 60,
+      consumption: known(2.6),
+      energy: { level01: 0.7, consumption: { perLap01: null, confidence01: 0, sampleCount: 0 } },
+    });
+    expect(plan?.perLapEnergy01).toBeNull();
+    expect(plan?.lapsRemainingOnEnergy).toBeNull();
+    expect(plan?.bindingConstraint).toBeNull(); // can't bind on an unknown rate
   });
 });
 
@@ -196,42 +309,73 @@ describe('properties (docs/05 §Testing)', () => {
     }
   });
 
-  it('all outputs are finite and confidence stays within [0, 1]', () => {
+  it('all outputs are finite and confidence stays within [0, 1] (incl. Virtual Energy)', () => {
     for (const fuelLiters of [0, 1, 13.3, 50, 117]) {
       for (const ppl of [1.5, 2.6, 4.0]) {
-        const plan = computeFuelPlan({
-          fuelLiters,
-          consumption: { perLapLiters: ppl, confidence01: 0.5, sampleCount: 4 },
-          race: { remainingS: 5400, avgGreenLapS: 95 },
-          lapsUntilPlannedStop: 12,
-        });
-        expect(plan).not.toBeNull();
-        if (!plan) continue;
-        const numbers = [
-          plan.perLapLiters,
-          plan.lapsRemainingOnFuel,
-          plan.lapsToFinish,
-          plan.litersToFinish,
-          plan.litersToAddNextStop,
-          plan.fuelSaveTargetLitersPerLap,
-          plan.confidence01,
-        ];
-        for (const v of numbers) {
-          if (v !== null) expect(Number.isFinite(v)).toBe(true);
+        for (const level01 of [0, 0.35, 1]) {
+          const plan = computeFuelPlan({
+            fuelLiters,
+            consumption: { perLapLiters: ppl, confidence01: 0.5, sampleCount: 4 },
+            race: { remainingS: 5400, avgGreenLapS: 95 },
+            lapsUntilPlannedStop: 12,
+            energy: { level01, consumption: knownEnergy(0.045) },
+          });
+          expect(plan).not.toBeNull();
+          if (!plan) continue;
+          const numbers = [
+            plan.perLapLiters,
+            plan.lapsRemainingOnFuel,
+            plan.lapsToFinish,
+            plan.litersToFinish,
+            plan.litersToAddNextStop,
+            plan.fuelSaveTargetLitersPerLap,
+            plan.perLapEnergy01,
+            plan.lapsRemainingOnEnergy,
+            plan.energyToFinish01,
+            plan.energyToAddNextStop01,
+            plan.energySaveTargetPerLap01,
+            plan.confidence01,
+          ];
+          for (const v of numbers) {
+            if (v !== null) expect(Number.isFinite(v)).toBe(true);
+          }
+          expect(plan.confidence01).toBeGreaterThanOrEqual(0);
+          expect(plan.confidence01).toBeLessThanOrEqual(1);
+          expect(['fuel', 'energy']).toContain(plan.bindingConstraint);
         }
-        expect(plan.confidence01).toBeGreaterThanOrEqual(0);
-        expect(plan.confidence01).toBeLessThanOrEqual(1);
       }
     }
   });
 
-  it('produces FuelPlan objects that satisfy the canonical schema', () => {
-    const plan = computeFuelPlan({
+  it('more Virtual Energy never yields fewer VE laps remaining (monotonic)', () => {
+    let prev = -Infinity;
+    for (const level01 of [0, 0.1, 0.3, 0.6, 1]) {
+      const plan = computeFuelPlan({
+        fuelLiters: 60,
+        consumption: known(2.6),
+        energy: { level01, consumption: knownEnergy(0.05) },
+      });
+      const laps = plan?.lapsRemainingOnEnergy ?? 0;
+      expect(laps).toBeGreaterThanOrEqual(prev);
+      prev = laps;
+    }
+  });
+
+  it('produces FuelPlan objects that satisfy the canonical schema (with and without VE)', () => {
+    const fuelOnly = computeFuelPlan({
       fuelLiters: 40,
       consumption: known(2.6),
       race: { remainingS: 3600, avgGreenLapS: 110 },
       lapsUntilPlannedStop: 20,
     });
-    expect(FuelPlanSchema.safeParse(plan).success).toBe(true);
+    expect(FuelPlanSchema.safeParse(fuelOnly).success).toBe(true);
+    const withVe = computeFuelPlan({
+      fuelLiters: 40,
+      consumption: known(2.6),
+      race: { remainingS: 3600, avgGreenLapS: 110 },
+      lapsUntilPlannedStop: 20,
+      energy: { level01: 0.6, consumption: knownEnergy(0.05) },
+    });
+    expect(FuelPlanSchema.safeParse(withVe).success).toBe(true);
   });
 });

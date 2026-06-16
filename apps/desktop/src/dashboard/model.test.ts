@@ -50,6 +50,12 @@ describe('fuel state honesty', () => {
           litersToFinish: 52,
           litersToAddNextStop: 12.5,
           fuelSaveTargetLitersPerLap: null,
+          perLapEnergy01: null,
+          lapsRemainingOnEnergy: null,
+          energyToFinish01: null,
+          energyToAddNextStop01: null,
+          energySaveTargetPerLap01: null,
+          bindingConstraint: null,
           confidence01: 0.8,
         },
         stintPlan: {
@@ -71,6 +77,53 @@ describe('fuel state honesty', () => {
     const m = buildDashboardModel(withStrategy);
     expect(m.fuel.addAtStop.value).toBe('12.5 L');
     expect(m.fuel.nextPit.value).toBe('18–24');
+  });
+});
+
+describe('virtual energy (LMU binding constraint)', () => {
+  it('surfaces VE level, laps, per-lap, add-at-stop and the binding constraint', () => {
+    const veState: RaceState = {
+      ...midStintState,
+      player: {
+        ...midStintState.player,
+        virtualEnergy: { level01: 0.5, perLapAvg01: 0.05, lapsRemainingEst: 10 },
+      },
+    };
+    const withVe: EngineerSnapshot = {
+      ...snap(veState),
+      strategy: {
+        fuelPlan: {
+          perLapLiters: 2.6,
+          lapsRemainingOnFuel: 16,
+          lapsToFinish: 20,
+          litersToFinish: 52,
+          litersToAddNextStop: 12.5,
+          fuelSaveTargetLitersPerLap: null,
+          perLapEnergy01: 0.05,
+          lapsRemainingOnEnergy: 10,
+          energyToFinish01: 1.0,
+          energyToAddNextStop01: 0.55,
+          energySaveTargetPerLap01: null,
+          bindingConstraint: 'energy',
+          confidence01: 0.8,
+        },
+        stintPlan: null,
+      },
+    };
+    const m = buildDashboardModel(withVe);
+    expect(m.energy.level.value).toBe('50%');
+    expect(m.energy.lapsRemaining).toEqual({ value: '10.0', severity: 'good' }); // 10 > caution
+    expect(m.energy.perLap.value).toBe('5.0%');
+    expect(m.energy.addAtStop.value).toBe('55%');
+    expect(m.binding).toBe('energy');
+  });
+
+  it('renders VE as unknown and binding null when the source exposes no Virtual Energy', () => {
+    const m = buildDashboardModel(snap(midStintState)); // fixtures default virtualEnergy = null
+    expect(m.energy.level).toEqual({ value: '—', severity: 'unknown' });
+    expect(m.energy.lapsRemaining).toEqual({ value: '—', severity: 'unknown' });
+    expect(m.energy.addAtStop).toEqual({ value: '—', severity: 'unknown' });
+    expect(m.binding).toBeNull();
   });
 });
 
@@ -238,6 +291,10 @@ describe('properties', () => {
         m.fuel.lapsRemaining,
         m.fuel.liters,
         m.fuel.perLap,
+        m.energy.level,
+        m.energy.lapsRemaining,
+        m.energy.perLap,
+        m.energy.addAtStop,
         ...m.tyres.corners.flatMap((c) => [c.temp, c.wear, c.pressure]),
         ...m.brakes.corners,
         m.aids.tc,

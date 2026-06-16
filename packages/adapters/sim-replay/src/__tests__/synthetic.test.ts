@@ -60,6 +60,30 @@ describe('synthetic generator', () => {
     }
   });
 
+  it('emits a Virtual Energy arc: monotonic, never negative, with a rolling estimate after lap 1', () => {
+    const frames = synthesizeFrames(scriptedScenario());
+    let prev = Number.POSITIVE_INFINITY;
+    for (const f of frames) {
+      const ve = f.player.virtualEnergy;
+      expect(ve).not.toBeNull();
+      expect(ve!.level01).toBeGreaterThanOrEqual(0);
+      expect(ve!.level01).toBeLessThanOrEqual(prev + 1e-9); // monotonically draining
+      prev = ve!.level01;
+    }
+    // No rolling estimate before a lap completes; present afterwards.
+    expect(at(frames, 0).player.virtualEnergy!.perLapAvg01).toBeNull();
+    expect(at(frames, frames.length - 1).player.virtualEnergy!.perLapAvg01).toBeCloseTo(0.11, 6);
+  });
+
+  it('omits Virtual Energy (null) when the config does not model it', () => {
+    const cfg = {
+      ...defaultSyntheticConfig(),
+      startEnergy01: undefined,
+      energyPerLap01: undefined,
+    };
+    for (const f of synthesizeFrames(cfg)) expect(f.player.virtualEnergy).toBeNull();
+  });
+
   it('matches the scripted-scenario per-lap summary (snapshot)', () => {
     const frames = synthesizeFrames(scriptedScenario());
     const lastTick = at(frames, frames.length - 1).tick;

@@ -1,5 +1,5 @@
 import type { CarState, RaceState } from '@race-engineer/core';
-import { diagnoseHandling } from '@race-engineer/strategy';
+import { diagnoseHandling, integratedCoaching, proposeSetupChanges } from '@race-engineer/strategy';
 import type { RaceContext } from './context';
 import type { ToolSpec } from './types';
 
@@ -54,13 +54,16 @@ const rivalJson = (c: CarState) => ({
   closingRateMps: c.closingRateMps,
 });
 
+/** Express a 0..1 fraction as a percentage for the tool surface (LMU shows VE as a %), or null. */
+const asPct = (v: number | null): number | null => (v === null ? null : v * 100);
+
 const WHEELS = ['FL', 'FR', 'RL', 'RR'] as const;
 
 export const READ_ONLY_TOOLS: ToolDef[] = [
   {
     name: 'get_race_state',
     description:
-      'Compact race briefing: session phase, position/class, laps and time remaining, last/best lap, fuel summary, flags, and the gaps to the cars immediately ahead and behind.',
+      'Compact race briefing: session phase, position/class, laps and time remaining, last/best lap, fuel summary, Virtual Energy summary (LMU, as a %; null if not exposed), flags, and the gaps to the cars immediately ahead and behind.',
     parameters: NO_ARGS,
     handler: (_args, ctx) => {
       const s = ctx.raceState;
@@ -84,10 +87,26 @@ export const READ_ONLY_TOOLS: ToolDef[] = [
           perLapAvgLiters: p.fuel.perLapAvgLiters,
           lapsRemainingEst: p.fuel.lapsRemainingEst,
         },
+        // Virtual Energy (LMU) as a percentage of the per-stint budget; null when not exposed.
+        virtualEnergy:
+          p.virtualEnergy === null
+            ? null
+            : {
+                levelPct: asPct(p.virtualEnergy.level01),
+                perLapAvgPct: asPct(p.virtualEnergy.perLapAvg01),
+                lapsRemainingEst: p.virtualEnergy.lapsRemainingEst,
+              },
         flag: s.flags.global,
         carAheadGapS: ahead?.gapToPlayerS ?? null,
         carBehindGapS: behind?.gapToPlayerS ?? null,
-        units: { fuel: 'liters', temp: 'C', gap: 's', distance: 'm', speed: 'm/s' },
+        units: {
+          fuel: 'liters',
+          energy: 'percent',
+          temp: 'C',
+          gap: 's',
+          distance: 'm',
+          speed: 'm/s',
+        },
       };
     },
   },
@@ -117,17 +136,42 @@ export const READ_ONLY_TOOLS: ToolDef[] = [
   {
     name: 'get_fuel_plan',
     description:
-      'The current fuel plan from the strategy engine: per-lap use, laps remaining on fuel, fuel to finish, liters to add at the next stop, any fuel-save target, and a confidence. Returns available:false while consumption is still being learned.',
+      'The current fuel + Virtual-Energy plan from the strategy engine: per-lap fuel use, laps remaining on fuel, fuel to finish, liters to add at the next stop, any fuel-save target, and (LMU) the Virtual Energy figures as percentages. `bindingConstraint` says which resource runs out first — `energy` means the stint is energy-limited, not fuel-limited (advise on the binding one). `virtualEnergy` is null when the series has no VE. Returns available:false while consumption is still being learned.',
     parameters: NO_ARGS,
     handler: (_args, ctx) => {
-      if (!ctx.fuelPlan) {
+      const fp = ctx.fuelPlan;
+      if (!fp) {
         return {
           available: false,
           reason: 'Fuel consumption not yet established',
           confidence01: 0,
         };
       }
-      return { available: true, ...ctx.fuelPlan, units: { fuel: 'liters' } };
+      return {
+        available: true,
+        perLapLiters: fp.perLapLiters,
+        lapsRemainingOnFuel: fp.lapsRemainingOnFuel,
+        lapsToFinish: fp.lapsToFinish,
+        litersToFinish: fp.litersToFinish,
+        litersToAddNextStop: fp.litersToAddNextStop,
+        fuelSaveTargetLitersPerLap: fp.fuelSaveTargetLitersPerLap,
+        // Which resource limits the stint: 'fuel' | 'energy' | null (no VE / still learning).
+        bindingConstraint: fp.bindingConstraint,
+        // Virtual Energy as percentages (the LMU convention), so figures are quoted directly;
+        // null when the series doesn't expose VE — then plan on fuel alone.
+        virtualEnergy:
+          fp.perLapEnergy01 === null
+            ? null
+            : {
+                lapsRemainingOnEnergy: fp.lapsRemainingOnEnergy,
+                perLapEnergyPct: asPct(fp.perLapEnergy01),
+                energyToFinishPct: asPct(fp.energyToFinish01),
+                energyToAddNextStopPct: asPct(fp.energyToAddNextStop01),
+                energySaveTargetPctPerLap: asPct(fp.energySaveTargetPerLap01),
+              },
+        confidence01: fp.confidence01,
+        units: { fuel: 'liters', energy: 'percent of the per-stint VE budget', laps: 'count' },
+      };
     },
   },
   {
@@ -204,6 +248,32 @@ export const READ_ONLY_TOOLS: ToolDef[] = [
         confidence01: d.confidence01,
         units: { temp: 'C' },
       };
+    },
+  },
+  {
+    name: 'propose_setup_change',
+    description:
+      'Advisory setup-change suggestions from the handling diagnosis (tyre temps): ordered, directional, relative changes (e.g. "soften the front bar a click or two") with the reason and a confidence. ADVICE ONLY — the DRIVER applies changes in the garage; the app never writes a setup. Returns an empty list when the balance is neutral and the tyres read even.',
+    parameters: NO_ARGS,
+    handler: (_args, ctx) => {
+      const d = diagnoseHandling(ctx.raceState.player.tires);
+      const suggestions = proposeSetupChanges(d);
+      return {
+        suggestions,
+        confidence01: d.confidence01,
+        note: 'advice only — the driver applies changes in the garage; the app never writes a setup',
+      };
+    },
+  },
+  {
+    name: 'get_coaching',
+    description:
+      'Integrated coaching: cross-domain DRIVING advice that links the handling balance with tyre temps and the fuel/energy plan into a single corrective action (e.g. understeer + energy-limited → lift earlier, which helps both). Ordered, each note lists the domains it links + a confidence. Empty when nothing aligns. Driving advice only — never a setup or game change.',
+    parameters: NO_ARGS,
+    handler: (_args, ctx) => {
+      const handling = diagnoseHandling(ctx.raceState.player.tires);
+      const notes = integratedCoaching({ handling, fuelPlan: ctx.fuelPlan });
+      return { notes, confidence01: handling.confidence01 };
     },
   },
   {

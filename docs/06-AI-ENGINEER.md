@@ -89,7 +89,7 @@ Sending raw 60 Hz telemetry to the LLM is wasteful and slow. Instead:
 ```
 get_race_state()        → compact RaceState briefing
 get_rivals()            → cars ahead/behind with class, gap, closing rate
-get_fuel_plan()         → FuelPlan (05)
+get_fuel_plan()         → FuelPlan (05): fuel + Virtual Energy (LMU, as %) + bindingConstraint
 get_stint_plan()        → StintPlan (05)
 project_pit_window()    → pit window + recommendation
 evaluate_undercut(id)   → undercut/overcut recommendation
@@ -97,6 +97,8 @@ get_tire_status()       → per-wheel temps/wear/window + deg estimate
 get_current_aids()      → current TC/ABS/brake-bias/engine-map (the advice baseline)
 get_setup_summary()     → current setup params (read-only)
 get_handling_diagnosis()→ understeer/oversteer balance, tire-temp spread, bottoming, lockups
+propose_setup_change()  → directional, relative setup advice from the diagnosis (advice only)
+get_coaching()          → integrated cross-domain driving advice (handling ⇄ tyres ⇄ energy)
 verify_change(change)   → did telemetry show the driver applied a suggested change?
 ```
 `propose_setup_change({param, delta, rationale})` exists only to **structure advice** for

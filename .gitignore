@@ -42,3 +42,5 @@ models/
 *.replay.raw
 # Loose recordings dropped at the repo root (e.g. `pnpm record` output). Subdir fixtures are unaffected.
 /*.jsonl
+# `pnpm capture` rig dumps — raw REST/setup payloads, same never-commit policy as recordings.
+/lmu-capture*.json

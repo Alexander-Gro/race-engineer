@@ -289,7 +289,30 @@ in a small, reviewable, green-tested change.
   speaks back in a real cloud voice.** _Human-verify (you + OpenAI key + mic + speakers):_ confirm the
   end-to-end loop.) **Remaining T10.1:** the **local native backends** (Piper/Kokoro + faster-whisper
   binaries — the free, no-key default; rig/native) and the **wheel PTT** (SDL2.dll on the rig — the
-  on-screen 🎙 button needs no SDL2). The cloud loop already supersedes the free Web-Speech call-outs.
+  on-screen 🎙 button needs no SDL2). (~~Piper TTS backend done 2026-06-16~~ — `piperTtsBackend()` in
+  `apps/desktop/src/voice/piper-backend.ts` fills the `piperTts` injected-backend seam: spawns
+  `piper --output-raw --model …`, writes text to stdin, streams stdout PCM as `AudioChunk`s. The
+  spawner is **injected**, so it's unit-tested offline with a fake child process — no binary needed;
+  the real binary/model come from the model manager (T4.6). 7 tests; compliance PASS. ~~whisper.cpp STT
+  backend done 2026-06-16~~ — `whisperCppBackend()` in `apps/desktop/src/voice/whisper-backend.ts`
+  fills the `whisperCppStt`/`fasterWhisperStt` seam: batch-shaped (buffers held-PTT frames, on `finish`
+  writes a temp WAV, runs `whisper-cli -m … -f … -nt`, returns the stdout transcript); spawner **+** fs
+  **+** tmp/clock all injected, so it's unit-tested offline with fakes (no binary, no disk), cleans up
+  the temp file in a `finally`, and surfaces a spawn error rather than silent empties. 8 tests; 765
+  green; compliance PASS. ~~worker/selector wiring done 2026-06-16~~ — `attachLocalBackends(route)`
+  (`apps/desktop/src/voice/local-backends.ts`) supplies the Piper/whisper backends to the route for
+  local engines **whose binary path is configured** (else the shell stays not-ready and the worker
+  falls back to the fake — honest readiness, no spawning a missing binary); `worker-voice.ts` applies
+  it before `selectTts/SttProvider`. 6 tests; 771 green; electron typecheck green; compliance PASS.
+  **Next:** the **model-path resolution + build-gate** (model manager T4.6 → `ttsConfig`/`sttConfig`
+  binary+model paths into the route, **and** widen the worker's voice build-gate
+  `voiceRouteIsCloud(route) || ENGINEER_VOICE=1` to also admit a ready *local* route — together these
+  flip the working free pair **piper+whisper-cpp** on), the
+  **Kokoro ONNX** + **faster-whisper** backends (the default-profile engines; until then the working
+  free pair is piper+whisper-cpp), and a **Mac smoke-test** with a real Piper voice. The OS audio sink
+  is already bridged. _Runtime note:_ whisper-cli wants 16 kHz mono WAV/PCM, so the local STT path needs
+  the mic captured as WAV/PCM (or a whisper build with ffmpeg) — a rig/runtime alignment, docs/07.) The
+  cloud loop already supersedes the free Web-Speech call-outs.
   M7.7–M7.9 / M8 / M9 offline-strategy depth are paused until the app is launchable. (Offline glue
   done: `get_stint_plan` + `project_pit_window` are now wired into the AI read-only tool surface,
   reading a precomputed `ctx.stintPlan` (T7.3) like `get_fuel_plan` reads `ctx.fuelPlan`; 373 green.
@@ -337,13 +360,32 @@ in a small, reviewable, green-tested change.
   source** (`apps/desktop/src/lmu-host.ts` — `LmuAdapter` + `createLmuNormalizer`, dynamically loaded
   only when `ENGINEER_SOURCE=lmu`; koffi stays external; the synthetic demo never touches it). So rig
   validation now happens by *watching the dashboard* with LMU running, not PowerShell. When it
-  resumes: **T1.5** `pnpm record` a real stint → trimmed fixture; **T2.2
+  resumes: **`pnpm capture`** (one-shot REST + `.svm` dump → `lmu-capture.json`, the first rig step —
+  confirms the LIVE-VERIFY field names for VE / aids / setup in one pass); **T1.5** `pnpm record` a
+  real stint → trimmed fixture; **T2.2
   live** REST probe → finish REST→`RaceState` mapping + settle S3 aids; **T1.3/T1.4** aids/setup reads;
   confirm the gap/`lateralPos`/closing signs + brake-bias front/rear + FCY/pit enums. **Full
   actionable list:** the **Rig verification backlog (consolidated)** in
   [03-LMU-INTEGRATION.md](03-LMU-INTEGRATION.md) — signs/conventions, FCY/pit/sector enums, and the
   **strategy-model calibration inputs** (pit-loss, refuel rate, Virtual Energy, tyre life, mandatory
   stops) the T7.x models need real values for.
+- **Virtual Energy correctness fix (M11, started 2026-06-16):** the fuel/strategy math was
+  litres-only; in LMU a stint is often bound by the per-stint **Virtual Energy** budget, not fuel.
+  **T11.1 done** — VE is now a first-class quantity parallel to fuel in the canonical schema
+  (`PlayerCar.virtualEnergy`) and the plan (`FuelPlan` VE fields + `bindingConstraint`), with the
+  same robust estimator and a binding-constraint = `min(fuel laps, VE laps)`. **T11.2 done** — VE
+  now flows live: the synthetic source emits a VE arc, the always-on `StrategyEngine` learns per-lap
+  VE like fuel and computes the binding constraint each snapshot, and the dashboard (models +
+  renderer) shows a Virtual Energy card with an "Energy-limited" badge (634 green; electron build +
+  compliance PASS). **T11.4 done** — the AI surface is VE-aware: `get_fuel_plan`/`get_race_state`
+  expose VE (as %) + the binding constraint, the free template answers energy questions and makes the
+  fuel answer VE-aware, and the system prompt flags the energy-limited case (641 green; compliance
+  PASS). **T11.3 offline half done** — a tolerant REST→canonical VE mapper + RaceState merge seam
+  (`virtualEnergyFromRest`/`withVirtualEnergyFromRest`), unit-tested (650 green; compliance PASS).
+  **M11 is now offline-complete** (incl. **T11.5** — a proactive `energy_low` voice call-out, the VE
+  sibling of `fuel_low`); all that remains is T11.3's **live half** — capturing the real
+  `/rest/strategy/usage` payload on the rig to pin field names + wiring the ~2 Hz REST poll into the
+  live host (rig backlog, docs/03 §C). See M11 below.
 
 ## The central ordering idea
 
@@ -542,6 +584,13 @@ Verify: unit tests using the doc-05 worked examples; property tests (monotonicit
 **T3.2 — Event detector core + framework** · _Claude Code_ · deps: T0.5
 Build: debounce/cooldown/dedupe framework; `lap_completed`, `fuel_low` events with tiers.
 Verify: synthetic fuel-low arc fires exactly one event with correct cooldown; tests.
+**Rule set since extended:** spotter (T3.4), traffic/FCY (T7.5/T7.6), strategy call-outs (T7.9),
+`energy_low` (T11.5), and ~~`tire_temp_out_of_window` (done 2026-06-16)~~ — a declared `EventType`
+that previously had no detector. `tireTempRule` (`events/rules/tire-temp.ts`) fires Tier-1 hot/cold
+call-outs when a player tyre's representative temp leaves the operating window (default 80–100 °C),
+one per direction per cooldown, **suppressed in the pit lane**; the radio `templatePhraser` speaks it
+("Tyres are overheating — ease off" / "below temperature — push to get heat in"). 7 rule tests + a
+phrasing test; 690 green; compliance PASS. (Magnitude window is rig-tunable per car/compound.)
 
 **T3.3 — Persistence (SQLite) + learning priors** · _Claude Code_ · deps: T3.1
 Build: better-sqlite3 repos; `sessions`/`laps`/`fuel_models`; prior blend feeds `confidence`.
@@ -856,8 +905,35 @@ T8.1 read current aids → T8.2 background-strategist loop → T8.3 integrated c
 forward — the **data-ready, deterministic, LLM-free** piece, the M8 analog of T9.2) → ~~T8.5
 proactivity controls + quiet windows~~ (done, pulled forward — the self-contained, offline-testable
 piece that closes the T6.3 proactivity-setting loop). **Read-only throughout — no write path.**
-T8.1 (read aids — **S3** rig) + T8.2/T8.3 (the coaching/strategist **LLM** loops) remain; better tackled
-once the live voice loop lands / the aids read live.
+~~T8.1 read current aids — offline half done 2026-06-16~~ — a tolerant `aidsFromRest` +
+`withAidsFromRest` (`packages/adapters/lmu/src/rest/aids.ts`, sharing `rest/probe.ts` with the VE
+mapper) probes the REST garage payloads for TC/ABS/engine-map indices and fills only the canonical aid
+fields SHM left null (prefer-SHM; brake bias stays SHM-sourced); returns nulls / unchanged state when
+not found — never a guessed index (rules 1/5). 6 tests; 696 green; compliance PASS. **Live half (rig,
+per [[build-rig-gated-offline-tolerant]]):** capture the garage JSON to confirm the aid-index source +
+field names (docs/03 §S3); if REST lacks them, wire the S4 setup-file fallback once T9.1 lands.
+~~**T8.2 background-strategist — done 2026-06-16**~~ — realised as a salience-gated event rule
+`strategistRule` (`events/rules/strategist.ts`) that **produces `strategy_update`** (a declared event
+type that previously had no producer): the proactive "thinking-ahead" layer that volunteers the single
+most useful forward-looking line — when you've fallen off the plan's pace and must save to reach the
+stop, and which resource binds (energy-save preferred when VE binds, else fuel-save). Tier-2,
+deduped per headline so it speaks **on change** then is cooldown-limited (not per-lap chatter), silent
+on-plan / while pitting / with no plan. **Confidence-gated** (docs/05 §8 "trustworthy or silent",
+`minConfidence01` default 0.4 like the sibling `strategyCalloutRule`) so it never volunteers off a
+noisy early-stint plan; carries `confidence01` in the payload for downstream hedging. Reads the
+strategy engine's numbers (rule 1); the radio `templatePhraser` phrases it; proactivity gating (T8.5)
+caps it downstream. 9 rule tests + a phrasing test; 706 green; compliance PASS. _Scope note:_ richer headlines (undercut windows, traffic-cost) need
+the per-rival context the Core doesn't expose yet (same gap as `evaluate_undercut`) — a follow-up.
+~~**T8.3 integrated coaching done 2026-06-16**~~ — the **cross-domain** layer: `integratedCoaching({
+handling, fuelPlan })` in `strategy/coaching.ts` links the handling balance + tyre temps + the
+fuel/energy binding into a single corrective **driving** action, and **only when domains align** (so
+it adds insight, not chatter) — flagship case: understeer + energy-limited → "lift a touch earlier"
+(saves energy *and* eases the front push). Pure composition of the existing deterministic reads (rule
+1, no new math); read-only/advisory — coaches driving, never a setup/game change (rule 5); notes carry
+the diagnosis confidence. Wired as the read-only `get_coaching` AI tool + a free template answer ("what
+should I focus on?"). 5 strategy + 1 template test; 750 green; compliance PASS. **This completes M8's
+offline scope.** _Follow-up:_ more links (brakes, traffic) when those reads exist; the live-audible
+proactive version rides the voice layer.
 Context: [06-AI-ENGINEER](06-AI-ENGINEER.md), [08-INPUT-AND-CONTROLS](08-INPUT-AND-CONTROLS.md).
 
 **T8.4 — Advice verification from telemetry** · _Claude Code_ · deps: T0.3 (works on telemetry; live aid
@@ -895,11 +971,40 @@ gap, docs/07). Live-audible once T10.1 lands; the setting already persists + rea
 
 ## M9 — Setup advisory (Roadmap Phase 4)
 
-T9.1 read setup (read-only — blocked on the **S4** setup-file format spike, rig) → ~~T9.2 handling
+T9.1 read setup (read-only) (~~done — `.svm` parser, **rig-verified**~~ — the canonical reader is the
+**rig T1.4** `parseSvm`/`extractSetupBaseline`/`toSetupSummary`/`parseSvmFile` in
+`packages/adapters/lmu/src/setup/svm.ts` (verified against `fixtures/sample-gt3.svm`): parses the
+INI-style `.svm` into a flat entry list, extracts the TC/ABS/engine-map/VE/fuel/compound **baseline**
+the engineer advises from, and flattens to the canonical `SetupSummary`. _(An independent Mac-session
+parser, T9.1, was reconciled away in favour of this rig-grounded one; its unused `diffSetups` was
+dropped — `pnpm capture` now derives sections from the flat `entries`.)_ Read-only (rule 5 — parse to
+advise relative "clicks", never write a setup); per-game format stays in the adapter (rule 4).
+**Remaining:** confirm which keys map to TC/ABS/brake-bias/aero/mechanical for the advice surface, the
+file location/nesting (docs/03 §S4.1), and wire the live fs read into the host.) → ~~T9.2 handling
 diagnosis from telemetry~~ (done, pulled forward — it's the data-ready piece: tyre temps are already
-populated, no rig needed) → T9.3 setup screen (current values + safe ranges) → T9.4 AI
-recommendations (`propose_setup_change`, advice only) → T9.5 before/after compare after the driver
-applies changes in the garage.
+populated, no rig needed) → T9.3 setup screen (~~view-model done 2026-06-16~~ — a pure
+`buildSetupModel(snapshot)` in `apps/desktop/src/dashboard/setup-model.ts`: the **aid baseline** the
+engineer advises from (TC/ABS with their schema range; brake bias %, engine map) + the **loaded setup
+params** grouped by `.svm` section (from T9.1). State-honest — unread aids `—`, and per-setting
+mechanical/aero **safe ranges** stay `—` until the rig provides the car data (docs/03 §S4.2); the model
+carries the structure so the screen renders them the moment they land. 7 tests; 722 green; compliance
+PASS. _Remaining:_ the dedicated screen UI lands with the deferred Tailwind/shadcn reskin; safe-range
+values come from the rig.) → T9.4 AI recommendations (~~`propose_setup_change` done 2026-06-16~~ —
+`proposeSetupChanges(diagnosis)` in `strategy/setup-advice.ts` maps the handling diagnosis (T9.2) to
+ordered **directional, relative** advice (balance → "soften the front bar a click or two", then
+per-corner tyre-pressure + camber), each with a reason + the diagnosis confidence. Wired as the
+read-only `propose_setup_change` AI tool + a free template answer ("how do I fix the understeer?").
+**Advice only — the driver applies it in the garage; the app never writes a setup** (rule 5); relative,
+never a fabricated absolute (rule 1). 7 strategy + 1 tool + 2 template tests; 732 green; compliance
+PASS.) → ~~T9.5 before/after compare done 2026-06-16~~ — `compareHandling(before, after)` in
+`strategy/setup-compare.ts` closes the advise→apply→verify loop: after the driver applies a change in
+the garage, it compares the handling diagnosis before vs after and reports whether the balance
+`improved` / `unchanged` / `worsened` (judged from the front−rear temp-gap magnitude; a flip to a
+smaller gap reads as improved, an overcorrection to a bigger gap as worse), with a driver-facing
+summary. The *what changed* half is the `.svm` delta (`diffSetups`, T9.1); this is the *did-it-help*
+half. Pure (reads two diagnoses), read-only/advisory — evaluates the driver's change, never makes one.
+6 tests; 738 green; compliance PASS. **This completes M9's offline scope** (live setup values + the
+dedicated screen UI remain — rig + the deferred reskin).
 
 **T9.2 — Handling diagnosis from telemetry** · _Claude Code_ · deps: T0.3 (works on telemetry) · **done**
 Build: `diagnoseHandling(tires, thresholds?)` in `@race-engineer/strategy` `handling.ts` — the
@@ -913,16 +1018,39 @@ Verify: ✅ worked-example (camber/pressure/balance) + state-honesty + property 
 ∈[0,1], sign-symmetric camber) tests (505 green); compliance PASS. **Wired into the AI surface:** the
 read-only `get_handling_diagnosis` tool (`ai/tools.ts` — runs the diagnosis from the snapshot tyres;
 `ai` now depends on `strategy` at runtime, acyclic) + a free template-mode handling answer (quotes the
-front/rear temps + balance tendency); 507 green. _Remaining follow-up:_ a dashboard "Handling" card;
-magnitude thresholds calibrated on the rig.
+front/rear temps + balance tendency); 507 green. ~~Dashboard "Handling" card done 2026-06-16~~ — a
+pure `buildHandlingModel(snapshot)` in `apps/desktop/src/dashboard/handling-model.ts` (mirrors the
+strategy-model pattern): display-ready axle balance (understeer/oversteer → caution, neutral → good),
+front/rear temps + signed delta, per-corner camber/pressure hints, and a zone-data confidence;
+state-honest (single-value temps → `—`/unknown). Wired into the renderer as a **Handling** card
+(hidden when no read is possible). 7 model tests; 682 green; electron build green; compliance PASS.
+_Remaining follow-up:_ magnitude thresholds calibrated on the rig.
 Context: [08-INPUT-AND-CONTROLS](08-INPUT-AND-CONTROLS.md) §3, [09-UI-UX](09-UI-UX.md).
 
 ## M10 — Polish, local mode, packaging (Roadmap Phase 5)
 
 T10.1 wire local STT/TTS (Piper/Kokoro + faster-whisper) + cost estimator → T10.2 full
 onboarding (profile choice + model download/GPU detect + mic permission + plugin-install
-helper + health UI, per [16](16-PLATFORM-PREREQUISITES.md) §5) → T10.3 crash isolation,
-graceful degradation, local diagnostics export → ~~T10.4 eval suites (latency + accuracy) in
+helper + health UI, per [16](16-PLATFORM-PREREQUISITES.md) §5) (~~health/readiness model done
+2026-06-16~~ — a pure `buildReadinessReport` in `apps/desktop/src/readiness.ts`: the model behind the
+onboarding/health screen + "ready to race?" badge. From the config + injected capability probes it
+emits a per-concern check list (profile / LLM / TTS / STT / mic / output / PTT / source), each with a
+status (ready/attention/blocked) and the **next action** to fix it — e.g. a cloud route with no key is
+`blocked` with "Add your … key", an unreachable Ollama is `attention` (template still works), an LMU
+source with no telemetry nudges "Start LMU". `overall` = worst status; `blockers` = the fix-first list.
+Pure/input-injected, secret-safe (presence booleans only, rule 6), 10 tests; 675 green; compliance
+PASS. _Remaining T10.2:_ the live capability probes (GPU/VRAM, model download/verify, mic-permission +
+device test, plugin-install helper) + the renderer wiring — native/runtime, verified live) →
+T10.3 crash isolation,
+graceful degradation, **local diagnostics export** (~~diagnostics export done 2026-06-16~~ — a pure,
+secret-safe `buildDiagnosticsReport` in `apps/desktop/src/diagnostics.ts`: a redacted bug-report
+snapshot — app/version, platform, configured providers, source/health, recent event counts, and recent
+**scrubbed** errors. **No secrets ever** (rule 6): keys are reported as presence booleans, never values;
+errors pass through `redactSecrets`; device/PTT hardware ids reduce to booleans. Pure/input-injected,
+10 tests incl. a planted-key-never-survives check; 665 green; compliance PASS. _Remaining T10.3:_ the
+crash-isolation/auto-restart wiring + graceful-degradation surfacing in the Electron shell, and wiring
+the diagnostics export to a "Save report" button + a real version/platform/health collector — runtime
+pieces best verified live) → ~~T10.4 eval suites (latency + accuracy) in
 CI on recordings~~ (done — new **`@race-engineer/eval`** package + `pnpm eval` CLI. Three pure,
 deterministic eval suites that score the **same always-on machinery the app runs** against ground
 truth derived from the data itself: (a) **fuel accuracy** — replays a `RaceState` stream through
@@ -944,6 +1072,78 @@ scores it the day it lands)) → T10.5 electron-builder installer + auto-update 
 **code signing (SignPath Foundation, free for OSS)** + `THIRD-PARTY`/`NOTICE`.
 Gate: clean install on a fresh Windows PC; guided first-run to a working radio exchange;
 multi-hour race unattended; documented cloud cost/hour + working free local mode.
+
+## M11 — Virtual Energy (LMU binding constraint) · _correctness fix, user-flagged_
+
+The fuel/strategy engine originally modelled consumption in **litres only**. In LMU a stint
+is frequently bound by the per-stint **Virtual Energy** budget, not fuel — a car can have
+litres left but be out of VE. Planning on litres alone is wrong for LMU. This makes VE a
+first-class quantity parallel to fuel, so the binding stint/finish constraint is
+`min(fuel-limited laps, VE-limited laps)`. Context: [05-STRATEGY-ENGINE](05-STRATEGY-ENGINE.md)
+§"Virtual Energy", [03-LMU-INTEGRATION](03-LMU-INTEGRATION.md) §VE / `/rest/strategy/usage`.
+
+**T11.1 — VE in the canonical schema + strategy math** · _Claude Code_ · deps: T3.1 · **done**
+Build: ✅ `PlayerCar.virtualEnergy` (`{ level01, perLapAvg01, lapsRemainingEst } | null`,
+`.default(null)` so pre-VE / SHM-only recordings still validate) + `FuelPlan` VE fields
+(`perLapEnergy01`, `lapsRemainingOnEnergy`, `energyToFinish01`, `energyToAddNextStop01`,
+`energySaveTargetPerLap01`, `bindingConstraint`). `strategy/fuel.ts`: `estimatePerLapEnergy` +
+`energyDeltasFromReadings01` (the fuel estimator refactored to a shared `blendConsumption`, so
+fuel and VE share identical robust-median + prior-blend math), and `computeFuelPlan` extended
+with an optional `energy` input that computes the VE-limited laps and sets `bindingConstraint`
+to whichever resource runs out first. Pure/deterministic; VE all-null when not supplied (fuel
+planning unchanged). The LMU SHM normalizer sets `virtualEnergy: null` (VE is REST-only).
+Verify: ✅ worked examples (fuel-binds / VE-binds / VE-to-finish / VE-save / VE-absent /
+unknown-rate) + property (VE-laps monotone in level; finite; schema-valid; binding ∈ {fuel,
+energy}) tests; typecheck + lint + 625 green; compliance PASS.
+**T11.2 — VE through the live engine + dashboard** · _Claude Code_ · deps: T11.1 · **done**
+Build: ✅ the synthetic source emits a VE arc (`startEnergy01`/`energyPerLap01`, optional → null
+when omitted; default + scripted configs tuned so VE is the binding constraint); `engineer-core`'s
+`StrategyEngine` accumulates green-lap VE deltas exactly like fuel (refill-/caution-/restart-safe)
+and passes `energy` into `computeFuelPlan`; the dashboard view-models surface VE (`model.ts` energy
+block + `binding`; `strategy-model.ts` `binding` + VE-save target) and the renderer paints a
+**Virtual Energy** card (hidden for fuel-only streams) with an **"Energy-limited"/"Fuel-limited"**
+badge on whichever resource binds. State-honest: VE absent → all `unknown`, `binding` null.
+Verify: ✅ engine VE-learning/binding/refill-drop tests, synthetic VE-arc + omitted-VE tests,
+dashboard energy-block + binding + VE-save tests; typecheck + lint + 634 green; electron build green;
+compliance PASS. _Live half:_ real VE values arrive with T11.3 (LMU REST); the renderer card +
+"energy-limited" call are then visible against the live source.
+**T11.3 — VE from LMU REST → canonical** · _Claude Code (live verify human-assisted)_ · deps: T11.1, T2.2 · **offline half done**
+Build: ✅ a **tolerant** REST→canonical mapper `virtualEnergyFromRest(strategyUsage, repairRefuel)`
++ `withVirtualEnergyFromRest(state, rest)` in `packages/adapters/lmu/src/rest/virtual-energy.ts`:
+probes documented candidate keys (case-insensitive, one level of nesting), normalizes a % (0..100)
+**or** a 0..1 fraction to the canonical 0..1, computes `lapsRemainingEst`, and **returns null when no
+VE level is found** — never invents one (rule 1 / state-honesty). VE is REST-only (absent from rF2
+SHM), so this is its sole source; read-only (only reads payloads the GET-only client fetched).
+Verify: ✅ mocked-payload mapping tests (%/fraction/nested/fallback/clamp/absent/zero-rate) + merge-
+into-`RaceState` tests; typecheck + lint + 650 green; compliance PASS.
+**Live half (human-assisted, rig):** capture the real `/rest/strategy/usage` +
+`RepairAndRefuel` JSON to pin field names/units, narrow the candidate lists, and wire the ~2 Hz REST
+poll into `lmu-host.ts` off the SHM hot path (merge via `withVirtualEnergyFromRest`). Full checklist
+in [03-LMU-INTEGRATION.md](03-LMU-INTEGRATION.md) §C (Virtual Energy).
+
+**T11.5 — Proactive `energy_low` call-out** · _Claude Code_ · deps: T11.1, T11.2 · **done**
+Build: ✅ the Virtual-Energy sibling of `fuel_low` (T5.4) — a new `energy_low` `EventType`, an
+`energyLowRule` (`packages/core/src/events/rules/energy-low.ts`) that fires off the canonical
+`player.virtualEnergy.lapsRemainingEst` at escalating laps-left thresholds (default 4 → 2) with the
+framework cooldown, silent when VE is absent/unknown. Wired into `defaultEventRules`; the radio
+`templatePhraser` speaks it ("Energy's low — about N laps." / "Energy critical — box this lap.") and
+`defaultVoicePriority` routes it by urgency (≤2 laps → WARNING, else STRATEGY), exactly like fuel;
+the dashboard labels it "Energy low" in the alerts feed. Pure detection, no math, no write path.
+Verify: ✅ rule tests (one-shot arc / silent-when-no-VE / multi-threshold escalation) + radio
+phrasing + priority tests; typecheck + lint + 655 green; compliance PASS.
+**T11.4 — VE in the AI tool surface + template answers** · _Claude Code_ · deps: T11.1 · **done**
+Build: ✅ `get_fuel_plan` now returns the binding constraint + a `virtualEnergy` block as
+**percentages** (the LMU convention, so the LLM/guard quote figures directly, not raw 0..1), null
+for fuel-only series; `get_race_state` gains a VE % summary; both descriptions updated. A new
+**Virtual Energy template intent** (free/no-LLM) answers "how's my energy" with VE laps + %/lap +
+which resource binds, and the **fuel answer is now VE-aware** — when energy is the tighter limit it
+says so (the user-flagged gap). System prompt gained a VE/binding-constraint line (phrasing only;
+the LLM still gets every number from a tool — rule 1). State-honest: VE absent → "no reading yet",
+never a fabricated %.
+Verify: ✅ tool tests (VE % block + binding on `get_fuel_plan`/`get_race_state`, null for fuel-only)
++ template tests (energy intent, VE-aware fuel answer, VE-absent honesty); typecheck + lint + 641
+green; compliance PASS. _Follow-up:_ proactive VE-low call-out rule (sibling of `fuelLowRule`),
+confidence-gated, is a separate small task; live VE values arrive with T11.3.
 
 ---
 

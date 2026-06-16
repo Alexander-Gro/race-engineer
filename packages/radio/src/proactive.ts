@@ -37,7 +37,7 @@ const URGENT_REFLEX = new Set<EventType>(['car_left', 'car_right', 'three_wide']
  */
 export const defaultVoicePriority = (event: EngineerEvent): number => {
   if (URGENT_REFLEX.has(event.type)) return VoicePriority.SPOTTER;
-  if (event.type === 'fuel_low') {
+  if (event.type === 'fuel_low' || event.type === 'energy_low') {
     const threshold = event.payload.thresholdLaps;
     return typeof threshold === 'number' && threshold <= 2
       ? VoicePriority.WARNING
@@ -62,6 +62,36 @@ export const templatePhraser: ProactivePhraser = (event) => {
       return whole <= 1
         ? 'Fuel critical — box this lap.'
         : `Fuel's low — about ${whole} laps left.`;
+    }
+    case 'energy_low': {
+      const laps = event.payload.lapsRemaining;
+      if (typeof laps !== 'number') return 'Virtual energy is getting low.';
+      const whole = Math.max(0, Math.floor(laps)); // conservative: at least this many full laps
+      return whole <= 1
+        ? 'Energy critical — box this lap.'
+        : `Energy's low — about ${whole} laps left.`;
+    }
+    case 'tire_temp_out_of_window': {
+      const dir = event.payload.direction;
+      if (dir === 'hot') return 'Tyres are overheating — ease off to bring them back.';
+      if (dir === 'cold') return 'Tyres are below temperature — push to get some heat in.';
+      return 'Tyres are out of their window.';
+    }
+    case 'strategy_update': {
+      const kind = event.payload.kind;
+      if (kind === 'energy-save') {
+        const pct = event.payload.savePerLapPct;
+        return typeof pct === 'number'
+          ? `Strategy: you're energy-limited — save about ${pct.toFixed(1)}% a lap to make the window.`
+          : "Strategy: you're energy-limited — start saving to make the window.";
+      }
+      if (kind === 'fuel-save') {
+        const litres = event.payload.savePerLapLiters;
+        return typeof litres === 'number'
+          ? `Strategy: fuel's tight — save about ${litres.toFixed(2)} a lap to make the window.`
+          : "Strategy: fuel's tight — start saving to make the window.";
+      }
+      return 'Strategy update.';
     }
     case 'pit_window_open': {
       const earliest = event.payload.earliestLap;

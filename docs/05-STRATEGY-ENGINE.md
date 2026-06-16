@@ -64,6 +64,40 @@ Translate to driver-facing coaching ("lift ~50 m earlier into the two big stops"
 **Worked example.** 60 L tank, 38 L left, perLap 2.6 L → lapsRemainingOnFuel = 14.
 Planned stop in 16 laps → needPerLap = 38/16 = 2.375 → saveTarget ≈ 0.225 L/lap (~9%).
 
+### Virtual Energy (LMU) — the binding constraint
+
+In **Le Mans Ultimate** (and the WEC ruleset it models), a stint is limited not only by
+fuel in the tank but by a per-stint **Virtual Energy (VE)** budget — a normalized `0..1`
+allowance that drains as you drive and refills at a stop. The two limits are *independent*:
+a car can have litres left but be **out of VE** (energy-limited), or have VE left but be
+low on fuel (fuel-limited). Planning on litres alone is wrong for LMU — the stint ends when
+**either** runs out.
+
+So VE is modelled as a **parallel quantity to fuel**, with the *same* estimator and plan
+math over its `0..1` budget (so it inherits the robust median + prior blend + confidence):
+```
+perLapEnergy01        = robust rolling per-lap VE burn (0..1/lap), blended with prior
+lapsRemainingOnEnergy = level01 / perLapEnergy01
+energyToFinish01      = lapsLeft * perLapEnergy01            // lapsLeft shared with fuel
+energyToAddNextStop01 = max(0, energyToFinish01 - level01 + reserve01)
+energySaveTarget01    = perLapEnergy01 - level01/lapsUntilStop   // when VE binds before the stop
+```
+The plan then reports the **binding constraint** — whichever runs out first:
+```
+bindingConstraint = lapsRemainingOnEnergy < lapsRemainingOnFuel ? 'energy' : 'fuel'
+```
+The engineer surfaces the binding resource ("you're energy-limited — short ~2 laps on VE
+before fuel; lift to save 0.005/lap") and the fuel-save vs energy-save target accordingly.
+
+**State honesty.** VE comes from the LMU **REST** API (`/rest/strategy/usage`), *not* shared
+memory — so when the source can't see it (SHM-only, non-LMU, or a recording made before VE
+support), all VE fields are `null`, `bindingConstraint` is `null`, and planning falls back to
+fuel-only. We never guess a VE rate (rule 1), exactly as with fuel.
+
+**Worked example.** 60 L fuel @ 2.6 L/lap → 23 laps on fuel; VE at 0.50 burning 0.05/lap →
+10 laps on energy. `bindingConstraint = 'energy'` — the stint is energy-limited at ~10 laps,
+13 laps *before* fuel would have forced the stop.
+
 ## 2. Tire degradation model
 
 Track per-stint: tire wear samples (`wear01`), tire temps vs target window, and lap-time

@@ -1,7 +1,12 @@
 import type { StintPlan } from '@race-engineer/core';
 import { multiClassTrafficState } from '@race-engineer/core/fixtures';
 import type { EngineerSnapshot } from '@race-engineer/engineer-core';
-import { computeFuelPlan, estimatePerLapConsumption, planStints } from '@race-engineer/strategy';
+import {
+  computeFuelPlan,
+  estimatePerLapConsumption,
+  estimatePerLapEnergy,
+  planStints,
+} from '@race-engineer/strategy';
 import { describe, expect, it } from 'vitest';
 import { buildStrategyModel } from './strategy-model';
 
@@ -82,6 +87,28 @@ describe('buildStrategyModel — stint plan', () => {
     expect(m.lapsToFinish.value).toBe('18 laps');
     // Can't reach the planned stop on 20 L → a save target is set (2.6 − 20/10 = 0.60 L/lap).
     expect(m.fuelSaveTarget.value).toBe('0.60 L/lap');
+  });
+
+  it('reports the binding constraint as fuel-only (energy null) when there is no Virtual Energy', () => {
+    const m = buildStrategyModel(snap(stintPlan, fuelPlan));
+    expect(m.binding).toBeNull();
+    expect(m.energySaveTarget).toMatchObject({ severity: 'unknown' });
+  });
+
+  it('surfaces an energy-limited binding constraint and a VE-save target (LMU)', () => {
+    const veFuelPlan = computeFuelPlan({
+      fuelLiters: 60, // plenty of fuel → VE binds
+      consumption: estimatePerLapConsumption({ greenLapFuelDeltas: [2.6, 2.6, 2.6] }),
+      lapsUntilPlannedStop: 12,
+      energy: {
+        level01: 0.5, // 0.5 / 0.06 ≈ 8.3 laps on VE < 12 → a VE-save target is set
+        consumption: estimatePerLapEnergy({ greenLapEnergyDeltas01: [0.06, 0.06, 0.06] }),
+      },
+    });
+    const m = buildStrategyModel(snap(stintPlan, veFuelPlan));
+    expect(m.binding).toBe('energy');
+    // 0.06 − 0.5/12 = 0.0183 → 1.8%/lap
+    expect(m.energySaveTarget.value).toBe('1.8%/lap');
   });
 });
 

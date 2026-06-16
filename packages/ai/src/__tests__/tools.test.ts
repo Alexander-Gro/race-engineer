@@ -1,5 +1,11 @@
 import { multiClassTrafficState } from '@race-engineer/core/fixtures';
-import { computeFuelPlan, estimatePerLapConsumption, planStints } from '@race-engineer/strategy';
+import type { RaceState } from '@race-engineer/core';
+import {
+  computeFuelPlan,
+  estimatePerLapConsumption,
+  estimatePerLapEnergy,
+  planStints,
+} from '@race-engineer/strategy';
 import { describe, expect, it } from 'vitest';
 import type { RaceContext } from '../context';
 import { READ_ONLY_TOOLS, toolRegistry } from '../tools';
@@ -101,6 +107,53 @@ describe('read-only tools', () => {
   });
 });
 
+describe('read-only tools — Virtual Energy (LMU)', () => {
+  const veState: RaceState = {
+    ...multiClassTrafficState,
+    player: {
+      ...multiClassTrafficState.player,
+      virtualEnergy: { level01: 0.5, perLapAvg01: 0.05, lapsRemainingEst: 10 },
+    },
+  };
+  const veFuelPlan = computeFuelPlan({
+    fuelLiters: 60, // 60 / 2.6 ≈ 23 laps on fuel
+    consumption: estimatePerLapConsumption({ greenLapFuelDeltas: [2.6, 2.6, 2.6] }),
+    energy: {
+      level01: 0.5, // 0.5 / 0.05 = 10 laps on VE → VE binds
+      consumption: estimatePerLapEnergy({ greenLapEnergyDeltas01: [0.05, 0.05, 0.05] }),
+    },
+  });
+  const veCtx: RaceContext = { raceState: veState, fuelPlan: veFuelPlan };
+
+  it('get_race_state surfaces a VE percentage block from canonical 0..1 values', () => {
+    const ve = run('get_race_state', veCtx).virtualEnergy as Record<string, unknown>;
+    expect(ve.levelPct).toBeCloseTo(50);
+    expect(ve.perLapAvgPct).toBeCloseTo(5);
+    expect(ve.lapsRemainingEst).toBe(10);
+  });
+
+  it('get_race_state returns virtualEnergy null when the source has no VE', () => {
+    expect(run('get_race_state').virtualEnergy).toBeNull(); // default ctx fixture has no VE
+  });
+
+  it('get_fuel_plan presents VE as percentages and reports the binding constraint', () => {
+    const r = run('get_fuel_plan', veCtx);
+    expect(r.bindingConstraint).toBe('energy');
+    const ve = r.virtualEnergy as Record<string, unknown>;
+    expect(ve.perLapEnergyPct).toBeCloseTo(5);
+    expect(ve.lapsRemainingOnEnergy).toBeCloseTo(10);
+    // Fuel figures stay flat and in litres — the contract is unchanged.
+    expect(r.perLapLiters).toBeCloseTo(2.6, 6);
+    expect((r.units as Record<string, unknown>).energy).toBe('percent of the per-stint VE budget');
+  });
+
+  it('get_fuel_plan virtualEnergy and binding are null for a fuel-only plan', () => {
+    const r = run('get_fuel_plan'); // default ctx fuelPlan has no energy
+    expect(r.virtualEnergy).toBeNull();
+    expect(r.bindingConstraint).toBeNull();
+  });
+});
+
 describe('read-only invariant', () => {
   it('handlers never mutate the race state', () => {
     const before = JSON.stringify(multiClassTrafficState);
@@ -119,10 +172,59 @@ describe('read-only invariant', () => {
         'project_pit_window',
         'get_tire_status',
         'get_handling_diagnosis',
+        'propose_setup_change',
+        'get_coaching',
         'get_current_aids',
       ]),
     );
-    // get_* reads, project_* derives — both read-only; no apply/set/write verb.
-    for (const n of names) expect(n).toMatch(/^(get|project)_/);
+    // get_* reads, project_* derives, propose_* advises — all read-only; no apply/set/write verb.
+    for (const n of names) expect(n).toMatch(/^(get|project|propose)_/);
+  });
+
+  it('propose_setup_change is advice-only — it returns suggestions, never applies them', () => {
+    const understeer: RaceState = {
+      ...multiClassTrafficState,
+      player: {
+        ...multiClassTrafficState.player,
+        // fronts much hotter than rears (3-zone) → understeer + full confidence.
+        tires: [
+          {
+            tempC: { inner: 105, center: 105, outer: 105 },
+            pressureKpa: null,
+            wear01: null,
+            compound: null,
+            surfaceTempC: null,
+          },
+          {
+            tempC: { inner: 105, center: 105, outer: 105 },
+            pressureKpa: null,
+            wear01: null,
+            compound: null,
+            surfaceTempC: null,
+          },
+          {
+            tempC: { inner: 85, center: 85, outer: 85 },
+            pressureKpa: null,
+            wear01: null,
+            compound: null,
+            surfaceTempC: null,
+          },
+          {
+            tempC: { inner: 85, center: 85, outer: 85 },
+            pressureKpa: null,
+            wear01: null,
+            compound: null,
+            surfaceTempC: null,
+          },
+        ],
+      },
+    };
+    const r = run('propose_setup_change', { raceState: understeer, fuelPlan: null });
+    const suggestions = r.suggestions as Array<Record<string, unknown>>;
+    expect(suggestions[0]?.area).toBe('balance');
+    expect(String(suggestions[0]?.change)).toMatch(/front/i);
+    expect(String(r.note)).toMatch(/never writes a setup/i);
+    // uniform tyres (the default fixture) → balanced → nothing to change.
+    expect((run('propose_setup_change').suggestions as unknown[]).length).toBe(0);
   });
 });

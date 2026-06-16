@@ -69,6 +69,12 @@ const num = (n: number | null, digits = 1, unit = ''): Reading =>
     ? UNKNOWN
     : { value: `${n.toFixed(digits)}${unit}`, severity: 'neutral' };
 
+/** A 0..1 fraction as a percentage Reading (e.g. 0.84 → "84%"). For Virtual Energy. */
+const pct = (n: number | null, digits = 0): Reading =>
+  n === null || !Number.isFinite(n)
+    ? UNKNOWN
+    : { value: `${(n * 100).toFixed(digits)}%`, severity: 'neutral' };
+
 /** Signed display that never shows a misleading `-0.0`: a value rounding to zero carries no sign. */
 const signedStr = (n: number, digits: number, unit: string): string => {
   const rounded = Number.parseFloat(n.toFixed(digits));
@@ -151,6 +157,7 @@ const EVENT_LABELS: Partial<Record<EventType, string>> = {
   three_wide: 'Three wide',
   clear: 'Clear',
   fuel_low: 'Fuel low',
+  energy_low: 'Energy low',
   tire_temp_out_of_window: 'Tyres out of window',
   pit_window_open: 'Pit window open',
   box_this_lap: 'Box this lap',
@@ -228,6 +235,15 @@ export interface DashboardModel {
     addAtStop: Reading;
     nextPit: Reading;
   };
+  /** Virtual Energy (LMU). All `unknown` when the source doesn't expose VE (non-LMU / SHM-only). */
+  energy: {
+    level: Reading;
+    lapsRemaining: Reading;
+    perLap: Reading;
+    addAtStop: Reading;
+  };
+  /** Which resource limits the current stint: `fuel`, `energy`, or null (no VE / still learning). */
+  binding: 'fuel' | 'energy' | null;
   tyres: { compound: string | null; corners: [CornerTyre, CornerTyre, CornerTyre, CornerTyre] };
   brakes: { corners: [Reading, Reading, Reading, Reading] };
   aids: { tc: Reading; abs: Reading; brakeBias: Reading; engineMap: Reading };
@@ -328,6 +344,17 @@ export const buildDashboardModel = (
       addAtStop: num(fuelPlan?.litersToAddNextStop ?? null, 1, ' L'),
       nextPit: nextPitReading(snapshot.strategy?.stintPlan ?? null),
     },
+    energy: {
+      level: pct(p.virtualEnergy?.level01 ?? null, 0),
+      // Prefer the strategy engine's VE-limited laps; fall back to the Normalizer's rolling estimate.
+      lapsRemaining: fuelLaps(
+        fuelPlan?.lapsRemainingOnEnergy ?? p.virtualEnergy?.lapsRemainingEst ?? null,
+        thresholds,
+      ),
+      perLap: pct(fuelPlan?.perLapEnergy01 ?? p.virtualEnergy?.perLapAvg01 ?? null, 1),
+      addAtStop: pct(fuelPlan?.energyToAddNextStop01 ?? null, 0),
+    },
+    binding: fuelPlan?.bindingConstraint ?? null,
     tyres: {
       compound: fl?.compound ?? null,
       corners: [

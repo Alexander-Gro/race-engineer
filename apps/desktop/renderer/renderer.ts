@@ -21,6 +21,7 @@ import {
   type StrategyModel,
   type StrategyRivalRow,
 } from '../src/dashboard/strategy-model';
+import { buildHandlingModel, type HandlingModel } from '../src/dashboard/handling-model';
 import { CalloutSpeaker, type CalloutSpeechPort } from '../src/callout';
 import { estimateCloudCost } from '../src/cost';
 import type { PttApi } from '../src/ptt-mapping';
@@ -82,7 +83,16 @@ const card = (title: string, ...body: HTMLElement[]): HTMLElement => {
 
 const CORNER_LABELS = ['FL', 'FR', 'RL', 'RR'] as const;
 
-const fuelCard = (m: DashboardModel['fuel']): HTMLElement => {
+/** A small "limiting" badge shown on whichever of fuel/VE binds the current stint. */
+const bindingBadge = (
+  binding: DashboardModel['binding'],
+  resource: 'fuel' | 'energy',
+): HTMLElement[] =>
+  binding === resource
+    ? [el('div', 'binding-badge', resource === 'fuel' ? 'Fuel-limited' : 'Energy-limited')]
+    : [];
+
+const fuelCard = (m: DashboardModel['fuel'], binding: DashboardModel['binding']): HTMLElement => {
   const big = el('div', 'fuel-big');
   const laps = el('div', `fuel-laps sev-${m.lapsRemaining.severity}`, m.lapsRemaining.value);
   laps.dataset['severity'] = m.lapsRemaining.severity;
@@ -94,7 +104,29 @@ const fuelCard = (m: DashboardModel['fuel']): HTMLElement => {
     metric('Add at stop', m.addAtStop),
     metric('Next pit (lap)', m.nextPit),
   );
-  return card('Fuel', big, grid);
+  return card('Fuel', big, grid, ...bindingBadge(binding, 'fuel'));
+};
+
+/**
+ * Virtual Energy card (LMU). Hidden entirely when the source exposes no VE (non-LMU / SHM-only),
+ * so a fuel-only stream never shows an empty VE panel. Shows the binding badge when VE limits.
+ */
+const energyCard = (
+  m: DashboardModel['energy'],
+  binding: DashboardModel['binding'],
+): HTMLElement | null => {
+  if (m.level.severity === 'unknown') return null;
+  const big = el('div', 'fuel-big');
+  const laps = el('div', `fuel-laps sev-${m.lapsRemaining.severity}`, m.lapsRemaining.value);
+  laps.dataset['severity'] = m.lapsRemaining.severity;
+  big.append(laps, el('div', 'fuel-laps-label', 'laps on VE'));
+  const grid = el('div', 'grid-2');
+  grid.append(
+    metric('VE left', m.level),
+    metric('Per lap', m.perLap),
+    metric('Add at stop', m.addAtStop),
+  );
+  return card('Virtual Energy', big, grid, ...bindingBadge(binding, 'energy'));
 };
 
 const cornerGrid = (
@@ -120,6 +152,37 @@ const tyresCard = (m: DashboardModel['tyres']): HTMLElement => {
     grid.append(cell);
   });
   return card(`Tyres${m.compound ? ` · ${m.compound}` : ''}`, grid);
+};
+
+/**
+ * Handling card (T9.2): axle balance + front/rear temps + per-corner camber/pressure hints. Hidden
+ * when no read is possible (no tyre temps at all); the renderer is a thin painter over the model.
+ */
+const handlingCard = (m: HandlingModel): HTMLElement | null => {
+  if (!m.available) return null;
+  const big = el('div', 'fuel-big');
+  const balance = el('div', `fuel-laps sev-${m.balance.severity}`, m.balance.value);
+  balance.dataset['severity'] = m.balance.severity;
+  big.append(balance, el('div', 'fuel-laps-label', 'balance'));
+  const grid = el('div', 'grid-2');
+  grid.append(
+    metric('Front', m.frontTemp),
+    metric('Rear', m.rearTemp),
+    metric('F−R', m.frontRearDelta),
+    metric('Zone data', m.confidence),
+  );
+  const corners = el('div', 'grid-2');
+  m.corners.forEach((c) => {
+    const cell = el('div', 'corner');
+    cell.append(el('div', 'corner-pos', c.corner));
+    const cam = el('div', `corner-sub sev-${c.camber.severity}`, c.camber.value);
+    cam.dataset['severity'] = c.camber.severity;
+    const pre = el('div', `corner-sub sev-${c.pressure.severity}`, c.pressure.value);
+    pre.dataset['severity'] = c.pressure.severity;
+    cell.append(cam, pre);
+    corners.append(cell);
+  });
+  return card('Handling', big, grid, corners);
 };
 
 const brakesCard = (m: DashboardModel['brakes']): HTMLElement =>
@@ -265,7 +328,7 @@ const rivalsCard = (m: StrategyModel): HTMLElement => {
   return card('Rivals', ...body);
 };
 
-const render = (model: DashboardModel, strategy: StrategyModel): void => {
+const render = (model: DashboardModel, strategy: StrategyModel, handling: HandlingModel): void => {
   const app = document.getElementById('app');
   if (!app) return;
   if (model.alerts.length > 0)
@@ -274,12 +337,16 @@ const render = (model: DashboardModel, strategy: StrategyModel): void => {
   const root = el('div');
   if (recentAlerts.length > 0) root.append(alertsStrip(recentAlerts));
   const cards = el('div', 'cards');
+  const energy = energyCard(model.energy, model.binding);
+  const handlingEl = handlingCard(handling);
   cards.append(
-    fuelCard(model.fuel),
+    fuelCard(model.fuel, model.binding),
+    ...(energy ? [energy] : []),
     standingsCard(model.standings),
     strategyCard(strategy),
     rivalsCard(strategy),
     tyresCard(model.tyres),
+    ...(handlingEl ? [handlingEl] : []),
     brakesCard(model.brakes),
     aidsCard(model.aids),
     timingCard(model.timing),
@@ -296,7 +363,7 @@ const render = (model: DashboardModel, strategy: StrategyModel): void => {
 let calloutSpeaker: CalloutSpeaker | null = null;
 
 window.engineer.onSnapshot((snapshot) => {
-  render(buildDashboardModel(snapshot), buildStrategyModel(snapshot));
+  render(buildDashboardModel(snapshot), buildStrategyModel(snapshot), buildHandlingModel(snapshot));
   if (snapshot.events?.length) calloutSpeaker?.announce(snapshot.events);
 });
 
