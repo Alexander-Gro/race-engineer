@@ -1159,10 +1159,19 @@ VE level is found** — never invents one (rule 1 / state-honesty). VE is REST-o
 SHM), so this is its sole source; read-only (only reads payloads the GET-only client fetched).
 Verify: ✅ mocked-payload mapping tests (%/fraction/nested/fallback/clamp/absent/zero-rate) + merge-
 into-`RaceState` tests; typecheck + lint + 650 green; compliance PASS.
-**Live half (human-assisted, rig):** capture the real `/rest/strategy/usage` +
-`RepairAndRefuel` JSON to pin field names/units, narrow the candidate lists, and wire the ~2 Hz REST
-poll into `lmu-host.ts` off the SHM hot path (merge via `withVirtualEnergyFromRest`). Full checklist
-in [03-LMU-INTEGRATION.md](03-LMU-INTEGRATION.md) §C (Virtual Energy).
+**Live wiring done 2026-06-16** (~~the ~2 Hz REST poll into `lmu-host.ts` off the SHM hot path~~):
+new `apps/desktop/src/lmu-rest.ts` `createRestMerge` polls the GET-only `LmuRestClient` for
+`strategyUsage`/`garage`/`repairRefuel` on **its own ~2 Hz timer** and exposes a pure `merge(state)`
+that applies `withVirtualEnergyFromRest` + `withAidsFromRest` against the **last** snapshot — so the
+50 Hz SHM tick does no network I/O and only spreads when REST actually has data (returns the same ref
+otherwise). `lmu-host.ts` wraps the SHM normalizer with it (VE/aids land before the strategy engine +
+detector run) and drives the poll from `start()`/`stop()`; degrades to a null client when the runtime
+has no `fetch`, and the poll never throws. 4 tests (798 green); typecheck + lint + compliance PASS
+(rules 5/3/4 + state-honesty). **Still human-assisted (rig):** with LMU in a session, capture the real
+`/rest/strategy/usage` + `RepairAndRefuel`/`getPlayerGarageData` JSON to **pin the LIVE-VERIFY field
+names** (`LEVEL_KEYS`/`PER_LAP_KEYS` in virtual-energy.ts, the aid-index keys in aids.ts) and confirm
+VE/aids actually populate against the live source — the mappers fail safe (null) until then. Full
+checklist in [03-LMU-INTEGRATION.md](03-LMU-INTEGRATION.md) §C (Virtual Energy).
 
 **T11.5 — Proactive `energy_low` call-out** · _Claude Code_ · deps: T11.1, T11.2 · **done**
 Build: ✅ the Virtual-Energy sibling of `fuel_low` (T5.4) — a new `energy_low` `EventType`, an
