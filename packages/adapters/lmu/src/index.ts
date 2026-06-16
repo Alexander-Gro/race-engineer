@@ -15,3 +15,4 @@ export * from './rest/client';
 export * from './rest/probe';
 export * from './rest/virtual-energy';
 export * from './rest/aids';
+export * from './setup/svm';

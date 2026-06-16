@@ -984,6 +984,14 @@ The `.svm` is a **human-readable text / INI-style** file (rF2 heritage), safe to
   **TC / ABS / brake bias / engine map / mixture** and to mechanical (springs, ARB, dampers,
   ride height) and aero (wing) settings, and whether any entry stores an absolute value.
 
+**Offline half built (T9.1, 2026-06-16):** a pure, tolerant parser
+`packages/adapters/lmu/src/setup/svm.ts` — `parseSvm(text)` → `{ sections: { KEY: [{key, index,
+display, raw}] } }`, `setupSummaryFromSvm(text, name)` → canonical `SetupSummary`, and
+`diffSetups(base, other)` → the changed setting **indices** (the reliable "which setting moved"
+capability). Pure (string in), read-only, unit-tested with a sample `.svm`. **Rig steps:** the
+`pnpm capture` script grabs a real `.svm`; then confirm the section/key names + the TC/ABS/brake-bias/
+aero/mechanical mapping, the file location/nesting (§S4.1), and wire the actual file read.
+
 ### S4.3 — Setup state via REST (alternative read source — LIVE-VERIFY)
 
 `/rest/garage/getPlayerGarageData` and the `/rest/garage/UIScreen/*` screens are the

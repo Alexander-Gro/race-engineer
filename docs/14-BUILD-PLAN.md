@@ -907,7 +907,16 @@ gap, docs/07). Live-audible once T10.1 lands; the setting already persists + rea
 
 ## M9 — Setup advisory (Roadmap Phase 4)
 
-T9.1 read setup (read-only — blocked on the **S4** setup-file format spike, rig) → ~~T9.2 handling
+T9.1 read setup (read-only) (~~`.svm` parser done 2026-06-16~~ — a pure, tolerant `parseSvm` +
+`setupSummaryFromSvm` + `diffSetups` in `packages/adapters/lmu/src/setup/svm.ts`: parses the INI-style
+`.svm` (`[SECTION]` / `Key=<index>//<display>`) into structured entries (stored index + display
+comment), flattens to the canonical `SetupSummary`, and reports which setting **indices changed vs a
+reference** (the reliable use — the file stores indices, not the UI's physical numbers, docs/03 §S4.2).
+Read-only (rule 5 — parse to advise relative "clicks", never write a setup); per-game format stays in
+the adapter (rule 4). 9 tests; 715 green; compliance PASS. **Live half (rig, per
+[[build-rig-gated-offline-tolerant]]):** confirm the LMU section/key names + which keys are
+TC/ABS/brake-bias/aero/mechanical, the file location/nesting (docs/03 §S4.1), and wire the fs read; the
+`pnpm capture` script will grab a real `.svm`.) → ~~T9.2 handling
 diagnosis from telemetry~~ (done, pulled forward — it's the data-ready piece: tyre temps are already
 populated, no rig needed) → T9.3 setup screen (current values + safe ranges) → T9.4 AI
 recommendations (`propose_setup_change`, advice only) → T9.5 before/after compare after the driver
