@@ -79,6 +79,10 @@ export interface StrategyModel {
   mandatoryStops: Reading;
   lapsToFinish: Reading;
   fuelSaveTarget: Reading;
+  /** Which resource limits the current stint: `fuel`, `energy`, or null (no VE / still learning). */
+  binding: 'fuel' | 'energy' | null;
+  /** Virtual-Energy save target (%/lap) when VE would run out before the planned stop. */
+  energySaveTarget: Reading;
   rivals: StrategyRivalRow[];
   seq: number;
 }
@@ -138,6 +142,11 @@ const saveTarget = (plan: FuelPlan | null): Reading =>
     ? UNKNOWN
     : { value: `${plan.fuelSaveTargetLitersPerLap.toFixed(2)} L/lap`, severity: 'caution' };
 
+const energySaveTarget = (plan: FuelPlan | null): Reading =>
+  plan === null || plan.energySaveTargetPerLap01 === null
+    ? UNKNOWN
+    : { value: `${(plan.energySaveTargetPerLap01 * 100).toFixed(1)}%/lap`, severity: 'caution' };
+
 /** Build the strategy + rival-tracker view-model for one snapshot. Pure, deterministic. */
 export const buildStrategyModel = (
   snapshot: EngineerSnapshot,
@@ -159,6 +168,8 @@ export const buildStrategyModel = (
     mandatoryStops: intReading(stintPlan?.mandatoryStopsRemaining ?? null),
     lapsToFinish: fuelToFinish(fuelPlan),
     fuelSaveTarget: saveTarget(fuelPlan),
+    binding: fuelPlan?.bindingConstraint ?? null,
+    energySaveTarget: energySaveTarget(fuelPlan),
     rivals: buildRivals(state, nearbyCount),
     seq: snapshot.seq,
   };

@@ -10,6 +10,9 @@ const frame = (opts: {
   perLapAvg?: number | null;
   remainingS?: number | null;
   flag?: RaceState['flags']['global'];
+  /** Virtual Energy level now (0..1); omit to leave VE unmodelled (null). */
+  energy01?: number;
+  energyPerLapAvg01?: number | null;
 }): RaceState => ({
   ...raceStartState,
   flags: { ...raceStartState.flags, global: opts.flag ?? 'green' },
@@ -25,6 +28,14 @@ const frame = (opts: {
       perLapAvgLiters: opts.perLapAvg ?? null,
       lapsRemainingEst: null,
     },
+    virtualEnergy:
+      opts.energy01 === undefined
+        ? null
+        : {
+            level01: opts.energy01,
+            perLapAvg01: opts.energyPerLapAvg01 ?? null,
+            lapsRemainingEst: null,
+          },
   },
 });
 
@@ -114,6 +125,43 @@ describe('StrategyEngine', () => {
       frame({ liters: 75, laps: 2, lastLapS: 100 }), // jumped 2 laps: 5 L over 2 = 2.5/lap, not 5
     ];
     expect(run(frames).summary(frames.at(-1)!).fuelPlan!.perLapLiters).toBeCloseTo(2.5, 6);
+  });
+
+  it('learns per-lap Virtual Energy and picks the binding constraint (LMU)', () => {
+    const frames = [
+      frame({ liters: 80, laps: 0, energy01: 1.0 }),
+      frame({ liters: 77.5, laps: 1, lastLapS: 100, energy01: 0.95 }), // 2.5 L, 0.05 VE
+      frame({ liters: 75, laps: 2, lastLapS: 100, energy01: 0.9 }),
+      frame({ liters: 72.5, laps: 3, lastLapS: 100, energy01: 0.85 }),
+    ];
+    const { fuelPlan } = run(frames).summary(frames.at(-1)!);
+    expect(fuelPlan).not.toBeNull();
+    expect(fuelPlan!.perLapEnergy01).toBeCloseTo(0.05, 6);
+    expect(fuelPlan!.lapsRemainingOnEnergy).toBeCloseTo(0.85 / 0.05, 6); // 17 laps on VE
+    // fuel is good for 72.5/2.5 = 29 laps, so VE (17) is the binding limit.
+    expect(fuelPlan!.bindingConstraint).toBe('energy');
+  });
+
+  it('leaves VE fields null and bindingConstraint null when the source has no VE', () => {
+    const frames = [
+      frame({ liters: 80, laps: 0 }),
+      frame({ liters: 77.5, laps: 1, lastLapS: 100 }),
+      frame({ liters: 75, laps: 2, lastLapS: 100 }),
+    ];
+    const { fuelPlan } = run(frames).summary(frames.at(-1)!);
+    expect(fuelPlan!.perLapEnergy01).toBeNull();
+    expect(fuelPlan!.lapsRemainingOnEnergy).toBeNull();
+    expect(fuelPlan!.bindingConstraint).toBeNull();
+  });
+
+  it('drops a VE refill (energy increase) from the per-lap VE estimate', () => {
+    const frames = [
+      frame({ liters: 80, laps: 0, energy01: 1.0 }),
+      frame({ liters: 77.5, laps: 1, lastLapS: 100, energy01: 0.95 }), // −0.05 burn
+      frame({ liters: 90, laps: 2, lastLapS: 100, energy01: 1.0 }), // +0.05 refill → excluded
+      frame({ liters: 87.5, laps: 3, lastLapS: 100, energy01: 0.95 }), // −0.05 burn
+    ];
+    expect(run(frames).summary(frames.at(-1)!).fuelPlan!.perLapEnergy01).toBeCloseTo(0.05, 6);
   });
 
   it('clears stale history when the lap count goes backwards — restart / loop (review)', () => {

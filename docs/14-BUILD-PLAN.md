@@ -348,9 +348,12 @@ in a small, reviewable, green-tested change.
   litres-only; in LMU a stint is often bound by the per-stint **Virtual Energy** budget, not fuel.
   **T11.1 done** — VE is now a first-class quantity parallel to fuel in the canonical schema
   (`PlayerCar.virtualEnergy`) and the plan (`FuelPlan` VE fields + `bindingConstraint`), with the
-  same robust estimator and a binding-constraint = `min(fuel laps, VE laps)` (625 green; compliance
-  PASS). Remaining: **T11.2** live engine + dashboard, **T11.3** LMU REST→canonical mapping (live
-  half), **T11.4** AI tool/template surface. See M11 below.
+  same robust estimator and a binding-constraint = `min(fuel laps, VE laps)`. **T11.2 done** — VE
+  now flows live: the synthetic source emits a VE arc, the always-on `StrategyEngine` learns per-lap
+  VE like fuel and computes the binding constraint each snapshot, and the dashboard (models +
+  renderer) shows a Virtual Energy card with an "Energy-limited" badge (634 green; electron build +
+  compliance PASS). Remaining: **T11.3** LMU REST→canonical mapping (live half), **T11.4** AI
+  tool/template surface. See M11 below.
 
 ## The central ordering idea
 
@@ -944,10 +947,18 @@ planning unchanged). The LMU SHM normalizer sets `virtualEnergy: null` (VE is RE
 Verify: ✅ worked examples (fuel-binds / VE-binds / VE-to-finish / VE-save / VE-absent /
 unknown-rate) + property (VE-laps monotone in level; finite; schema-valid; binding ∈ {fuel,
 energy}) tests; typecheck + lint + 625 green; compliance PASS.
-**T11.2 — VE through the live engine + dashboard** · _Claude Code_ · deps: T11.1
-Build: synthetic source emits a VE arc; `engineer-core`'s `StrategyEngine` accumulates green-lap
-VE deltas like fuel and passes `energy` into `computeFuelPlan`; the dashboard surfaces the
-binding constraint + VE-to-add. Verify: VE arc converges; dashboard shows "energy-limited".
+**T11.2 — VE through the live engine + dashboard** · _Claude Code_ · deps: T11.1 · **done**
+Build: ✅ the synthetic source emits a VE arc (`startEnergy01`/`energyPerLap01`, optional → null
+when omitted; default + scripted configs tuned so VE is the binding constraint); `engineer-core`'s
+`StrategyEngine` accumulates green-lap VE deltas exactly like fuel (refill-/caution-/restart-safe)
+and passes `energy` into `computeFuelPlan`; the dashboard view-models surface VE (`model.ts` energy
+block + `binding`; `strategy-model.ts` `binding` + VE-save target) and the renderer paints a
+**Virtual Energy** card (hidden for fuel-only streams) with an **"Energy-limited"/"Fuel-limited"**
+badge on whichever resource binds. State-honest: VE absent → all `unknown`, `binding` null.
+Verify: ✅ engine VE-learning/binding/refill-drop tests, synthetic VE-arc + omitted-VE tests,
+dashboard energy-block + binding + VE-save tests; typecheck + lint + 634 green; electron build green;
+compliance PASS. _Live half:_ real VE values arrive with T11.3 (LMU REST); the renderer card +
+"energy-limited" call are then visible against the live source.
 **T11.3 — VE from LMU REST → canonical** · _Claude Code (live verify human-assisted)_ · deps: T11.1, T2.2
 Build: map `/rest/strategy/usage` VE-per-lap + current VE level into `player.virtualEnergy` in
 the REST→`RaceState` merge. Verify: mocked-payload mapping test; **live half:** capture the real

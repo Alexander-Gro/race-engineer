@@ -82,7 +82,16 @@ const card = (title: string, ...body: HTMLElement[]): HTMLElement => {
 
 const CORNER_LABELS = ['FL', 'FR', 'RL', 'RR'] as const;
 
-const fuelCard = (m: DashboardModel['fuel']): HTMLElement => {
+/** A small "limiting" badge shown on whichever of fuel/VE binds the current stint. */
+const bindingBadge = (
+  binding: DashboardModel['binding'],
+  resource: 'fuel' | 'energy',
+): HTMLElement[] =>
+  binding === resource
+    ? [el('div', 'binding-badge', resource === 'fuel' ? 'Fuel-limited' : 'Energy-limited')]
+    : [];
+
+const fuelCard = (m: DashboardModel['fuel'], binding: DashboardModel['binding']): HTMLElement => {
   const big = el('div', 'fuel-big');
   const laps = el('div', `fuel-laps sev-${m.lapsRemaining.severity}`, m.lapsRemaining.value);
   laps.dataset['severity'] = m.lapsRemaining.severity;
@@ -94,7 +103,29 @@ const fuelCard = (m: DashboardModel['fuel']): HTMLElement => {
     metric('Add at stop', m.addAtStop),
     metric('Next pit (lap)', m.nextPit),
   );
-  return card('Fuel', big, grid);
+  return card('Fuel', big, grid, ...bindingBadge(binding, 'fuel'));
+};
+
+/**
+ * Virtual Energy card (LMU). Hidden entirely when the source exposes no VE (non-LMU / SHM-only),
+ * so a fuel-only stream never shows an empty VE panel. Shows the binding badge when VE limits.
+ */
+const energyCard = (
+  m: DashboardModel['energy'],
+  binding: DashboardModel['binding'],
+): HTMLElement | null => {
+  if (m.level.severity === 'unknown') return null;
+  const big = el('div', 'fuel-big');
+  const laps = el('div', `fuel-laps sev-${m.lapsRemaining.severity}`, m.lapsRemaining.value);
+  laps.dataset['severity'] = m.lapsRemaining.severity;
+  big.append(laps, el('div', 'fuel-laps-label', 'laps on VE'));
+  const grid = el('div', 'grid-2');
+  grid.append(
+    metric('VE left', m.level),
+    metric('Per lap', m.perLap),
+    metric('Add at stop', m.addAtStop),
+  );
+  return card('Virtual Energy', big, grid, ...bindingBadge(binding, 'energy'));
 };
 
 const cornerGrid = (
@@ -274,8 +305,10 @@ const render = (model: DashboardModel, strategy: StrategyModel): void => {
   const root = el('div');
   if (recentAlerts.length > 0) root.append(alertsStrip(recentAlerts));
   const cards = el('div', 'cards');
+  const energy = energyCard(model.energy, model.binding);
   cards.append(
-    fuelCard(model.fuel),
+    fuelCard(model.fuel, model.binding),
+    ...(energy ? [energy] : []),
     standingsCard(model.standings),
     strategyCard(strategy),
     rivalsCard(strategy),

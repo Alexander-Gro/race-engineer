@@ -34,6 +34,10 @@ export interface SyntheticConfig {
   startFuelLiters: number;
   fuelCapacityLiters: number;
   fuelPerLapLiters: number;
+  /** Virtual Energy at t=0 (0..1 of the per-stint budget); omit to leave VE unmodelled (null). */
+  startEnergy01?: number;
+  /** Virtual-Energy burn per lap (0..1); omit to leave VE unmodelled (null). */
+  energyPerLap01?: number;
   /** Tire wear fraction lost per lap (0..1 of the full range). */
   tireWearPerLap01: number;
   playerId: number;
@@ -80,6 +84,8 @@ export const synthesizeFrames = (config: SyntheticConfig): RaceState[] => {
     startFuelLiters,
     fuelCapacityLiters,
     fuelPerLapLiters,
+    startEnergy01,
+    energyPerLap01,
     tireWearPerLap01,
     rivals,
   } = config;
@@ -156,6 +162,20 @@ export const synthesizeFrames = (config: SyntheticConfig): RaceState[] => {
     const fuelLiters = Math.max(0, startFuelLiters - fuelPerLapLiters * lapsFloat);
     const perLapAvg = pm.lapsCompleted >= 1 ? fuelPerLapLiters : null;
     const lapsRemainingEst = perLapAvg !== null && perLapAvg > 0 ? fuelLiters / perLapAvg : null;
+
+    // Virtual Energy arc, mirroring fuel — a 0..1 budget draining at a steady per-lap rate.
+    const virtualEnergy =
+      startEnergy01 !== undefined && energyPerLap01 !== undefined
+        ? {
+            level01: clamp01(startEnergy01 - energyPerLap01 * lapsFloat),
+            perLapAvg01: pm.lapsCompleted >= 1 ? energyPerLap01 : null,
+            lapsRemainingEst:
+              pm.lapsCompleted >= 1 && energyPerLap01 > 0
+                ? clamp01(startEnergy01 - energyPerLap01 * lapsFloat) / energyPerLap01
+                : null,
+          }
+        : null;
+
     const lastLapS = pm.lapsCompleted >= 1 ? baseLapTimeS : null;
     const wear = clamp01(1 - tireWearPerLap01 * lapsFloat);
 
@@ -187,6 +207,7 @@ export const synthesizeFrames = (config: SyntheticConfig): RaceState[] => {
         perLapAvgLiters: perLapAvg,
         lapsRemainingEst,
       },
+      virtualEnergy,
       tires: uniformWheel(
         makeTire({
           tempC: 90,
@@ -261,7 +282,9 @@ export const defaultSyntheticConfig = (): SyntheticConfig => ({
   ticks: 300,
   startFuelLiters: 60,
   fuelCapacityLiters: 80,
-  fuelPerLapLiters: 3,
+  fuelPerLapLiters: 3, // 60 / 3 = 20 laps on fuel
+  startEnergy01: 1.0,
+  energyPerLap01: 0.052, // 1.0 / 0.052 ≈ 19.2 laps on VE → VE is the (slight) binding constraint
   tireWearPerLap01: 0.04,
   playerId: 7,
   playerClassId: 'hypercar',
@@ -318,6 +341,8 @@ export const scriptedScenario = (): SyntheticConfig => {
     startFuelLiters: 30,
     fuelCapacityLiters: 30,
     fuelPerLapLiters: 3, // empties the tank by ~lap 10
+    startEnergy01: 1.0,
+    energyPerLap01: 0.11, // ≈ 9.1 laps on VE → energy runs out ~a lap before fuel
     tireWearPerLap01: 0.06,
     playerId: 7,
     playerClassId: 'hypercar',
