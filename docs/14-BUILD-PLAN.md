@@ -850,8 +850,15 @@ T8.1 read current aids → T8.2 background-strategist loop → T8.3 integrated c
 forward — the **data-ready, deterministic, LLM-free** piece, the M8 analog of T9.2) → ~~T8.5
 proactivity controls + quiet windows~~ (done, pulled forward — the self-contained, offline-testable
 piece that closes the T6.3 proactivity-setting loop). **Read-only throughout — no write path.**
-T8.1 (read aids — **S3** rig) + T8.2/T8.3 (the coaching/strategist **LLM** loops) remain; better tackled
-once the live voice loop lands / the aids read live.
+~~T8.1 read current aids — offline half done 2026-06-16~~ — a tolerant `aidsFromRest` +
+`withAidsFromRest` (`packages/adapters/lmu/src/rest/aids.ts`, sharing `rest/probe.ts` with the VE
+mapper) probes the REST garage payloads for TC/ABS/engine-map indices and fills only the canonical aid
+fields SHM left null (prefer-SHM; brake bias stays SHM-sourced); returns nulls / unchanged state when
+not found — never a guessed index (rules 1/5). 6 tests; 696 green; compliance PASS. **Live half (rig,
+per [[build-rig-gated-offline-tolerant]]):** capture the garage JSON to confirm the aid-index source +
+field names (docs/03 §S3); if REST lacks them, wire the S4 setup-file fallback once T9.1 lands.
+**T8.2/T8.3** (the coaching/strategist **LLM** loops) remain — T8.2 needs a scope steer; T8.3 builds on
+the now-readable aids.
 Context: [06-AI-ENGINEER](06-AI-ENGINEER.md), [08-INPUT-AND-CONTROLS](08-INPUT-AND-CONTROLS.md).
 
 **T8.4 — Advice verification from telemetry** · _Claude Code_ · deps: T0.3 (works on telemetry; live aid

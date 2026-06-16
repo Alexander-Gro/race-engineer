@@ -1,4 +1,5 @@
 import type { PlayerCar, RaceState } from '@race-engineer/core';
+import { findNumber } from './probe';
 
 /**
  * Map LMU's REST Virtual-Energy data into the canonical `PlayerCar.virtualEnergy` (build-plan
@@ -40,35 +41,6 @@ const PER_LAP_KEYS = [
   'usage',
   'consumption',
 ] as const;
-
-const isRecord = (v: unknown): v is Record<string, unknown> =>
-  typeof v === 'object' && v !== null && !Array.isArray(v);
-
-const finiteNumber = (v: unknown): number | null =>
-  typeof v === 'number' && Number.isFinite(v) ? v : null;
-
-/**
- * Find a finite number under any of `keys` (case-insensitive) at the top level or one level deep.
- * Returns the first match in object-key order, or null. Tolerant of the unknown payload shape.
- */
-const findNumber = (raw: unknown, keys: readonly string[]): number | null => {
-  if (!isRecord(raw)) return null;
-  const want = new Set(keys.map((k) => k.toLowerCase()));
-  for (const [k, v] of Object.entries(raw)) {
-    if (want.has(k.toLowerCase())) {
-      const n = finiteNumber(v);
-      if (n !== null) return n;
-    }
-  }
-  // One level of nesting (e.g. { virtualEnergy: { level: 85 } } or { strategy: { perLap: 5 } }).
-  for (const v of Object.values(raw)) {
-    if (isRecord(v)) {
-      const nested = findNumber(v, keys);
-      if (nested !== null) return nested;
-    }
-  }
-  return null;
-};
 
 const clamp01 = (v: number): number => Math.min(1, Math.max(0, v));
 

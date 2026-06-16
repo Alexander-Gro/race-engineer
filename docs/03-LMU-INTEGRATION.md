@@ -383,6 +383,14 @@ struct rF2VehicleTelemetry {
 > aid indices are not in per-vehicle telemetry. `rF2Extended.mPhysics` has only sim
 > driving-aid difficulty flags (see §rF2Extended), not the in-car map index. So current
 > TC/ABS/engine-map levels probably come from REST (S2) or the setup file (S4). LIVE-VERIFY.
+>
+> **Offline half built (T8.1, 2026-06-16):** a tolerant `aidsFromRest(garage, repairRefuel)` +
+> `withAidsFromRest(state, rest)` (`packages/adapters/lmu/src/rest/aids.ts`) probes the REST garage
+> payloads for TC/ABS/engine-map indices and fills only the canonical aid fields SHM left null
+> (prefer-SHM; brake bias stays SHM-sourced). Field names are LIVE-VERIFY. **Rig steps:** capture
+> `/rest/garage/getPlayerGarageData` + `/rest/garage/UIScreen/*` JSON, confirm where the aid indices
+> live + their key names, narrow the candidate lists; if REST doesn't expose them, add the setup-file
+> (S4) fallback once `T9.1`'s parser lands. (The `pnpm capture` script will dump these in one pass.)
 
 #### rF2Telemetry (the wrapper / what the Telemetry MMF contains)
 ```cpp
