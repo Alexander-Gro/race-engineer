@@ -60,10 +60,11 @@ describe('attachLocalBackends', () => {
     const route: VoiceProviderConfig = {
       tts: 'piper',
       stt: 'fake',
-      ttsConfig: { binaryPath: '/opt/piper/piper' },
+      ttsConfig: { binaryPath: '/opt/piper/piper', modelPath: '/m/en.onnx' },
     };
     const out = attachLocalBackends(route);
-    expect(route.ttsBackend).toBeUndefined(); // original untouched
+    expect(typeof out.ttsBackend).toBe('function'); // attached on the copy…
+    expect(route.ttsBackend).toBeUndefined(); // …never the original
     expect(out).not.toBe(route);
   });
 });

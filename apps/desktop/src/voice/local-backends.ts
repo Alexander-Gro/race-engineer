@@ -1,4 +1,5 @@
 import type { VoiceProviderConfig } from '@race-engineer/voice';
+import { sttLocalReady, ttsLocalReady } from '../voice-route';
 import { defaultSpawn, piperTtsBackend } from './piper-backend';
 import { whisperCppBackend } from './whisper-backend';
 
@@ -8,9 +9,10 @@ import { whisperCppBackend } from './whisper-backend';
  * already wires `route.ttsBackend`/`sttBackend` into the local shells (T4.4) — this is the desktop-side
  * glue that supplies them (the backends use `node:child_process`, so they live here, not in `voice`).
  *
- * **Honest readiness:** a backend is attached **only when its binary path is configured** (the model
- * manager / settings supply it). Without a path the backend is left off, so `provider.available` stays
- * false and the worker falls back to the fake rather than spawning a missing binary at synth time.
+ * **Honest readiness:** a backend is attached **only when its binary + model paths are configured**
+ * (`ttsLocalReady`/`sttLocalReady` — the same predicates the worker build-gate uses, so attachment and
+ * the gate can't drift). Without the paths the backend is left off, so `provider.available` stays false
+ * and the worker falls back to the fake rather than spawning a missing binary at synth time.
  *
  * Today's working free pair is **piper (TTS) + whisper-cpp (STT)**. `kokoro` (ONNX) and `faster-whisper`
  * have no native backend yet, so those engine ids still fall back until their backends land (follow-up).
@@ -19,11 +21,11 @@ import { whisperCppBackend } from './whisper-backend';
 export const attachLocalBackends = (route: VoiceProviderConfig): VoiceProviderConfig => {
   const next: VoiceProviderConfig = { ...route };
 
-  if (route.tts === 'piper' && route.ttsConfig?.binaryPath) {
+  if (ttsLocalReady(route)) {
     next.ttsBackend = piperTtsBackend();
   }
 
-  if (route.stt === 'whisper-cpp' && route.sttConfig?.binaryPath && route.sttConfig?.modelPath) {
+  if (sttLocalReady(route)) {
     next.sttBackend = whisperCppBackend({ spawn: defaultSpawn });
   }
 

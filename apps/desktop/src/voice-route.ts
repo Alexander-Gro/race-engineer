@@ -18,19 +18,53 @@ export const resolveVoiceRoute = (
 ): VoiceProviderConfig => {
   // One OpenAI key covers cloud TTS (slice 3b-i) and cloud STT (3b-iii) — the full talk-to-it loop.
   const openaiKey = secrets.getKey('openai') ?? '';
+  const local = voice.local;
   return {
     tts: voice.tts,
     stt: voice.stt,
     ...(voice.tts === 'openai' ? { cloudTtsConfig: { apiKey: openaiKey } } : {}),
     ...(voice.stt === 'openai' ? { cloudSttConfig: { apiKey: openaiKey } } : {}),
+    // Local engines (free/offline): carry the configured binary+model paths so `attachLocalBackends`
+    // can wire the native backend (else the local shell stays not-ready and falls back to the fake).
+    ...(voice.tts === 'piper' && local?.piper ? { ttsConfig: { ...local.piper } } : {}),
+    ...(voice.stt === 'whisper-cpp' && local?.whisperCpp
+      ? { sttConfig: { ...local.whisperCpp } }
+      : {}),
   };
 };
 
 /**
- * Does this route select a cloud engine that should activate the premium (audible) voice path? The
- * worker builds the voice layer when this is true (or `ENGINEER_VOICE=1`), so picking a cloud engine in
- * Settings turns the real voice on without an env flag. Local engines stay off until their native
- * backend is wired (else they'd just fall back to silence).
+ * Does this route select a cloud engine (so its premium, audible path activates with a key)?
+ * Kept distinct from {@link voiceRouteIsLocalReady} so each readiness reason is independently testable.
  */
 export const voiceRouteIsCloud = (route: VoiceProviderConfig): boolean =>
   route.tts === 'openai' || route.stt === 'openai';
+
+/**
+ * Is the selected local **TTS** engine ready to actually speak — its native backend can attach because
+ * both the binary and model paths are configured? Today only Piper has a backend (Kokoro is a follow-up).
+ * This is the single source of truth shared by `attachLocalBackends` (whether to wire the backend) and
+ * the worker build-gate (whether to build the voice layer at all) — so the two can't drift.
+ */
+export const ttsLocalReady = (route: VoiceProviderConfig): boolean =>
+  route.tts === 'piper' && !!route.ttsConfig?.binaryPath && !!route.ttsConfig?.modelPath;
+
+/**
+ * Is the selected local **STT** engine ready to transcribe — binary + model configured? Today only
+ * whisper.cpp has a backend (faster-whisper is a follow-up).
+ */
+export const sttLocalReady = (route: VoiceProviderConfig): boolean =>
+  route.stt === 'whisper-cpp' && !!route.sttConfig?.binaryPath && !!route.sttConfig?.modelPath;
+
+/** A local (free/offline) route ready to produce real audio on at least one side (TTS or STT). */
+export const voiceRouteIsLocalReady = (route: VoiceProviderConfig): boolean =>
+  ttsLocalReady(route) || sttLocalReady(route);
+
+/**
+ * Should the worker build the (audible) voice layer for this route? True for a cloud route (BYO-key) or
+ * a **ready local route** (free/offline binaries configured) — so selecting either in Settings turns the
+ * real voice on without an env flag. An unconfigured local route (e.g. the default `kokoro`+`faster-
+ * whisper` with no backends yet) stays off, leaving the silent `pnpm dev` demo untouched.
+ */
+export const voiceRouteIsReady = (route: VoiceProviderConfig): boolean =>
+  voiceRouteIsCloud(route) || voiceRouteIsLocalReady(route);

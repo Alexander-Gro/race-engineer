@@ -304,15 +304,26 @@ in a small, reviewable, green-tested change.
   local engines **whose binary path is configured** (else the shell stays not-ready and the worker
   falls back to the fake — honest readiness, no spawning a missing binary); `worker-voice.ts` applies
   it before `selectTts/SttProvider`. 6 tests; 771 green; electron typecheck green; compliance PASS.
-  **Next:** the **model-path resolution + build-gate** (model manager T4.6 → `ttsConfig`/`sttConfig`
-  binary+model paths into the route, **and** widen the worker's voice build-gate
-  `voiceRouteIsCloud(route) || ENGINEER_VOICE=1` to also admit a ready *local* route — together these
-  flip the working free pair **piper+whisper-cpp** on), the
-  **Kokoro ONNX** + **faster-whisper** backends (the default-profile engines; until then the working
-  free pair is piper+whisper-cpp), and a **Mac smoke-test** with a real Piper voice. The OS audio sink
-  is already bridged. _Runtime note:_ whisper-cli wants 16 kHz mono WAV/PCM, so the local STT path needs
-  the mic captured as WAV/PCM (or a whisper build with ffmpeg) — a rig/runtime alignment, docs/07.) The
-  cloud loop already supersedes the free Web-Speech call-outs.
+  ~~model-path resolution + build-gate done 2026-06-16 (Windows)~~ — the free/offline voice pair can now
+  be **turned on by config alone**. `AppSettings.voice.local` (`VoiceLocalPaths`: `piper`/`whisperCpp` →
+  `{ binaryPath?, modelPath? }`, **non-secret** plain paths, tolerant-parsed — empties/garbage dropped,
+  never a stray key) records where the installed Piper/whisper.cpp binaries+models live; `resolveVoiceRoute`
+  resolves them into the route's `ttsConfig`/`sttConfig` for the matching local engine. Shared readiness
+  predicates `ttsLocalReady`/`sttLocalReady` (piper/whisper-cpp **with both binary+model paths**) are now
+  the **single source of truth** used by *both* `attachLocalBackends` (wire the native backend) and the
+  worker build-gate, so they can't drift; `voiceRouteIsReady = voiceRouteIsCloud || voiceRouteIsLocalReady`
+  widens `shouldBuildVoice` so a **configured local route turns the audible voice on with no env flag**,
+  while the bare free default (`kokoro`+`faster-whisper`, no backends/paths) stays off — the silent
+  `pnpm dev` demo is untouched. +10 tests (788 green); typecheck + lint + electron build green; compliance
+  PASS (rules 5/6/2 + honest readiness — a not-ready local engine falls back to the offline fake, never
+  spawns a missing binary). **Next:** the **model-manager auto-fill** (T4.6 `ModelManager.ensureModel` →
+  real free-profile Piper/whisper specs (URLs + SHA-256, **can't be guessed — rig/decision**) → write the
+  resolved paths into `voice.local`) + a **Settings path picker** so a user can point at existing binaries;
+  the **Kokoro ONNX** + **faster-whisper** backends (the default-profile engines; until then the working
+  free pair is piper+whisper-cpp); and a **Mac/Windows smoke-test** with a real Piper voice + whisper model.
+  The OS audio sink is already bridged. _Runtime note:_ whisper-cli wants 16 kHz mono WAV/PCM, so the local
+  STT path needs the mic captured as WAV/PCM (or a whisper build with ffmpeg) — a rig/runtime alignment,
+  docs/07.) The cloud loop already supersedes the free Web-Speech call-outs.
   M7.7–M7.9 / M8 / M9 offline-strategy depth are paused until the app is launchable. (Offline glue
   done: `get_stint_plan` + `project_pit_window` are now wired into the AI read-only tool surface,
   reading a precomputed `ctx.stintPlan` (T7.3) like `get_fuel_plan` reads `ctx.fuelPlan`; 373 green.

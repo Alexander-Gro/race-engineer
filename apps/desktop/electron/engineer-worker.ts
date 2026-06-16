@@ -6,7 +6,7 @@ import type { VoiceProviderConfig } from '@race-engineer/voice';
 import { AskResponder, type MainToWorkerMessage, type WorkerMessage } from '../src/ask';
 import type { AudioOutMessage } from '../src/audio-bridge';
 import { createSyntheticEngineerCore } from '../src/host';
-import { voiceRouteIsCloud } from '../src/voice-route';
+import { voiceRouteIsReady } from '../src/voice-route';
 import type { EngineerVoice } from '../src/voice-engine';
 
 /**
@@ -20,11 +20,12 @@ import type { EngineerVoice } from '../src/voice-engine';
  * **shared-memory** source (`pnpm dev:lmu`, koffi dynamically imported only when selected).
  *
  * **Voice layer (T10.1 slice 3b):** built/rebuilt from the configured **voice route** on each
- * `configure` (so picking a cloud engine in Settings turns the real voice on live). It activates when
- * the route selects a cloud engine ({@link voiceRouteIsCloud}) or `ENGINEER_VOICE=1` (the offline
- * preview) — otherwise it stays off so the default `pnpm dev` demo is untouched and the voice/radio/ai
- * graph is dynamically imported only when needed. A bad cloud key / offline pre-render falls back to the
- * free offline voice rather than crashing (docs/16 §1 "never crash").
+ * `configure` (so picking a cloud engine — or a configured free/offline local engine — in Settings turns
+ * the real voice on live). It activates when the route is ready ({@link voiceRouteIsReady}: a cloud
+ * engine with a key, or a local engine whose binary+model paths are configured) or `ENGINEER_VOICE=1`
+ * (the offline preview) — otherwise it stays off so the default `pnpm dev` demo is untouched and the
+ * voice/radio/ai graph is dynamically imported only when needed. A bad cloud key / offline pre-render
+ * falls back to the free offline voice rather than crashing (docs/16 §1 "never crash").
  */
 const responder = new AskResponder();
 // The voice layer + its bridge hooks, (re)built on configure; null until a route activates it.
@@ -40,9 +41,10 @@ const post = (audio: AudioOutMessage): void =>
 // The reactive reply + text-ask share this provider-aware brain (template or configured LLM, guarded).
 const answer = (question: string): Promise<string> => responder.answer(question);
 
-// Build the voice layer only when a cloud engine is selected (audible) or the offline preview is on.
+// Build the voice layer only for a ready route — cloud (key) or a configured local engine — or when
+// the offline preview flag is on. An unconfigured route stays off (silent `pnpm dev` demo untouched).
 const shouldBuildVoice = (route: VoiceProviderConfig): boolean =>
-  voiceRouteIsCloud(route) || process.env['ENGINEER_VOICE'] === '1';
+  voiceRouteIsReady(route) || process.env['ENGINEER_VOICE'] === '1';
 
 // Rebuilds are serialized + de-duped by route, so rapid settings/secret saves can't race or rebuild
 // for an unchanged route (a rebuild re-pre-renders Tier-0, which for a cloud TTS costs network calls).

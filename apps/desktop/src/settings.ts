@@ -52,10 +52,31 @@ export const LLM_PROVIDER_IDS = [
   'gemini',
 ] as const satisfies readonly LlmProviderId[];
 
+/** Filesystem paths for a local voice engine's native binary + model. **Not secret** (plain paths). */
+export interface VoiceEnginePaths {
+  /** Path to the engine executable (e.g. the `piper` / `whisper-cli` binary). */
+  binaryPath?: string;
+  /** Path to the model file (a Piper voice `.onnx` / a whisper `ggml` model). */
+  modelPath?: string;
+}
+
+/**
+ * Local-engine binary/model paths (build-plan T10.1), recorded once the free/offline voice binaries are
+ * installed on the machine — the model manager (T4.6) or the user supplies them. Absent ⇒ the local
+ * engine stays not-ready and the worker falls back to the offline fake rather than spawning a missing
+ * binary. Plain filesystem paths, never a secret — safe to persist in the settings JSON.
+ */
+export interface VoiceLocalPaths {
+  /** Piper TTS: the `piper` executable + a voice `.onnx`. */
+  piper?: VoiceEnginePaths;
+  /** whisper.cpp STT: the `whisper-cli` executable + a `ggml` model. */
+  whisperCpp?: VoiceEnginePaths;
+}
+
 export interface AppSettings {
   profile: Profile;
   llm: { provider: LlmProviderId; model?: string };
-  voice: { tts: TtsEngineId; stt: SttEngineId };
+  voice: { tts: TtsEngineId; stt: SttEngineId; local?: VoiceLocalPaths };
   proactivity: ProactivityLevel;
   /** Chosen engineer-voice output device, or null = OS default. */
   outputDeviceId: string | null;
@@ -113,6 +134,27 @@ export const requiredSecretForLlm = (provider: LlmProviderId): SecretSlot | null
 const inSet = <T extends string>(set: readonly T[], v: unknown): v is T =>
   typeof v === 'string' && (set as readonly string[]).includes(v);
 
+/** Keep only string binary/model paths; drop empties so `{}`/garbage never resolves a fake "ready". */
+const parseEnginePaths = (raw: unknown): VoiceEnginePaths | undefined => {
+  if (typeof raw !== 'object' || raw === null) return undefined;
+  const o = raw as Record<string, unknown>;
+  const paths: VoiceEnginePaths = {};
+  if (typeof o['binaryPath'] === 'string' && o['binaryPath']) paths.binaryPath = o['binaryPath'];
+  if (typeof o['modelPath'] === 'string' && o['modelPath']) paths.modelPath = o['modelPath'];
+  return paths.binaryPath !== undefined || paths.modelPath !== undefined ? paths : undefined;
+};
+
+const parseVoiceLocal = (raw: unknown): VoiceLocalPaths | undefined => {
+  if (typeof raw !== 'object' || raw === null) return undefined;
+  const o = raw as Record<string, unknown>;
+  const piper = parseEnginePaths(o['piper']);
+  const whisperCpp = parseEnginePaths(o['whisperCpp']);
+  const local: VoiceLocalPaths = {};
+  if (piper) local.piper = piper;
+  if (whisperCpp) local.whisperCpp = whisperCpp;
+  return local.piper || local.whisperCpp ? local : undefined;
+};
+
 const parsePtt = (raw: unknown): ButtonRef | null => {
   if (typeof raw !== 'object' || raw === null) return null;
   const o = raw as Record<string, unknown>;
@@ -139,6 +181,7 @@ export const parseSettings = (raw: unknown): AppSettings => {
     string,
     unknown
   >;
+  const voiceLocal = parseVoiceLocal(voice['local']);
   return {
     profile: inSet(PROFILES, o['profile']) ? o['profile'] : DEFAULT_SETTINGS.profile,
     llm: {
@@ -150,6 +193,7 @@ export const parseSettings = (raw: unknown): AppSettings => {
     voice: {
       tts: inSet(TTS_ENGINES, voice['tts']) ? voice['tts'] : DEFAULT_SETTINGS.voice.tts,
       stt: inSet(STT_ENGINES, voice['stt']) ? voice['stt'] : DEFAULT_SETTINGS.voice.stt,
+      ...(voiceLocal ? { local: voiceLocal } : {}),
     },
     proactivity: inSet(PROACTIVITY_LEVELS, o['proactivity'])
       ? o['proactivity']

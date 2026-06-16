@@ -53,6 +53,33 @@ describe('parseSettings', () => {
     expect(parseSettings({ ptt: { deviceGuid: 'wheel', buttonIndex: -1 } }).ptt).toBeNull();
   });
 
+  it('parses local voice binary/model paths and drops empty/garbage path entries', () => {
+    const parsed = parseSettings({
+      voice: {
+        tts: 'piper',
+        stt: 'whisper-cpp',
+        local: {
+          piper: { binaryPath: '/opt/piper/piper', modelPath: '/m/en.onnx' },
+          whisperCpp: { binaryPath: '/opt/whisper/whisper-cli', modelPath: '/m/ggml.bin', junk: 1 },
+        },
+      },
+    });
+    expect(parsed.voice.local).toEqual({
+      piper: { binaryPath: '/opt/piper/piper', modelPath: '/m/en.onnx' },
+      whisperCpp: { binaryPath: '/opt/whisper/whisper-cli', modelPath: '/m/ggml.bin' },
+    });
+  });
+
+  it('omits voice.local entirely when no valid local paths are present (no empty husk)', () => {
+    expect(parseSettings({ voice: { tts: 'piper', stt: 'fake' } }).voice.local).toBeUndefined();
+    // An empty / non-string-path object resolves to nothing rather than a fake "ready" engine.
+    expect(
+      parseSettings({ voice: { tts: 'piper', stt: 'fake', local: { piper: { binaryPath: '' } } } })
+        .voice.local,
+    ).toBeUndefined();
+    expect(DEFAULT_SETTINGS.voice.local).toBeUndefined(); // the free default carries no paths
+  });
+
   it('drops unknown fields — including a stray "key" — so settings can never carry a secret', () => {
     const parsed = parseSettings({
       profile: 'free',
