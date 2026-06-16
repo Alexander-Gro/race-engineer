@@ -125,6 +125,19 @@ const INTENTS: readonly Intent[] = [
     },
   },
   {
+    // Setup-change advice — checked before the handling *read* so "how do I fix the understeer"
+    // gets a suggestion, while "how's the handling" still describes the balance.
+    test: /\bset-?up\b|what should i change|how (do|can) i fix|fix.{0,8}(under|over)steer|reduce.{0,14}(under|over)steer/,
+    respond: (ctx) => {
+      const r = tool('propose_setup_change', ctx);
+      const suggestions = (r.suggestions as Array<Record<string, unknown>>) ?? [];
+      const top = suggestions[0];
+      return top
+        ? String(top.change)
+        : "Balance looks settled — nothing I'd change from the tyre temps right now.";
+    },
+  },
+  {
     // Handling/balance — distinct keywords from the tyre-wear intent above (no overlap).
     test: /\b(handling|understeer|oversteer|rotate|balance|camber)\b/,
     respond: (ctx) => {

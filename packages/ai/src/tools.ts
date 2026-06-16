@@ -1,5 +1,5 @@
 import type { CarState, RaceState } from '@race-engineer/core';
-import { diagnoseHandling } from '@race-engineer/strategy';
+import { diagnoseHandling, proposeSetupChanges } from '@race-engineer/strategy';
 import type { RaceContext } from './context';
 import type { ToolSpec } from './types';
 
@@ -247,6 +247,21 @@ export const READ_ONLY_TOOLS: ToolDef[] = [
         pressure: byCorner(d.pressure),
         confidence01: d.confidence01,
         units: { temp: 'C' },
+      };
+    },
+  },
+  {
+    name: 'propose_setup_change',
+    description:
+      'Advisory setup-change suggestions from the handling diagnosis (tyre temps): ordered, directional, relative changes (e.g. "soften the front bar a click or two") with the reason and a confidence. ADVICE ONLY — the DRIVER applies changes in the garage; the app never writes a setup. Returns an empty list when the balance is neutral and the tyres read even.',
+    parameters: NO_ARGS,
+    handler: (_args, ctx) => {
+      const d = diagnoseHandling(ctx.raceState.player.tires);
+      const suggestions = proposeSetupChanges(d);
+      return {
+        suggestions,
+        confidence01: d.confidence01,
+        note: 'advice only — the driver applies changes in the garage; the app never writes a setup',
       };
     },
   },

@@ -172,10 +172,58 @@ describe('read-only invariant', () => {
         'project_pit_window',
         'get_tire_status',
         'get_handling_diagnosis',
+        'propose_setup_change',
         'get_current_aids',
       ]),
     );
-    // get_* reads, project_* derives — both read-only; no apply/set/write verb.
-    for (const n of names) expect(n).toMatch(/^(get|project)_/);
+    // get_* reads, project_* derives, propose_* advises — all read-only; no apply/set/write verb.
+    for (const n of names) expect(n).toMatch(/^(get|project|propose)_/);
+  });
+
+  it('propose_setup_change is advice-only — it returns suggestions, never applies them', () => {
+    const understeer: RaceState = {
+      ...multiClassTrafficState,
+      player: {
+        ...multiClassTrafficState.player,
+        // fronts much hotter than rears (3-zone) → understeer + full confidence.
+        tires: [
+          {
+            tempC: { inner: 105, center: 105, outer: 105 },
+            pressureKpa: null,
+            wear01: null,
+            compound: null,
+            surfaceTempC: null,
+          },
+          {
+            tempC: { inner: 105, center: 105, outer: 105 },
+            pressureKpa: null,
+            wear01: null,
+            compound: null,
+            surfaceTempC: null,
+          },
+          {
+            tempC: { inner: 85, center: 85, outer: 85 },
+            pressureKpa: null,
+            wear01: null,
+            compound: null,
+            surfaceTempC: null,
+          },
+          {
+            tempC: { inner: 85, center: 85, outer: 85 },
+            pressureKpa: null,
+            wear01: null,
+            compound: null,
+            surfaceTempC: null,
+          },
+        ],
+      },
+    };
+    const r = run('propose_setup_change', { raceState: understeer, fuelPlan: null });
+    const suggestions = r.suggestions as Array<Record<string, unknown>>;
+    expect(suggestions[0]?.area).toBe('balance');
+    expect(String(suggestions[0]?.change)).toMatch(/front/i);
+    expect(String(r.note)).toMatch(/never writes a setup/i);
+    // uniform tyres (the default fixture) → balanced → nothing to change.
+    expect((run('propose_setup_change').suggestions as unknown[]).length).toBe(0);
   });
 });

@@ -95,6 +95,37 @@ describe('templateAnswer (free, no-LLM reactive answering)', () => {
     expect(a).toContain('89');
   });
 
+  it('gives advisory setup-change advice when asked how to fix the balance', () => {
+    const hot = { inner: 105, center: 105, outer: 105 };
+    const cool = { inner: 85, center: 85, outer: 85 };
+    const tyre = (t: typeof hot) => ({
+      tempC: t,
+      pressureKpa: null,
+      wear01: null,
+      compound: null,
+      surfaceTempC: null,
+    });
+    const understeer: RaceState = {
+      ...multiClassTrafficState,
+      player: {
+        ...multiClassTrafficState.player,
+        tires: [tyre(hot), tyre(hot), tyre(cool), tyre(cool)],
+      },
+    };
+    const a = templateAnswer('how do I fix the understeer?', {
+      raceState: understeer,
+      fuelPlan: null,
+    })!;
+    expect(a).toMatch(/front/i); // free up the front
+  });
+
+  it('says nothing to change when the balance reads settled', () => {
+    // ctx's fixture tyres are uniform → balanced → no suggestion.
+    expect(templateAnswer('what should I change in the setup?', ctx)).toMatch(
+      /nothing I'?d change|settled/i,
+    );
+  });
+
   it('answers aid-baseline questions', () => {
     expect(templateAnswer("what's my brake bias?", ctx)).toBe(
       'TC 6, ABS 4, brake bias 55.0%, map 4.',

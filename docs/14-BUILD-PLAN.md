@@ -925,8 +925,14 @@ params** grouped by `.svm` section (from T9.1). State-honest — unread aids `�
 mechanical/aero **safe ranges** stay `—` until the rig provides the car data (docs/03 §S4.2); the model
 carries the structure so the screen renders them the moment they land. 7 tests; 722 green; compliance
 PASS. _Remaining:_ the dedicated screen UI lands with the deferred Tailwind/shadcn reskin; safe-range
-values come from the rig.) → T9.4 AI
-recommendations (`propose_setup_change`, advice only) → T9.5 before/after compare after the driver
+values come from the rig.) → T9.4 AI recommendations (~~`propose_setup_change` done 2026-06-16~~ —
+`proposeSetupChanges(diagnosis)` in `strategy/setup-advice.ts` maps the handling diagnosis (T9.2) to
+ordered **directional, relative** advice (balance → "soften the front bar a click or two", then
+per-corner tyre-pressure + camber), each with a reason + the diagnosis confidence. Wired as the
+read-only `propose_setup_change` AI tool + a free template answer ("how do I fix the understeer?").
+**Advice only — the driver applies it in the garage; the app never writes a setup** (rule 5); relative,
+never a fabricated absolute (rule 1). 7 strategy + 1 tool + 2 template tests; 732 green; compliance
+PASS.) → T9.5 before/after compare after the driver
 applies changes in the garage.
 
 **T9.2 — Handling diagnosis from telemetry** · _Claude Code_ · deps: T0.3 (works on telemetry) · **done**
