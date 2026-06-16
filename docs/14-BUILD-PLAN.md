@@ -344,6 +344,13 @@ in a small, reviewable, green-tested change.
   [03-LMU-INTEGRATION.md](03-LMU-INTEGRATION.md) — signs/conventions, FCY/pit/sector enums, and the
   **strategy-model calibration inputs** (pit-loss, refuel rate, Virtual Energy, tyre life, mandatory
   stops) the T7.x models need real values for.
+- **Virtual Energy correctness fix (M11, started 2026-06-16):** the fuel/strategy math was
+  litres-only; in LMU a stint is often bound by the per-stint **Virtual Energy** budget, not fuel.
+  **T11.1 done** — VE is now a first-class quantity parallel to fuel in the canonical schema
+  (`PlayerCar.virtualEnergy`) and the plan (`FuelPlan` VE fields + `bindingConstraint`), with the
+  same robust estimator and a binding-constraint = `min(fuel laps, VE laps)` (625 green; compliance
+  PASS). Remaining: **T11.2** live engine + dashboard, **T11.3** LMU REST→canonical mapping (live
+  half), **T11.4** AI tool/template surface. See M11 below.
 
 ## The central ordering idea
 
@@ -914,6 +921,40 @@ scores it the day it lands)) → T10.5 electron-builder installer + auto-update 
 **code signing (SignPath Foundation, free for OSS)** + `THIRD-PARTY`/`NOTICE`.
 Gate: clean install on a fresh Windows PC; guided first-run to a working radio exchange;
 multi-hour race unattended; documented cloud cost/hour + working free local mode.
+
+## M11 — Virtual Energy (LMU binding constraint) · _correctness fix, user-flagged_
+
+The fuel/strategy engine originally modelled consumption in **litres only**. In LMU a stint
+is frequently bound by the per-stint **Virtual Energy** budget, not fuel — a car can have
+litres left but be out of VE. Planning on litres alone is wrong for LMU. This makes VE a
+first-class quantity parallel to fuel, so the binding stint/finish constraint is
+`min(fuel-limited laps, VE-limited laps)`. Context: [05-STRATEGY-ENGINE](05-STRATEGY-ENGINE.md)
+§"Virtual Energy", [03-LMU-INTEGRATION](03-LMU-INTEGRATION.md) §VE / `/rest/strategy/usage`.
+
+**T11.1 — VE in the canonical schema + strategy math** · _Claude Code_ · deps: T3.1 · **done**
+Build: ✅ `PlayerCar.virtualEnergy` (`{ level01, perLapAvg01, lapsRemainingEst } | null`,
+`.default(null)` so pre-VE / SHM-only recordings still validate) + `FuelPlan` VE fields
+(`perLapEnergy01`, `lapsRemainingOnEnergy`, `energyToFinish01`, `energyToAddNextStop01`,
+`energySaveTargetPerLap01`, `bindingConstraint`). `strategy/fuel.ts`: `estimatePerLapEnergy` +
+`energyDeltasFromReadings01` (the fuel estimator refactored to a shared `blendConsumption`, so
+fuel and VE share identical robust-median + prior-blend math), and `computeFuelPlan` extended
+with an optional `energy` input that computes the VE-limited laps and sets `bindingConstraint`
+to whichever resource runs out first. Pure/deterministic; VE all-null when not supplied (fuel
+planning unchanged). The LMU SHM normalizer sets `virtualEnergy: null` (VE is REST-only).
+Verify: ✅ worked examples (fuel-binds / VE-binds / VE-to-finish / VE-save / VE-absent /
+unknown-rate) + property (VE-laps monotone in level; finite; schema-valid; binding ∈ {fuel,
+energy}) tests; typecheck + lint + 625 green; compliance PASS.
+**T11.2 — VE through the live engine + dashboard** · _Claude Code_ · deps: T11.1
+Build: synthetic source emits a VE arc; `engineer-core`'s `StrategyEngine` accumulates green-lap
+VE deltas like fuel and passes `energy` into `computeFuelPlan`; the dashboard surfaces the
+binding constraint + VE-to-add. Verify: VE arc converges; dashboard shows "energy-limited".
+**T11.3 — VE from LMU REST → canonical** · _Claude Code (live verify human-assisted)_ · deps: T11.1, T2.2
+Build: map `/rest/strategy/usage` VE-per-lap + current VE level into `player.virtualEnergy` in
+the REST→`RaceState` merge. Verify: mocked-payload mapping test; **live half:** capture the real
+`strategy/usage` payload on the rig and confirm field names/units (S2.2).
+**T11.4 — VE in the AI tool surface + template answers** · _Claude Code_ · deps: T11.1
+Build: expose VE / binding constraint in the read-only tools + a free template answer ("you're
+energy-limited, ~N laps on VE"). Verify: tool-call + template tests over a VE-binding fixture.
 
 ---
 

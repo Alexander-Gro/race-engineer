@@ -14,6 +14,16 @@ export const FuelPlanSchema = z.object({
   litersToFinish: z.number().nonnegative().nullable(),
   litersToAddNextStop: z.number().nonnegative().nullable(),
   fuelSaveTargetLitersPerLap: z.number().nonnegative().nullable(), // to stretch a stint
+  // --- Virtual Energy (LMU). The binding stint/finish constraint is whichever of fuel and VE
+  //     runs out first, so `bindingConstraint` tells the consumer which figures to surface.
+  //     All VE fields are null when the series doesn't expose VE — then the fuel figures above
+  //     stand alone (fuel-only planning, e.g. non-LMU). Units mirror VE's 0..1 budget.
+  perLapEnergy01: z.number().nonnegative().nullable(),
+  lapsRemainingOnEnergy: z.number().nonnegative().nullable(),
+  energyToFinish01: z.number().nonnegative().nullable(),
+  energyToAddNextStop01: z.number().nonnegative().nullable(),
+  energySaveTargetPerLap01: z.number().nonnegative().nullable(), // to stretch a stint on VE
+  bindingConstraint: z.enum(['fuel', 'energy']).nullable(),
   confidence01: unit01, // shrinks with low sample size
 });
 export type FuelPlan = z.infer<typeof FuelPlanSchema>;

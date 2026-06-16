@@ -96,6 +96,21 @@ export const PlayerCarSchema = CarStateSchema.extend({
     perLapAvgLiters: z.number().nonnegative().nullable(), // rolling, Normalizer-computed
     lapsRemainingEst: z.number().nonnegative().nullable(), // liters / perLapAvg
   }),
+  // Virtual Energy (LMU endurance): a normalized 0..1 per-stint energy budget consumed
+  // alongside fuel. In LMU it is frequently the *binding* stint constraint — a car can have
+  // fuel left but be out of VE (or vice versa) — so strategy must plan on min(fuel, VE).
+  // null when the game/series doesn't expose it. Sourced from LMU REST /rest/strategy/usage,
+  // NOT shared memory (docs/03 §VE); the REST→canonical mapping is the live half (S2.2).
+  // `.default(null)` so recordings made before VE support (or from the SHM-only source, which
+  // can't see VE) still validate — a missing key means "no VE data", parsed as null.
+  virtualEnergy: z
+    .object({
+      level01: unit01, // VE remaining now, 0..1 of the per-stint budget
+      perLapAvg01: unit01.nullable(), // rolling per-lap VE burn, Normalizer-computed
+      lapsRemainingEst: z.number().nonnegative().nullable(), // level01 / perLapAvg01
+    })
+    .nullable()
+    .default(null),
   tires: wheelArray(TireSchema),
   brakes: wheelArray(BrakeSchema),
   aids: DriverAidsSchema,

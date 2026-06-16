@@ -50,6 +50,12 @@ describe('fuel state honesty', () => {
           litersToFinish: 52,
           litersToAddNextStop: 12.5,
           fuelSaveTargetLitersPerLap: null,
+          perLapEnergy01: null,
+          lapsRemainingOnEnergy: null,
+          energyToFinish01: null,
+          energyToAddNextStop01: null,
+          energySaveTargetPerLap01: null,
+          bindingConstraint: null,
           confidence01: 0.8,
         },
         stintPlan: {

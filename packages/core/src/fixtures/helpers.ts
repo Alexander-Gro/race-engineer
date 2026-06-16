@@ -67,6 +67,7 @@ export const makePlayerCar = (
     perLapAvgLiters: null,
     lapsRemainingEst: null,
   },
+  virtualEnergy: o.virtualEnergy ?? null,
   tires: o.tires ?? uniformWheel(makeTire()),
   brakes: o.brakes ?? uniformWheel(makeBrake()),
   aids: o.aids ?? defaultAids,

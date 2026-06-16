@@ -11,6 +11,12 @@ const fuelPlanAt = (confidence01: number): FuelPlan => ({
   litersToFinish: null,
   litersToAddNextStop: null,
   fuelSaveTargetLitersPerLap: null,
+  perLapEnergy01: null,
+  lapsRemainingOnEnergy: null,
+  energyToFinish01: null,
+  energyToAddNextStop01: null,
+  energySaveTargetPerLap01: null,
+  bindingConstraint: null,
   confidence01,
 });
 

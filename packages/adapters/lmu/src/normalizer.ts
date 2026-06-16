@@ -197,6 +197,9 @@ const buildPlayer = (
       perLapAvgLiters,
       lapsRemainingEst,
     },
+    // Virtual Energy is exposed via the LMU REST API (/rest/strategy/usage), not shared
+    // memory, so the SHM normalizer can't fill it — the REST→canonical merge is the live half.
+    virtualEnergy: null,
     tires,
     brakes,
     aids: {
