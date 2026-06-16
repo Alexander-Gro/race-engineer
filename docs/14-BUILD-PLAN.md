@@ -900,8 +900,13 @@ Verify: ✅ worked-example (camber/pressure/balance) + state-honesty + property 
 ∈[0,1], sign-symmetric camber) tests (505 green); compliance PASS. **Wired into the AI surface:** the
 read-only `get_handling_diagnosis` tool (`ai/tools.ts` — runs the diagnosis from the snapshot tyres;
 `ai` now depends on `strategy` at runtime, acyclic) + a free template-mode handling answer (quotes the
-front/rear temps + balance tendency); 507 green. _Remaining follow-up:_ a dashboard "Handling" card;
-magnitude thresholds calibrated on the rig.
+front/rear temps + balance tendency); 507 green. ~~Dashboard "Handling" card done 2026-06-16~~ — a
+pure `buildHandlingModel(snapshot)` in `apps/desktop/src/dashboard/handling-model.ts` (mirrors the
+strategy-model pattern): display-ready axle balance (understeer/oversteer → caution, neutral → good),
+front/rear temps + signed delta, per-corner camber/pressure hints, and a zone-data confidence;
+state-honest (single-value temps → `—`/unknown). Wired into the renderer as a **Handling** card
+(hidden when no read is possible). 7 model tests; 682 green; electron build green; compliance PASS.
+_Remaining follow-up:_ magnitude thresholds calibrated on the rig.
 Context: [08-INPUT-AND-CONTROLS](08-INPUT-AND-CONTROLS.md) §3, [09-UI-UX](09-UI-UX.md).
 
 ## M10 — Polish, local mode, packaging (Roadmap Phase 5)
