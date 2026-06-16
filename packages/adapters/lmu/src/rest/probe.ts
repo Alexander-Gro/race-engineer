@@ -34,3 +34,27 @@ export const findNumber = (raw: unknown, keys: readonly string[]): number | null
   }
   return null;
 };
+
+/**
+ * Find a nested **object** under any of `keys` (case-insensitive) at the top level or one level deep.
+ * Used to locate a specific record (e.g. LMU's `garage.VM_TRACTIONCONTROLMAP` aid object, which carries
+ * its own `value`/`minValue`/`maxValue`) rather than a bare number — a plain `findNumber(garage,'value')`
+ * would grab the first of many same-named fields. Returns the first match, or null.
+ */
+export const findRecord = (
+  raw: unknown,
+  keys: readonly string[],
+): Record<string, unknown> | null => {
+  if (!isRecord(raw)) return null;
+  const want = new Set(keys.map((k) => k.toLowerCase()));
+  for (const [k, v] of Object.entries(raw)) {
+    if (want.has(k.toLowerCase()) && isRecord(v)) return v;
+  }
+  for (const v of Object.values(raw)) {
+    if (isRecord(v)) {
+      const nested = findRecord(v, keys);
+      if (nested !== null) return nested;
+    }
+  }
+  return null;
+};

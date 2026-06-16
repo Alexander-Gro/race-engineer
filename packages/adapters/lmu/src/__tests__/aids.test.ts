@@ -4,8 +4,9 @@ import { describe, expect, it } from 'vitest';
 import { aidsFromRest, withAidsFromRest } from '../rest/aids';
 
 /**
- * REST garage field names are LIVE-VERIFY (docs/03 §S2/§S3) — these payloads use the *plausible* keys
- * the tolerant reader probes. Confirm/narrow them from a real rig capture, then tighten the lists.
+ * Field names + shape confirmed against a live rig capture (docs/03 §S2, 2026-06-16): each aid is a
+ * `VM_*` object on the garage payload carrying `value` + `minValue`/`maxValue` (+ a display
+ * `stringValue`). Captured: TC value 5 (0–12), ABS value 9 (0–10), engine mixture value 1 (0–2).
  */
 
 /** A SHM-derived state with the aid indices unread (what the LMU SHM normalizer produces). */
@@ -18,18 +19,28 @@ const shmState: RaceState = {
   },
 };
 
-describe('aidsFromRest (LMU REST garage → canonical aids; field names LIVE-VERIFY)', () => {
-  it('maps TC / ABS / engine-map indices from the garage payload', () => {
-    const a = aidsFromRest({ tractionControl: 4, abs: 3, engineMap: 5 });
-    expect(a.tc).toEqual({ value: 4, min: null, max: null });
-    expect(a.abs).toEqual({ value: 3, min: null, max: null });
-    expect(a.engineMap).toBe(5);
+/** A garage payload shaped like the real LMU `getPlayerGarageData` (confirmed VM_* aid objects). */
+const garage = {
+  VM_TRACTIONCONTROLMAP: { value: 5, minValue: 0, maxValue: 12, stringValue: '5' },
+  VM_ANTILOCKBRAKESYSTEMMAP: { value: 9, minValue: 0, maxValue: 10, stringValue: '9 (Understeer)' },
+  VM_ENGINE_MIXTURE: { value: 1, minValue: 0, maxValue: 2, stringValue: 'Race' },
+};
+
+describe('aidsFromRest (LMU REST garage → canonical aids; VM_* confirmed on the rig)', () => {
+  it('maps TC / ABS / engine-mixture from the VM_* objects with their real ranges', () => {
+    const a = aidsFromRest(garage);
+    expect(a.tc).toEqual({ value: 5, min: 0, max: 12 });
+    expect(a.abs).toEqual({ value: 9, min: 0, max: 10 });
+    expect(a.engineMap).toBe(1);
   });
 
-  it('reads from a nested object and falls back to the refuel screen', () => {
-    const a = aidsFromRest({ aids: { tc: 6 } }, { engineMix: 2 });
-    expect(a.tc?.value).toBe(6);
-    expect(a.engineMap).toBe(2); // from repairRefuel fallback (engineMix alias)
+  it('falls back to the refuel screen and tolerates a missing range', () => {
+    const a = aidsFromRest(
+      { VM_TRACTIONCONTROLMAP: { value: 6 } }, // no min/max present
+      { VM_ENGINE_MIXTURE: { value: 2, minValue: 0, maxValue: 2 } },
+    );
+    expect(a.tc).toEqual({ value: 6, min: null, max: null });
+    expect(a.engineMap).toBe(2); // from the repairRefuel fallback
     expect(a.abs).toBeNull(); // not present anywhere
   });
 
@@ -43,13 +54,11 @@ describe('aidsFromRest (LMU REST garage → canonical aids; field names LIVE-VER
 });
 
 describe('withAidsFromRest (merge into a SHM-derived RaceState)', () => {
-  it('fills the aid indices SHM left null, leaving the rest of the state untouched', () => {
-    const merged = withAidsFromRest(shmState, {
-      garage: { tractionControl: 4, abs: 3, engineMap: 5 },
-    });
-    expect(merged.player.aids.tc).toEqual({ value: 4, min: null, max: null });
-    expect(merged.player.aids.abs).toEqual({ value: 3, min: null, max: null });
-    expect(merged.player.engine.map).toBe(5);
+  it('fills the aid indices SHM left null (with the REST range), leaving the rest untouched', () => {
+    const merged = withAidsFromRest(shmState, { garage });
+    expect(merged.player.aids.tc).toEqual({ value: 5, min: 0, max: 12 });
+    expect(merged.player.aids.abs).toEqual({ value: 9, min: 0, max: 10 });
+    expect(merged.player.engine.map).toBe(1);
     expect(merged.player.aids.brakeBias).toEqual({ frontPct: 54 }); // SHM-owned, untouched
     expect(merged).not.toBe(shmState); // pure: new object
   });
@@ -67,9 +76,7 @@ describe('withAidsFromRest (merge into a SHM-derived RaceState)', () => {
         engine: { ...raceStartState.player.engine, map: 3 },
       },
     };
-    const merged = withAidsFromRest(populated, {
-      garage: { tractionControl: 9, abs: 9, engineMap: 9 },
-    });
+    const merged = withAidsFromRest(populated, { garage });
     expect(merged).toBe(populated); // nothing to fill → same reference
     expect(merged.player.aids.tc?.value).toBe(2);
     expect(merged.player.aids.abs?.value).toBe(1);
