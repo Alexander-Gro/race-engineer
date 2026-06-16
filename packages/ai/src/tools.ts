@@ -54,13 +54,16 @@ const rivalJson = (c: CarState) => ({
   closingRateMps: c.closingRateMps,
 });
 
+/** Express a 0..1 fraction as a percentage for the tool surface (LMU shows VE as a %), or null. */
+const asPct = (v: number | null): number | null => (v === null ? null : v * 100);
+
 const WHEELS = ['FL', 'FR', 'RL', 'RR'] as const;
 
 export const READ_ONLY_TOOLS: ToolDef[] = [
   {
     name: 'get_race_state',
     description:
-      'Compact race briefing: session phase, position/class, laps and time remaining, last/best lap, fuel summary, flags, and the gaps to the cars immediately ahead and behind.',
+      'Compact race briefing: session phase, position/class, laps and time remaining, last/best lap, fuel summary, Virtual Energy summary (LMU, as a %; null if not exposed), flags, and the gaps to the cars immediately ahead and behind.',
     parameters: NO_ARGS,
     handler: (_args, ctx) => {
       const s = ctx.raceState;
@@ -84,10 +87,26 @@ export const READ_ONLY_TOOLS: ToolDef[] = [
           perLapAvgLiters: p.fuel.perLapAvgLiters,
           lapsRemainingEst: p.fuel.lapsRemainingEst,
         },
+        // Virtual Energy (LMU) as a percentage of the per-stint budget; null when not exposed.
+        virtualEnergy:
+          p.virtualEnergy === null
+            ? null
+            : {
+                levelPct: asPct(p.virtualEnergy.level01),
+                perLapAvgPct: asPct(p.virtualEnergy.perLapAvg01),
+                lapsRemainingEst: p.virtualEnergy.lapsRemainingEst,
+              },
         flag: s.flags.global,
         carAheadGapS: ahead?.gapToPlayerS ?? null,
         carBehindGapS: behind?.gapToPlayerS ?? null,
-        units: { fuel: 'liters', temp: 'C', gap: 's', distance: 'm', speed: 'm/s' },
+        units: {
+          fuel: 'liters',
+          energy: 'percent',
+          temp: 'C',
+          gap: 's',
+          distance: 'm',
+          speed: 'm/s',
+        },
       };
     },
   },
@@ -117,17 +136,42 @@ export const READ_ONLY_TOOLS: ToolDef[] = [
   {
     name: 'get_fuel_plan',
     description:
-      'The current fuel plan from the strategy engine: per-lap use, laps remaining on fuel, fuel to finish, liters to add at the next stop, any fuel-save target, and a confidence. Returns available:false while consumption is still being learned.',
+      'The current fuel + Virtual-Energy plan from the strategy engine: per-lap fuel use, laps remaining on fuel, fuel to finish, liters to add at the next stop, any fuel-save target, and (LMU) the Virtual Energy figures as percentages. `bindingConstraint` says which resource runs out first — `energy` means the stint is energy-limited, not fuel-limited (advise on the binding one). `virtualEnergy` is null when the series has no VE. Returns available:false while consumption is still being learned.',
     parameters: NO_ARGS,
     handler: (_args, ctx) => {
-      if (!ctx.fuelPlan) {
+      const fp = ctx.fuelPlan;
+      if (!fp) {
         return {
           available: false,
           reason: 'Fuel consumption not yet established',
           confidence01: 0,
         };
       }
-      return { available: true, ...ctx.fuelPlan, units: { fuel: 'liters' } };
+      return {
+        available: true,
+        perLapLiters: fp.perLapLiters,
+        lapsRemainingOnFuel: fp.lapsRemainingOnFuel,
+        lapsToFinish: fp.lapsToFinish,
+        litersToFinish: fp.litersToFinish,
+        litersToAddNextStop: fp.litersToAddNextStop,
+        fuelSaveTargetLitersPerLap: fp.fuelSaveTargetLitersPerLap,
+        // Which resource limits the stint: 'fuel' | 'energy' | null (no VE / still learning).
+        bindingConstraint: fp.bindingConstraint,
+        // Virtual Energy as percentages (the LMU convention), so figures are quoted directly;
+        // null when the series doesn't expose VE — then plan on fuel alone.
+        virtualEnergy:
+          fp.perLapEnergy01 === null
+            ? null
+            : {
+                lapsRemainingOnEnergy: fp.lapsRemainingOnEnergy,
+                perLapEnergyPct: asPct(fp.perLapEnergy01),
+                energyToFinishPct: asPct(fp.energyToFinish01),
+                energyToAddNextStopPct: asPct(fp.energyToAddNextStop01),
+                energySaveTargetPctPerLap: asPct(fp.energySaveTargetPerLap01),
+              },
+        confidence01: fp.confidence01,
+        units: { fuel: 'liters', energy: 'percent of the per-stint VE budget', laps: 'count' },
+      };
     },
   },
   {

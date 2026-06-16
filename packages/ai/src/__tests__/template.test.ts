@@ -1,5 +1,11 @@
 import { multiClassTrafficState } from '@race-engineer/core/fixtures';
-import { computeFuelPlan, estimatePerLapConsumption, planStints } from '@race-engineer/strategy';
+import type { RaceState } from '@race-engineer/core';
+import {
+  computeFuelPlan,
+  estimatePerLapConsumption,
+  estimatePerLapEnergy,
+  planStints,
+} from '@race-engineer/strategy';
 import { describe, expect, it } from 'vitest';
 import type { RaceContext } from '../context';
 import { templateAnswer } from '../template';
@@ -13,12 +19,51 @@ const fuelPlan = computeFuelPlan({
 const stintPlan = planStints({ raceLaps: 30, tankCapacityLiters: 60, perLapFuelLiters: 2.6 });
 const ctx: RaceContext = { raceState: multiClassTrafficState, fuelPlan, stintPlan };
 
+// An energy-limited context (plenty of fuel, VE the bind) for the Virtual Energy intents.
+const veState: RaceState = {
+  ...multiClassTrafficState,
+  player: {
+    ...multiClassTrafficState.player,
+    virtualEnergy: { level01: 0.5, perLapAvg01: 0.05, lapsRemainingEst: 10 },
+  },
+};
+const veFuelPlan = computeFuelPlan({
+  fuelLiters: 60, // ≈ 23 laps on fuel
+  consumption: estimatePerLapConsumption({ greenLapFuelDeltas: [2.6, 2.6, 2.6] }),
+  energy: {
+    level01: 0.5, // 10 laps on VE → energy binds
+    consumption: estimatePerLapEnergy({ greenLapEnergyDeltas01: [0.05, 0.05, 0.05] }),
+  },
+});
+const veCtx: RaceContext = { raceState: veState, fuelPlan: veFuelPlan, stintPlan };
+
 describe('templateAnswer (free, no-LLM reactive answering)', () => {
   it('answers fuel questions from the precomputed plan, quoting the numbers verbatim', () => {
     const a = templateAnswer("how's my fuel?", ctx)!;
     expect(a).toMatch(/8 laps of fuel left/);
     expect(a).toMatch(/2\.60 per lap/);
     expect(a).toMatch(/add 29 litres/); // 46.8 to finish − 20 in tank + reserve
+  });
+
+  it('answers virtual-energy questions, quoting VE % and the binding constraint', () => {
+    const a = templateAnswer("how's my virtual energy?", veCtx)!;
+    expect(a).toMatch(/10 laps of virtual energy left/); // 0.5 / 0.05
+    expect(a).toMatch(/5\.0% a lap/);
+    expect(a).toMatch(/Energy's your limit/); // VE (10) binds before fuel (23)
+  });
+
+  it('makes the fuel answer VE-aware when energy is the tighter limit (the flagged gap)', () => {
+    const a = templateAnswer("how's my fuel?", veCtx)!;
+    expect(a).toMatch(/23 laps of fuel left/);
+    expect(a).toMatch(/energy's the tighter limit/);
+    expect(a).toMatch(/10 laps on VE/);
+  });
+
+  it('stays honest about VE when the source has none', () => {
+    // The default ctx fuelPlan carries no VE → "no reading yet", never a fabricated %.
+    expect(templateAnswer('how much energy do I have?', ctx)).toMatch(
+      /[Nn]o virtual-energy reading/,
+    );
   });
 
   it('answers pit-timing from the stint plan (checked before fuel)', () => {

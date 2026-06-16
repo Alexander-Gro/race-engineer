@@ -47,6 +47,25 @@ const INTENTS: readonly Intent[] = [
     },
   },
   {
+    // Virtual Energy (LMU) — checked before "fuel" so an energy question never routes to fuel.
+    test: /\bvirtual\s*energy\b|\benergy\b/,
+    respond: (ctx) => {
+      const fp = tool('get_fuel_plan', ctx);
+      const ve = fp.available ? (fp.virtualEnergy as Record<string, unknown> | null) : null;
+      if (!ve) {
+        return "No virtual-energy reading yet — this car may not use it, or I'm still learning.";
+      }
+      let s = `About ${round(ve.lapsRemainingOnEnergy)} laps of virtual energy left, ${round(ve.perLapEnergyPct, 1)}% a lap.`;
+      if (fp.bindingConstraint === 'energy') s += " Energy's your limit, not fuel.";
+      else if (fp.bindingConstraint === 'fuel')
+        s += " Fuel runs out first, so energy isn't the limit.";
+      if (n(ve.energySaveTargetPctPerLap) !== null) {
+        s += ` Save ${round(ve.energySaveTargetPctPerLap, 1)}% a lap to stretch it.`;
+      }
+      return s;
+    },
+  },
+  {
     test: /\bfuel\b|laps?\s+(of\s+fuel|left|remaining)|how\s+much\s+fuel/,
     respond: (ctx) => {
       const fp = tool('get_fuel_plan', ctx);
@@ -57,6 +76,12 @@ const INTENTS: readonly Intent[] = [
       }
       if (n(fp.fuelSaveTargetLitersPerLap) !== null) {
         s += ` Save ${round(fp.fuelSaveTargetLitersPerLap, 2)} a lap to stretch it.`;
+      }
+      // In LMU the stint can be energy-limited even with fuel to spare — say so (the user-flagged gap).
+      if (fp.bindingConstraint === 'energy') {
+        const ve = fp.virtualEnergy as Record<string, unknown> | null;
+        if (ve)
+          s += ` But energy's the tighter limit — about ${round(ve.lapsRemainingOnEnergy)} laps on VE.`;
       }
       return s;
     },

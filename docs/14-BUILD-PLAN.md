@@ -352,8 +352,11 @@ in a small, reviewable, green-tested change.
   now flows live: the synthetic source emits a VE arc, the always-on `StrategyEngine` learns per-lap
   VE like fuel and computes the binding constraint each snapshot, and the dashboard (models +
   renderer) shows a Virtual Energy card with an "Energy-limited" badge (634 green; electron build +
-  compliance PASS). Remaining: **T11.3** LMU REST→canonical mapping (live half), **T11.4** AI
-  tool/template surface. See M11 below.
+  compliance PASS). **T11.4 done** — the AI surface is VE-aware: `get_fuel_plan`/`get_race_state`
+  expose VE (as %) + the binding constraint, the free template answers energy questions and makes the
+  fuel answer VE-aware, and the system prompt flags the energy-limited case (641 green; compliance
+  PASS). **Remaining: only T11.3** — the LMU REST→canonical VE mapping, whose live half (capturing the
+  real `/rest/strategy/usage` payload) needs the Windows rig + LMU. See M11 below.
 
 ## The central ordering idea
 
@@ -963,9 +966,19 @@ compliance PASS. _Live half:_ real VE values arrive with T11.3 (LMU REST); the r
 Build: map `/rest/strategy/usage` VE-per-lap + current VE level into `player.virtualEnergy` in
 the REST→`RaceState` merge. Verify: mocked-payload mapping test; **live half:** capture the real
 `strategy/usage` payload on the rig and confirm field names/units (S2.2).
-**T11.4 — VE in the AI tool surface + template answers** · _Claude Code_ · deps: T11.1
-Build: expose VE / binding constraint in the read-only tools + a free template answer ("you're
-energy-limited, ~N laps on VE"). Verify: tool-call + template tests over a VE-binding fixture.
+**T11.4 — VE in the AI tool surface + template answers** · _Claude Code_ · deps: T11.1 · **done**
+Build: ✅ `get_fuel_plan` now returns the binding constraint + a `virtualEnergy` block as
+**percentages** (the LMU convention, so the LLM/guard quote figures directly, not raw 0..1), null
+for fuel-only series; `get_race_state` gains a VE % summary; both descriptions updated. A new
+**Virtual Energy template intent** (free/no-LLM) answers "how's my energy" with VE laps + %/lap +
+which resource binds, and the **fuel answer is now VE-aware** — when energy is the tighter limit it
+says so (the user-flagged gap). System prompt gained a VE/binding-constraint line (phrasing only;
+the LLM still gets every number from a tool — rule 1). State-honest: VE absent → "no reading yet",
+never a fabricated %.
+Verify: ✅ tool tests (VE % block + binding on `get_fuel_plan`/`get_race_state`, null for fuel-only)
++ template tests (energy intent, VE-aware fuel answer, VE-absent honesty); typecheck + lint + 641
+green; compliance PASS. _Follow-up:_ proactive VE-low call-out rule (sibling of `fuelLowRule`),
+confidence-gated, is a separate small task; live VE values arrive with T11.3.
 
 ---
 

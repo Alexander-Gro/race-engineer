@@ -1,5 +1,11 @@
 import { multiClassTrafficState } from '@race-engineer/core/fixtures';
-import { computeFuelPlan, estimatePerLapConsumption, planStints } from '@race-engineer/strategy';
+import type { RaceState } from '@race-engineer/core';
+import {
+  computeFuelPlan,
+  estimatePerLapConsumption,
+  estimatePerLapEnergy,
+  planStints,
+} from '@race-engineer/strategy';
 import { describe, expect, it } from 'vitest';
 import type { RaceContext } from '../context';
 import { READ_ONLY_TOOLS, toolRegistry } from '../tools';
@@ -98,6 +104,53 @@ describe('read-only tools', () => {
     expect(r.className).toBe('LMP2');
     expect(r.carBehindGapS).toBe(0.8);
     expect(r.flag).toBe('green');
+  });
+});
+
+describe('read-only tools — Virtual Energy (LMU)', () => {
+  const veState: RaceState = {
+    ...multiClassTrafficState,
+    player: {
+      ...multiClassTrafficState.player,
+      virtualEnergy: { level01: 0.5, perLapAvg01: 0.05, lapsRemainingEst: 10 },
+    },
+  };
+  const veFuelPlan = computeFuelPlan({
+    fuelLiters: 60, // 60 / 2.6 ≈ 23 laps on fuel
+    consumption: estimatePerLapConsumption({ greenLapFuelDeltas: [2.6, 2.6, 2.6] }),
+    energy: {
+      level01: 0.5, // 0.5 / 0.05 = 10 laps on VE → VE binds
+      consumption: estimatePerLapEnergy({ greenLapEnergyDeltas01: [0.05, 0.05, 0.05] }),
+    },
+  });
+  const veCtx: RaceContext = { raceState: veState, fuelPlan: veFuelPlan };
+
+  it('get_race_state surfaces a VE percentage block from canonical 0..1 values', () => {
+    const ve = run('get_race_state', veCtx).virtualEnergy as Record<string, unknown>;
+    expect(ve.levelPct).toBeCloseTo(50);
+    expect(ve.perLapAvgPct).toBeCloseTo(5);
+    expect(ve.lapsRemainingEst).toBe(10);
+  });
+
+  it('get_race_state returns virtualEnergy null when the source has no VE', () => {
+    expect(run('get_race_state').virtualEnergy).toBeNull(); // default ctx fixture has no VE
+  });
+
+  it('get_fuel_plan presents VE as percentages and reports the binding constraint', () => {
+    const r = run('get_fuel_plan', veCtx);
+    expect(r.bindingConstraint).toBe('energy');
+    const ve = r.virtualEnergy as Record<string, unknown>;
+    expect(ve.perLapEnergyPct).toBeCloseTo(5);
+    expect(ve.lapsRemainingOnEnergy).toBeCloseTo(10);
+    // Fuel figures stay flat and in litres — the contract is unchanged.
+    expect(r.perLapLiters).toBeCloseTo(2.6, 6);
+    expect((r.units as Record<string, unknown>).energy).toBe('percent of the per-stint VE budget');
+  });
+
+  it('get_fuel_plan virtualEnergy and binding are null for a fuel-only plan', () => {
+    const r = run('get_fuel_plan'); // default ctx fuelPlan has no energy
+    expect(r.virtualEnergy).toBeNull();
+    expect(r.bindingConstraint).toBeNull();
   });
 });
 

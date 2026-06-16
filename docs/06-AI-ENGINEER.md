@@ -89,7 +89,7 @@ Sending raw 60 Hz telemetry to the LLM is wasteful and slow. Instead:
 ```
 get_race_state()        → compact RaceState briefing
 get_rivals()            → cars ahead/behind with class, gap, closing rate
-get_fuel_plan()         → FuelPlan (05)
+get_fuel_plan()         → FuelPlan (05): fuel + Virtual Energy (LMU, as %) + bindingConstraint
 get_stint_plan()        → StintPlan (05)
 project_pit_window()    → pit window + recommendation
 evaluate_undercut(id)   → undercut/overcut recommendation
