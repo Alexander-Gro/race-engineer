@@ -12,3 +12,4 @@ export * from './capabilities';
 export * from './adapter';
 export * from './normalizer';
 export * from './rest/client';
+export * from './rest/virtual-energy';

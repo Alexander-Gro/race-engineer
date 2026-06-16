@@ -355,8 +355,11 @@ in a small, reviewable, green-tested change.
   compliance PASS). **T11.4 done** — the AI surface is VE-aware: `get_fuel_plan`/`get_race_state`
   expose VE (as %) + the binding constraint, the free template answers energy questions and makes the
   fuel answer VE-aware, and the system prompt flags the energy-limited case (641 green; compliance
-  PASS). **Remaining: only T11.3** — the LMU REST→canonical VE mapping, whose live half (capturing the
-  real `/rest/strategy/usage` payload) needs the Windows rig + LMU. See M11 below.
+  PASS). **T11.3 offline half done** — a tolerant REST→canonical VE mapper + RaceState merge seam
+  (`virtualEnergyFromRest`/`withVirtualEnergyFromRest`), unit-tested (650 green; compliance PASS).
+  **M11 is now offline-complete**; all that remains is T11.3's **live half** — capturing the real
+  `/rest/strategy/usage` payload on the rig to pin field names + wiring the ~2 Hz REST poll into the
+  live host (rig backlog, docs/03 §C). See M11 below.
 
 ## The central ordering idea
 
@@ -962,10 +965,19 @@ Verify: ✅ engine VE-learning/binding/refill-drop tests, synthetic VE-arc + omi
 dashboard energy-block + binding + VE-save tests; typecheck + lint + 634 green; electron build green;
 compliance PASS. _Live half:_ real VE values arrive with T11.3 (LMU REST); the renderer card +
 "energy-limited" call are then visible against the live source.
-**T11.3 — VE from LMU REST → canonical** · _Claude Code (live verify human-assisted)_ · deps: T11.1, T2.2
-Build: map `/rest/strategy/usage` VE-per-lap + current VE level into `player.virtualEnergy` in
-the REST→`RaceState` merge. Verify: mocked-payload mapping test; **live half:** capture the real
-`strategy/usage` payload on the rig and confirm field names/units (S2.2).
+**T11.3 — VE from LMU REST → canonical** · _Claude Code (live verify human-assisted)_ · deps: T11.1, T2.2 · **offline half done**
+Build: ✅ a **tolerant** REST→canonical mapper `virtualEnergyFromRest(strategyUsage, repairRefuel)`
++ `withVirtualEnergyFromRest(state, rest)` in `packages/adapters/lmu/src/rest/virtual-energy.ts`:
+probes documented candidate keys (case-insensitive, one level of nesting), normalizes a % (0..100)
+**or** a 0..1 fraction to the canonical 0..1, computes `lapsRemainingEst`, and **returns null when no
+VE level is found** — never invents one (rule 1 / state-honesty). VE is REST-only (absent from rF2
+SHM), so this is its sole source; read-only (only reads payloads the GET-only client fetched).
+Verify: ✅ mocked-payload mapping tests (%/fraction/nested/fallback/clamp/absent/zero-rate) + merge-
+into-`RaceState` tests; typecheck + lint + 650 green; compliance PASS.
+**Live half (human-assisted, rig):** capture the real `/rest/strategy/usage` +
+`RepairAndRefuel` JSON to pin field names/units, narrow the candidate lists, and wire the ~2 Hz REST
+poll into `lmu-host.ts` off the SHM hot path (merge via `withVirtualEnergyFromRest`). Full checklist
+in [03-LMU-INTEGRATION.md](03-LMU-INTEGRATION.md) §C (Virtual Energy).
 **T11.4 — VE in the AI tool surface + template answers** · _Claude Code_ · deps: T11.1 · **done**
 Build: ✅ `get_fuel_plan` now returns the binding constraint + a `virtualEnergy` block as
 **percentages** (the LMU convention, so the LLM/guard quote figures directly, not raw 0..1), null

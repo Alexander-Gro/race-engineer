@@ -785,7 +785,20 @@ toggled TC/ABS/brake-bias on the fly. (164 MB raw — git-ignored, never committ
 - [ ] **Refuel rate (L/s) + tyre-change time (s)** (T7.2 `serviceTime`) — per car/series;
   check the REST `RepairAndRefuel` / `strategy/usage` payloads (S2) or measure a stop.
 - [ ] **Virtual Energy** mapping (endurance fuel/energy) from REST `strategy/usage` (S2.2) —
-  whether fuel-to-finish should be energy-based for Hypercar.
+  whether fuel-to-finish should be energy-based for Hypercar. **Offline half done (T11.3):** the
+  canonical `PlayerCar.virtualEnergy` field, the strategy/engine/dashboard/AI VE path (M11), and a
+  **tolerant REST→VE mapper** `virtualEnergyFromRest(strategyUsage, repairRefuel)` +
+  `withVirtualEnergyFromRest(state, rest)` (`packages/adapters/lmu/src/rest/virtual-energy.ts`) all
+  exist and are unit-tested. **Rig steps still needed:**
+  1. On the rig, GET `/rest/strategy/usage` and `/rest/garage/UIScreen/RepairAndRefuel` (Swagger/curl,
+     in-session) and **record the real JSON** — pin the actual field names + whether VE is a % (0..100)
+     or a 0..1 fraction. Then narrow the mapper's `LEVEL_KEYS`/`PER_LAP_KEYS` candidate lists to the
+     confirmed keys (the `toFraction01` heuristic already handles either scale).
+  2. Wire the live poll: in `apps/desktop/src/lmu-host.ts`, poll the REST client at ~2 Hz **off the
+     50 Hz SHM hot path**, cache the latest VE, and merge it into each normalized `RaceState` via
+     `withVirtualEnergyFromRest` (never block the telemetry loop on network I/O — CLAUDE.md rule 3).
+  3. Confirm in-app: the dashboard Virtual Energy card populates and the "Energy-limited" badge shows
+     when VE binds before fuel.
 - [ ] **Tyre life / max-stint-laps** (T7.3 `maxStintLapsByTire`) and **fresh-vs-worn pace
   delta** (T7.4 `freshTyreGainPerLapS`) — derive from a real green stint (feeds T7.1 fit;
   needs the T1.5 recording).
