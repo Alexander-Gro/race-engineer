@@ -20,10 +20,14 @@ import type { CandidateEvent, EventRule } from '../types';
  *    against live data alongside the spotter's `lateralPos` sign (docs/03) before trusting it.
  *
  * Pure and allocation-light (runs every tick); level-triggered like `fuel_low`, with the
- * {@link EventDetector}'s cooldown keeping it to one call-out per car per window. "Faster/slower" is
- * read from the *geometry* (a car closing from behind is faster than you right now; one ahead you are
- * catching is slower) and, in a multi-class field, gated to a different class so a same-class battle
- * isn't mistaken for traffic.
+ * {@link EventDetector}'s cooldown keeping it to one call-out per car per window.
+ *
+ * **"Faster/slower" is read from the actual class *pace*, not geometry** (fixed after a live GT3 capture
+ * wrongly heard "slower class ahead" — a GT3 has no slower class). Each class's pace is its fastest known
+ * lap (`bestLapS ?? lastLapS`) in the current field; a car only raises `faster_class_approaching` if its
+ * class is genuinely faster than the player's, and `slower_class_ahead` only if genuinely slower. When a
+ * class's pace isn't known yet (no lap set), we stay silent rather than guess (docs/05 §8 trustworthy-or-
+ * silent). `differentClassOnly:false` opts back into the old geometry-only behaviour (single-class use).
  */
 
 export interface TrafficOptions {
@@ -67,9 +71,45 @@ const resolve = (o: TrafficOptions): ResolvedOptions => ({
 const eligible = (player: PlayerCar, car: CarState): boolean =>
   !car.isPlayer && car.id !== player.id && !car.pit.inPitLane;
 
-/** Treat unknown classes as "different" (don't suppress a warning just because class data is missing). */
-const differentClass = (player: PlayerCar, car: CarState): boolean =>
-  player.className === null || car.className === null || player.className !== car.className;
+/**
+ * Representative pace (s/lap) per class for the current field — the **fastest** known lap
+ * (`bestLapS`, falling back to `lastLapS`) across that class's cars. Lower = faster class. Pure,
+ * recomputed per tick; a class with no completed lap yet is simply absent (→ unknown relation).
+ */
+export const classPaceS = (state: RaceState): Map<string, number> => {
+  const pace = new Map<string, number>();
+  const consider = (cls: string | null, lap: number | null): void => {
+    if (cls === null || lap === null || !(lap > 0)) return;
+    const cur = pace.get(cls);
+    if (cur === undefined || lap < cur) pace.set(cls, lap);
+  };
+  for (const c of state.cars) {
+    consider(c.className, c.bestLapS);
+    consider(c.className, c.lastLapS);
+  }
+  consider(state.player.className, state.player.bestLapS);
+  consider(state.player.className, state.player.lastLapS);
+  return pace;
+};
+
+type ClassRelation = 'faster' | 'slower' | 'same' | 'unknown';
+
+/** The other car's class speed relative to the player's, by field pace. Same class (or equal pace) ⇒ `same`. */
+const classRelation = (
+  player: PlayerCar,
+  car: CarState,
+  pace: Map<string, number>,
+): ClassRelation => {
+  if (player.className !== null && car.className !== null && player.className === car.className) {
+    return 'same';
+  }
+  const p = player.className === null ? undefined : pace.get(player.className);
+  const o = car.className === null ? undefined : pace.get(car.className);
+  if (p === undefined || o === undefined) return 'unknown';
+  if (o < p) return 'faster';
+  if (o > p) return 'slower';
+  return 'same'; // distinct classes, equal pace ⇒ treat as the same tier (no faster/slower call)
+};
 
 /** Seconds until the cars meet: distance gap / closing speed, falling back to the time gap. */
 const etaS = (car: CarState): number => {
@@ -99,14 +139,27 @@ export const trafficForecast = (
   const ahead: CarState[] = [];
   if (state.player.pit.inPitLane) return { approaching, ahead };
 
+  const pace = classPaceS(state);
   for (const car of state.cars) {
     if (!eligible(state.player, car)) continue;
     if (car.gapToPlayerS === null || car.closingRateMps === null) continue;
     if (car.closingRateMps < o.minClosingMps) continue; // not converging
-    if (o.differentClassOnly && !differentClass(state.player, car)) continue;
 
-    if (car.gapToPlayerS > 0 && car.gapToPlayerS <= o.horizonBehindS) approaching.push(car);
-    else if (car.gapToPlayerS < 0 && -car.gapToPlayerS <= o.horizonAheadS) ahead.push(car);
+    const behind = car.gapToPlayerS > 0 && car.gapToPlayerS <= o.horizonBehindS;
+    const aheadOfPlayer = car.gapToPlayerS < 0 && -car.gapToPlayerS <= o.horizonAheadS;
+    if (!behind && !aheadOfPlayer) continue;
+
+    if (o.differentClassOnly) {
+      // Class-rank gated (the multi-class default): a car raises "faster approaching" only if its class
+      // is genuinely faster, "slower ahead" only if genuinely slower. Same/unknown class ⇒ stay silent.
+      const rel = classRelation(state.player, car, pace);
+      if (behind && rel === 'faster') approaching.push(car);
+      else if (aheadOfPlayer && rel === 'slower') ahead.push(car);
+    } else {
+      // Geometry-only opt-out (single-class / "warn me about everyone"): position + closing, any class.
+      if (behind) approaching.push(car);
+      else ahead.push(car);
+    }
   }
   approaching.sort((a, b) => etaS(a) - etaS(b));
   ahead.sort((a, b) => etaS(a) - etaS(b));

@@ -11,30 +11,44 @@ interface RivalSpec {
   className?: string | null;
 }
 
-/** A frame with an LMP2 player and the given rivals, for the constructed cases. */
+// Representative pace per class so the rule can rank class speed (Hypercar fastest … GT3 slowest).
+const CLASS_PACE_S: Record<string, number> = {
+  Hypercar: 209,
+  Hyper: 209,
+  LMP2: 217,
+  GTE: 226,
+  GT3: 250,
+};
+
+/** A frame with a player (LMP2 by default) and the given rivals, each carrying class-realistic pace. */
 const buildFrame = (opts: {
   tick?: number;
   monotonicMs?: number;
   playerInPit?: boolean;
+  playerClassName?: string;
   rivals: RivalSpec[];
 }): RaceState => {
+  const playerClass = opts.playerClassName ?? 'LMP2';
   const player = makePlayerCar({
     id: 99,
     position: 5,
-    className: 'LMP2',
+    className: playerClass,
+    bestLapS: CLASS_PACE_S[playerClass] ?? null,
     pit: { inPitLane: opts.playerInPit ?? false, inPitStall: false, stops: 0, state: 'none' },
   });
-  const rivals = opts.rivals.map((r, i) =>
-    makeCarState({
+  const rivals = opts.rivals.map((r, i) => {
+    const className = r.className === undefined ? 'Hypercar' : r.className;
+    return makeCarState({
       id: r.id,
       position: 6 + i,
-      className: r.className === undefined ? 'Hypercar' : r.className,
+      className,
       driverName: `R${r.id}`,
+      lastLapS: className === null ? null : (CLASS_PACE_S[className] ?? null),
       gapToPlayerS: r.gapToPlayerS,
       gapToPlayerM: r.gapToPlayerM ?? null,
       closingRateMps: r.closingRateMps,
-    }),
-  );
+    });
+  });
   return {
     ...raceStartState,
     tick: opts.tick ?? 0,
@@ -93,6 +107,71 @@ describe('trafficForecast', () => {
       playerInPit: true,
       rivals: [{ id: 1, gapToPlayerS: 1.0, gapToPlayerM: 20, closingRateMps: 10 }],
     });
+    expect(trafficForecast(frame).approaching).toHaveLength(0);
+  });
+
+  // --- Class-rank gating (live-rig bug: a GT3 heard "slower class ahead" / false "faster approaching") ---
+
+  it('does not call a faster class ahead "slower" — GT3 catching a Hypercar in traffic', () => {
+    const { approaching, ahead } = trafficForecast(
+      buildFrame({
+        playerClassName: 'GT3',
+        rivals: [
+          // A Hypercar briefly ahead of the GT3 (e.g. into a slow corner) — faster class, NOT slower.
+          {
+            id: 1,
+            gapToPlayerS: -2.0,
+            gapToPlayerM: -25,
+            closingRateMps: 6,
+            className: 'Hypercar',
+          },
+        ],
+      }),
+    );
+    expect(ahead).toHaveLength(0); // the reported bug — must NOT raise slower_class_ahead
+    expect(approaching).toHaveLength(0); // it's ahead, not closing from behind
+  });
+
+  it('a GT3 (slowest class) never raises slower_class_ahead — no slower class exists', () => {
+    const { ahead } = trafficForecast(
+      buildFrame({
+        playerClassName: 'GT3',
+        rivals: [
+          { id: 3, gapToPlayerS: -1.0, gapToPlayerM: -10, closingRateMps: 5, className: 'LMP2' },
+          {
+            id: 4,
+            gapToPlayerS: -2.0,
+            gapToPlayerM: -20,
+            closingRateMps: 5,
+            className: 'Hypercar',
+          },
+        ],
+      }),
+    );
+    expect(ahead).toHaveLength(0);
+  });
+
+  it('still warns a GT3 of a genuinely faster class approaching from behind', () => {
+    const { approaching } = trafficForecast(
+      buildFrame({
+        playerClassName: 'GT3',
+        rivals: [
+          { id: 2, gapToPlayerS: 1.5, gapToPlayerM: 30, closingRateMps: 10, className: 'LMP2' },
+        ],
+      }),
+    );
+    expect(approaching.map((c) => c.id)).toEqual([2]); // LMP2 is faster than GT3 — correct warning
+  });
+
+  it('stays silent when a class has no lap time yet (pace unknown ⇒ no guess)', () => {
+    const frame = buildFrame({
+      playerClassName: 'GT3',
+      rivals: [
+        { id: 5, gapToPlayerS: 1.2, gapToPlayerM: 25, closingRateMps: 9, className: 'LMP2' },
+      ],
+    });
+    // Wipe the rival's lap time so its class pace is unknown.
+    frame.cars = frame.cars.map((c) => (c.id === 5 ? { ...c, lastLapS: null, bestLapS: null } : c));
     expect(trafficForecast(frame).approaching).toHaveLength(0);
   });
 });

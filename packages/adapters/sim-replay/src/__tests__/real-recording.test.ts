@@ -4,6 +4,7 @@ import {
   EventDetector,
   RaceStateSchema,
   spotterRule,
+  trafficRule,
   type EngineerEvent,
   type RaceState,
 } from '@race-engineer/core';
@@ -44,5 +45,21 @@ describe('real LMU recording fixture (Le Mans multi-class)', () => {
     // The window is centred on a 0.0 m along-track moment, so a real car draws alongside → left/right.
     const sides = events.filter((e) => e.type === 'car_left' || e.type === 'car_right');
     expect(sides.length).toBeGreaterThan(0);
+  });
+
+  // The player here is a GT3 — the slowest class in the field (Hyper ~218 s, LMP2 ~226 s, GT3 ~255 s).
+  // The live-rig bug was hearing "slower class ahead" for a GT3; with class-rank gating it must never
+  // fire, and any "faster class approaching" must target a genuinely faster (Hyper/LMP2) car.
+  it('never raises slower_class_ahead for a GT3, and only flags genuinely faster classes', async () => {
+    const frames = await loadFixture();
+    expect(frames[0]?.player.className).toBe('GT3'); // guard: the fixture is the GT3 capture
+    const detector = new EventDetector([trafficRule()]);
+    const events: EngineerEvent[] = [];
+    for (const frame of frames) events.push(...detector.process(frame));
+
+    expect(events.filter((e) => e.type === 'slower_class_ahead')).toHaveLength(0);
+    for (const e of events.filter((e) => e.type === 'faster_class_approaching')) {
+      expect(['Hyper', 'LMP2']).toContain(e.payload.className); // never a same/slower class
+    }
   });
 });
