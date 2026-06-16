@@ -932,8 +932,15 @@ per-corner tyre-pressure + camber), each with a reason + the diagnosis confidenc
 read-only `propose_setup_change` AI tool + a free template answer ("how do I fix the understeer?").
 **Advice only — the driver applies it in the garage; the app never writes a setup** (rule 5); relative,
 never a fabricated absolute (rule 1). 7 strategy + 1 tool + 2 template tests; 732 green; compliance
-PASS.) → T9.5 before/after compare after the driver
-applies changes in the garage.
+PASS.) → ~~T9.5 before/after compare done 2026-06-16~~ — `compareHandling(before, after)` in
+`strategy/setup-compare.ts` closes the advise→apply→verify loop: after the driver applies a change in
+the garage, it compares the handling diagnosis before vs after and reports whether the balance
+`improved` / `unchanged` / `worsened` (judged from the front−rear temp-gap magnitude; a flip to a
+smaller gap reads as improved, an overcorrection to a bigger gap as worse), with a driver-facing
+summary. The *what changed* half is the `.svm` delta (`diffSetups`, T9.1); this is the *did-it-help*
+half. Pure (reads two diagnoses), read-only/advisory — evaluates the driver's change, never makes one.
+6 tests; 738 green; compliance PASS. **This completes M9's offline scope** (live setup values + the
+dedicated screen UI remain — rig + the deferred reskin).
 
 **T9.2 — Handling diagnosis from telemetry** · _Claude Code_ · deps: T0.3 (works on telemetry) · **done**
 Build: `diagnoseHandling(tires, thresholds?)` in `@race-engineer/strategy` `handling.ts` — the

@@ -12,3 +12,4 @@ export * from './fcy';
 export * from './handling';
 export * from './advice';
 export * from './setup-advice';
+export * from './setup-compare';
