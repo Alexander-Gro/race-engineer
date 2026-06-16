@@ -908,7 +908,17 @@ Context: [08-INPUT-AND-CONTROLS](08-INPUT-AND-CONTROLS.md) §3, [09-UI-UX](09-UI
 
 T10.1 wire local STT/TTS (Piper/Kokoro + faster-whisper) + cost estimator → T10.2 full
 onboarding (profile choice + model download/GPU detect + mic permission + plugin-install
-helper + health UI, per [16](16-PLATFORM-PREREQUISITES.md) §5) → T10.3 crash isolation,
+helper + health UI, per [16](16-PLATFORM-PREREQUISITES.md) §5) (~~health/readiness model done
+2026-06-16~~ — a pure `buildReadinessReport` in `apps/desktop/src/readiness.ts`: the model behind the
+onboarding/health screen + "ready to race?" badge. From the config + injected capability probes it
+emits a per-concern check list (profile / LLM / TTS / STT / mic / output / PTT / source), each with a
+status (ready/attention/blocked) and the **next action** to fix it — e.g. a cloud route with no key is
+`blocked` with "Add your … key", an unreachable Ollama is `attention` (template still works), an LMU
+source with no telemetry nudges "Start LMU". `overall` = worst status; `blockers` = the fix-first list.
+Pure/input-injected, secret-safe (presence booleans only, rule 6), 10 tests; 675 green; compliance
+PASS. _Remaining T10.2:_ the live capability probes (GPU/VRAM, model download/verify, mic-permission +
+device test, plugin-install helper) + the renderer wiring — native/runtime, verified live) →
+T10.3 crash isolation,
 graceful degradation, **local diagnostics export** (~~diagnostics export done 2026-06-16~~ — a pure,
 secret-safe `buildDiagnosticsReport` in `apps/desktop/src/diagnostics.ts`: a redacted bug-report
 snapshot — app/version, platform, configured providers, source/health, recent event counts, and recent
