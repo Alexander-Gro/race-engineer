@@ -42,6 +42,14 @@ import {
   type OllamaModels,
   type SettingsApi,
 } from '../src/settings-bridge';
+import {
+  UPDATES_CHECK_CHANNEL,
+  UPDATES_INSTALL_CHANNEL,
+  UPDATES_STATUS_CHANNEL,
+  UPDATES_VERSION_CHANNEL,
+  type UpdateStatus,
+  type UpdatesApi,
+} from '../src/updates-bridge';
 
 /**
  * Preload (build-plan T6.1 / Track A text-ask + T6.3 settings + T10.1 PTT mapping). Exposes three
@@ -131,8 +139,22 @@ const radioIn: RadioInApi = {
   },
 };
 
+// In-app auto-update (docs/16 §4): version for the footer, manual check, install-on-restart, and a
+// status stream. The check/install run in main (electron-updater); this is just the thin bridge.
+const updates: UpdatesApi = {
+  getVersion: () => ipcRenderer.invoke(UPDATES_VERSION_CHANNEL) as Promise<string>,
+  check: () => ipcRenderer.send(UPDATES_CHECK_CHANNEL),
+  install: () => ipcRenderer.send(UPDATES_INSTALL_CHANNEL),
+  onStatus(listener: (status: UpdateStatus) => void): () => void {
+    const handler = (_event: IpcRendererEvent, status: UpdateStatus): void => listener(status);
+    ipcRenderer.on(UPDATES_STATUS_CHANNEL, handler);
+    return () => ipcRenderer.removeListener(UPDATES_STATUS_CHANNEL, handler);
+  },
+};
+
 contextBridge.exposeInMainWorld('engineer', bridge);
 contextBridge.exposeInMainWorld('settings', settings);
 contextBridge.exposeInMainWorld('ptt', ptt);
 contextBridge.exposeInMainWorld('audioOut', audioOut);
 contextBridge.exposeInMainWorld('radioIn', radioIn);
+contextBridge.exposeInMainWorld('updates', updates);

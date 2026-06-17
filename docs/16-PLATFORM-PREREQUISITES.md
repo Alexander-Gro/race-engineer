@@ -84,8 +84,12 @@ The free profile depends on local models — plan how a user obtains and runs th
 - **Antivirus false positives:** an app that reads game memory, captures the mic, and ships
   native binaries can trip AV heuristics. Mitigate by signing, building reputation, and
   submitting false-positive reports to AV vendors. Document the expected first-run warnings.
-- **Auto-update:** electron-builder `autoUpdater` against **GitHub Releases** (free feed).
-  Pick a channel (stable/beta).
+- **Auto-update — wired (2026-06-17):** `electron-updater` against **GitHub Releases** (free feed,
+  `publish: github` in the config → embeds `app-update.yml`, emits `latest.yml` which the release
+  workflow uploads). Main checks on launch + on demand; new builds download in the background and
+  install on restart. The renderer **footer** shows the version + a "Check for updates" button
+  (`window.updates`, `apps/desktop/src/updates-bridge.ts`). No-op in dev; works from the first
+  installed build that has it (≥ 0.2.0) — earlier versions must be replaced manually once.
 - **Targets:** Windows 10/11 x64 (decide on ARM later). Installer = NSIS.
 
 ### Building the installer (electron-builder) — wired

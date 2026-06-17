@@ -12,6 +12,14 @@ copyright: © 2026 Race Engineer contributors (Apache-2.0)
 # first run. (winCodeSign is still fetched — it also provides `rcedit`, which embeds the app icon.)
 # To sign later, wire SignPath (free for OSS) — no other change needed here.
 
+# Auto-update feed (electron-updater, docs/16 §4). Embeds app-update.yml in the app so the installed
+# build knows where to look, and emits latest.yml in dist/ for the release. We attach the artifacts via
+# the release workflow (softprops), not electron-builder's own publish, so no token is needed at build.
+publish:
+  provider: github
+  owner: Alexander-Gro
+  repo: race-engineer
+
 directories:
   output: dist # installers land in apps/desktop/dist/ (gitignored)
   buildResources: build-resources # icon.ico etc. live in apps/desktop/build-resources/ (auto-picked)

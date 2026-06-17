@@ -1,6 +1,6 @@
 {
   "name": "@race-engineer/desktop",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "private": true,
   "description": "An AI race engineer for sim racing — live telemetry, strategy, and a push-to-talk AI voice on the radio.",
   "author": "Race Engineer contributors",
@@ -21,6 +21,7 @@
   "//": "The @race-engineer/* workspace packages are bundled into out/ by electron-vite at build time, so they are devDependencies — NOT runtime deps to package (electron-builder would follow their symlinks into packages/ and choke). The genuine externalized runtime deps the bundle require()s (koffi, @anthropic-ai/sdk, zod) ARE dependencies so electron-builder packages them.",
   "dependencies": {
     "@anthropic-ai/sdk": "^0.104.1",
+    "electron-updater": "^6.3.9",
     "koffi": "^3.0.0",
     "zod": "^3.24.1"
   },

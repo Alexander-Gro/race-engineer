@@ -44,6 +44,12 @@ import {
 } from '../src/settings';
 import type { SettingsApi } from '../src/settings-bridge';
 import { SpeechController, type SpeechPort } from '../src/speech';
+import {
+  formatUpdateStatus,
+  isInstallReady,
+  isUpdateBusy,
+  type UpdatesApi,
+} from '../src/updates-bridge';
 
 /**
  * Renderer (build-plan T6.2). Subscribes to throttled snapshots via the preload-exposed read-only
@@ -62,6 +68,7 @@ declare global {
     ptt: PttApi;
     audioOut: AudioOutApi;
     radioIn: RadioInApi;
+    updates: UpdatesApi;
   }
 }
 
@@ -992,6 +999,36 @@ const wireSettingsPanel = (): void => {
   void window.settings.listApiKeys().then(showKeys);
 };
 wireSettingsPanel();
+
+/**
+ * Footer: the app version + an in-app updater. The button checks GitHub Releases (via main's
+ * electron-updater); a newer build downloads in the background and, once ready, the button becomes
+ * "Restart to update". So the driver never hand-installs a new exe (docs/16 §4). No-op in dev.
+ */
+const wireFooter = (): void => {
+  const versionEl = document.getElementById('app-version');
+  const statusEl = document.getElementById('update-status');
+  const btn = document.getElementById('check-updates') as HTMLButtonElement | null;
+  if (!versionEl || !statusEl || !btn) return;
+
+  void window.updates.getVersion().then((v) => {
+    versionEl.textContent = `v${v}`;
+  });
+
+  let installReady = false;
+  window.updates.onStatus((status) => {
+    statusEl.textContent = formatUpdateStatus(status);
+    installReady = isInstallReady(status);
+    btn.textContent = installReady ? 'Restart to update' : 'Check for updates';
+    btn.disabled = isUpdateBusy(status); // can't act mid check/download
+  });
+
+  btn.addEventListener('click', () => {
+    if (installReady) window.updates.install();
+    else window.updates.check();
+  });
+};
+wireFooter();
 
 /**
  * Push-to-talk mapping (T10.1 / docs/08 §1). "Map button" arms capture in the main process; the next

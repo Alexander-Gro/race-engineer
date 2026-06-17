@@ -50,7 +50,15 @@ import {
   SETTINGS_LOAD_CHANNEL,
   SETTINGS_SAVE_CHANNEL,
 } from '../src/settings-bridge';
+import {
+  UPDATES_CHECK_CHANNEL,
+  UPDATES_INSTALL_CHANNEL,
+  UPDATES_STATUS_CHANNEL,
+  UPDATES_VERSION_CHANNEL,
+  type UpdateStatus,
+} from '../src/updates-bridge';
 import { detectOllama, type HttpGetJson } from '@race-engineer/platform';
+import { autoUpdater } from 'electron-updater';
 import { requestSingleInstanceLock } from '../src/single-instance';
 import { fsSettingsStorage, SafeStorageSecretStore } from './stores';
 
@@ -87,6 +95,61 @@ const sendVoiceActive = (): void => {
       active: voiceActiveForRenderer,
     });
   }
+};
+
+// In-app auto-update (docs/16 §4): electron-updater checks the project's GitHub Releases, downloads a
+// newer build in the background, and installs it on restart — so the driver never hand-downloads a new
+// .exe. Only meaningful in the **packaged** app; in dev a check reports 'unsupported'. Status is pushed
+// to the renderer's footer; update only the app, never the game (rule 5).
+const setupAutoUpdater = (): void => {
+  const send = (status: UpdateStatus): void => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send(UPDATES_STATUS_CHANNEL, status);
+    }
+  };
+  const check = async (): Promise<void> => {
+    if (!app.isPackaged) {
+      send({ kind: 'unsupported' }); // dev / unpacked — there's no release feed to check
+      return;
+    }
+    try {
+      await autoUpdater.checkForUpdates();
+    } catch (err) {
+      send({ kind: 'error', message: err instanceof Error ? err.message : String(err) });
+    }
+  };
+
+  ipcMain.handle(UPDATES_VERSION_CHANNEL, () => app.getVersion());
+  ipcMain.on(UPDATES_CHECK_CHANNEL, () => void check());
+  ipcMain.on(UPDATES_INSTALL_CHANNEL, () => {
+    try {
+      autoUpdater.quitAndInstall();
+    } catch (err) {
+      send({ kind: 'error', message: err instanceof Error ? err.message : String(err) });
+    }
+  });
+
+  autoUpdater.autoDownload = true; // fetch the update as soon as one is found
+  autoUpdater.autoInstallOnAppQuit = true; // and apply it on the next quit if not restarted sooner
+  autoUpdater.on('checking-for-update', () => send({ kind: 'checking' }));
+  autoUpdater.on('update-available', (info: { version: string }) =>
+    send({ kind: 'available', version: info.version }),
+  );
+  autoUpdater.on('update-not-available', (info: { version: string }) =>
+    send({ kind: 'up-to-date', version: info.version }),
+  );
+  autoUpdater.on('download-progress', (p: { percent: number }) =>
+    send({ kind: 'downloading', percent: p.percent }),
+  );
+  autoUpdater.on('update-downloaded', (info: { version: string }) =>
+    send({ kind: 'downloaded', version: info.version }),
+  );
+  autoUpdater.on('error', (err: Error) =>
+    send({ kind: 'error', message: err?.message ?? String(err) }),
+  );
+
+  // A quiet check shortly after launch (installed app only); the footer surfaces the result.
+  if (app.isPackaged) setTimeout(() => void check(), 5000);
 };
 
 // Pending text-ask requests, correlated by id: renderer → main (invoke) → worker → main → resolve.
@@ -557,6 +620,7 @@ const main = (): void => {
     );
     startEngineerWorker();
     createWindow();
+    setupAutoUpdater();
     app.on('activate', () => {
       // Dock re-open: a fresh window picks up the running worker's broadcast.
       if (BrowserWindow.getAllWindows().length === 0) createWindow();

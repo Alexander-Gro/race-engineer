@@ -410,6 +410,13 @@
     <!-- Future engineer-voice playback target; selecting an output routes it via setSinkId now. -->
     <audio id="engineer-audio" hidden></audio>
     <div id="app">Waiting for telemetry… (live LMU source: make sure you're in a session)</div>
+    <!-- App version + in-app updater (downloads new releases so you never hand-install an exe). -->
+    <footer class="voice-bar app-footer">
+      <span class="voice-status" id="app-version">v…</span>
+      <span style="flex: 1"></span>
+      <span class="voice-status" id="update-status"></span>
+      <button class="ask-btn" id="check-updates" type="button">Check for updates</button>
+    </footer>
     <!-- electron-vite (Vite) bundles this TS entry; in dev it's served with HMR. -->
     <script type="module" src="./renderer.ts"></script>
   </body>

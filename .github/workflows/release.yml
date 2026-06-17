@@ -71,3 +71,4 @@ jobs:
           files: |
             apps/desktop/dist/*.exe
             apps/desktop/dist/*.blockmap
+            apps/desktop/dist/latest.yml
