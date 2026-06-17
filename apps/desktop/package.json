@@ -1,6 +1,6 @@
 {
   "name": "@race-engineer/desktop",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "description": "An AI race engineer for sim racing — live telemetry, strategy, and a push-to-talk AI voice on the radio.",
   "author": "Race Engineer contributors",

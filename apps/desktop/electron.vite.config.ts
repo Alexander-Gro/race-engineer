@@ -37,6 +37,13 @@ const WORKSPACE_PACKAGES = [
 const bundleWorkspaceSrc = (): ReturnType<typeof externalizeDepsPlugin> =>
   externalizeDepsPlugin({ exclude: WORKSPACE_PACKAGES });
 
+// The **preload** runs under `sandbox: true`, where the only `require` allowed is `electron` — a
+// runtime `require('zod')` (or any other npm dep) throws and the preload silently fails to load, so
+// NONE of the `contextBridge` APIs reach the renderer and the whole UI is dead. So the preload must be
+// fully self-contained: bundle its deps (zod) in, externalizing only electron + node built-ins.
+const bundlePreload = (): ReturnType<typeof externalizeDepsPlugin> =>
+  externalizeDepsPlugin({ exclude: [...WORKSPACE_PACKAGES, 'zod'] });
+
 export default defineConfig({
   main: {
     plugins: [bundleWorkspaceSrc()],
@@ -50,7 +57,7 @@ export default defineConfig({
     },
   },
   preload: {
-    plugins: [bundleWorkspaceSrc()],
+    plugins: [bundlePreload()],
     build: {
       rollupOptions: { input: { index: resolve(__dirname, 'electron/preload.ts') } },
     },
