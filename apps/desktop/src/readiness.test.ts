@@ -15,8 +15,8 @@ describe('buildReadinessReport', () => {
     const r = buildReadinessReport(input({ capabilities: { source: 'synthetic' } }));
     expect(byId(r, 'profile').status).toBe('ready');
     expect(byId(r, 'llm').status).toBe('ready'); // template
-    expect(byId(r, 'tts').status).toBe('ready'); // kokoro (local)
-    expect(byId(r, 'stt').status).toBe('ready'); // faster-whisper (local)
+    expect(byId(r, 'tts').status).toBe('ready'); // piper (local)
+    expect(byId(r, 'stt').status).toBe('ready'); // whisper-cpp (local)
     expect(byId(r, 'source').status).toBe('ready'); // synthetic
     // No hard blockers in the free default; mic/PTT are first-run "attention" nudges.
     expect(r.blockers).toEqual([]);

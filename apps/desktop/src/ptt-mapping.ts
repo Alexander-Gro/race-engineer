@@ -34,6 +34,9 @@ export const PTT_MAP_CLEAR_CHANNEL = 'ptt:map-clear' as const;
 export const PTT_GET_CHANNEL = 'ptt:get' as const;
 /** Main → renderer (push): mapping-flow progress (listening / captured / cancelled / error). */
 export const PTT_EVENT_CHANNEL = 'ptt:event' as const;
+/** Main → renderer (push): a **live** PTT edge from the mapped hardware button (T4.1 runtime read).
+ *  Drives the radio exactly like the on-screen hold-to-talk button — `true` = pressed, `false` = released. */
+export const PTT_LIVE_CHANNEL = 'ptt:live' as const;
 
 /** Progress of a mapping attempt, pushed main → renderer so the UI can reflect it live. */
 export type PttMappingEvent =
@@ -60,6 +63,8 @@ export interface PttApi {
   getBinding(): Promise<PttBindingInfo>;
   /** Subscribe to mapping-flow events; returns an unsubscribe. */
   onMappingEvent(listener: (event: PttMappingEvent) => void): () => void;
+  /** Subscribe to **live** PTT edges from the mapped hardware button (drives the radio); unsubscribe. */
+  onLivePtt(listener: (down: boolean) => void): () => void;
 }
 
 /** A glanceable label for a binding ("Mock Wheel · button 4" / "Unmapped"). Pure — safe in the renderer. */

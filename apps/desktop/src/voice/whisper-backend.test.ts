@@ -35,7 +35,8 @@ const makeFs = () => {
 };
 
 const CONFIG = { binaryPath: '/opt/whisper/whisper-cli', modelPath: '/models/ggml-small.bin' };
-const FIXED = { tmpDir: '/tmp', now: () => 123 };
+// Disable beam search + the bias prompt for the exact-args assertions below; their own tests cover them.
+const FIXED = { tmpDir: '/tmp', now: () => 123, beamSize: 0, prompt: '' };
 // The backend builds the temp path with node:path `join`, so it is platform-native
 // (`/tmp/...` on POSIX, `\tmp\...` on Windows) — derive the expected path the same way.
 const WAV = join('/tmp', 're-stt-123.wav');
@@ -58,6 +59,25 @@ describe('whisperCppBackend', () => {
     expect(Array.from(written.subarray(44))).toEqual([1, 2, 3]); // frames concatenated
     expect(calls[0]?.command).toBe('/opt/whisper/whisper-cli');
     expect(calls[0]?.args).toEqual(['-m', '/models/ggml-small.bin', '-f', WAV, '-nt']);
+  });
+
+  it('adds beam search, the bias prompt, and appended hints by default', async () => {
+    const { spawn, calls } = makeSpawn({ stdout: 'box this lap' });
+    // Defaults on (no beamSize/prompt override) → beam search + the standing racing-vocab prompt.
+    const stream = whisperCppBackend({ spawn, fs: makeFs().fs, tmpDir: '/tmp', now: () => 123 })(
+      { hints: ['Spa', 'Hypercar'] },
+      CONFIG,
+    );
+    stream.pushAudio(new Uint8Array([1]));
+    await stream.finish();
+    const args = calls[0]!.args;
+    expect(args).toEqual(expect.arrayContaining(['-bs', '5']));
+    const promptIdx = args.indexOf('--prompt');
+    expect(promptIdx).toBeGreaterThan(-1);
+    const prompt = args[promptIdx + 1]!;
+    expect(prompt).toContain('brake bias'); // standing vocabulary
+    expect(prompt).toContain('Spa'); // per-call hint appended
+    expect(prompt).toContain('Hypercar');
   });
 
   it('passes the language flag when configured', async () => {

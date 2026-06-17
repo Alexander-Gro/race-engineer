@@ -46,10 +46,9 @@ Works out of the box with **no signup, no key, fully offline-capable**:
 
 | Job | Default free provider | Runs on |
 | --- | --- | --- |
-| Strategy / events / spotter math | Deterministic TypeScript | CPU, always free |
+| Strategy / events math | Deterministic TypeScript | CPU, always free |
 | STT | **faster-whisper** (turbo/small model) | GPU (3–4 GB) or CPU |
-| TTS (conversational) | **Kokoro** (quality) or **Piper** (lightest) | CPU or 1–2 GB VRAM |
-| TTS (spotter call-outs) | Pre-rendered once from the local TTS | $0 at runtime |
+| TTS (conversational + call-outs) | **Kokoro** (quality) or **Piper** (lightest), streamed locally | CPU or 1–2 GB VRAM |
 | LLM brain | **Local Qwen 3.x** (tool-calling), a **free cloud tier**, or **template mode** | see §LLM routes |
 
 Voice is fully local and private in this profile; nothing leaves the machine unless the
@@ -78,12 +77,17 @@ That means a free or modest model is more than adequate. Three free routes:
   limits (see rate-limit math below). Caveat: free tiers may log/train on prompts and can
   change over time.
 - **Route B — Local LLM (offline / max privacy).** Qwen 3.x is the best local tool-caller;
-  our tool surface is simple read-only getters, well within its ability. **Constraint:**
-  see §GPU contention.
-- **Route C — Template mode (no LLM).** ~70–80% of common radio queries are structured
+  our tool surface is simple read-only getters, well within its ability. **This is the
+  vision's free default**: when the free profile is selected and a local **Ollama** is running
+  with a model pulled, the app auto-upgrades to it (`freeRouteWithLocalOllama`, preferring a
+  Qwen build) so the engineer is genuinely LLM-generated at $0 — **local ≠ template.**
+  **Constraint:** see §GPU contention.
+- **Route C — Template mode (no LLM).** The **degraded fallback only** — used when no model is
+  reachable (no Ollama, no key, offline). ~70–80% of common radio queries are structured
   ("how's my fuel?", "who's behind me?") and can be answered by templates filled from the
-  strategy engine — fully offline, instant, zero dependency. Ships as the universal
-  fallback under every profile.
+  strategy engine — fully offline, instant, zero dependency, so the app always talks. It is
+  **not** the intended default voice (CLAUDE.md): if the driver hears templated lines with a
+  model available, the AI engineer isn't running — a bug.
 
 ## GPU contention — the sim-rig reality
 

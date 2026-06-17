@@ -1,17 +1,16 @@
-import { FakeProvider } from '@race-engineer/ai';
+import { FakeProvider, type LlmProvider, type RaceContext } from '@race-engineer/ai';
 import {
   EventDetector,
   fuelLowRule,
-  spotterRule,
   type EngineerEvent,
   type EventType,
   type RaceState,
 } from '@race-engineer/core';
 import { lowFuelState, multiClassTrafficState } from '@race-engineer/core/fixtures';
+import { computeFuelPlan, estimatePerLapConsumption } from '@race-engineer/strategy';
 import {
   FakeTtsProvider,
   MockAudioSink,
-  prerenderTier0,
   VoicePlayer,
   VoicePriority,
   type AudioChunk,
@@ -21,6 +20,7 @@ import {
 import { describe, expect, it } from 'vitest';
 import {
   defaultVoicePriority,
+  engineerPhraser,
   llmPhraser,
   ProactiveVoiceRouter,
   templatePhraser,
@@ -32,9 +32,9 @@ const ev = (
   type: EventType,
   payload: Record<string, unknown> = {},
   extra: Partial<EngineerEvent> = {},
-): EngineerEvent => ({ id: `${type}:0`, tick: 0, type, tier: 0, priority: 0, payload, ...extra });
+): EngineerEvent => ({ id: `${type}:0`, tick: 0, type, tier: 1, priority: 0, payload, ...extra });
 
-/** TTS that counts synthesize calls — used to prove Tier-0 never synthesizes. */
+/** TTS that counts synthesize calls — used to prove the phrased path synthesizes. */
 class CountingTts implements TtsProvider {
   readonly name = 'counting';
   synthCalls = 0;
@@ -48,13 +48,12 @@ class CountingTts implements TtsProvider {
   }
 }
 
-const makeRouter = async (overrides: Partial<ProactiveVoiceRouterOptions> = {}) => {
+const makeRouter = (overrides: Partial<ProactiveVoiceRouterOptions> = {}) => {
   const sink = new MockAudioSink();
   const player = new VoicePlayer(sink);
   const tts = new CountingTts();
-  const tier0Clips = await prerenderTier0(new FakeTtsProvider(), 'v1');
-  const router = new ProactiveVoiceRouter({ player, tts, voice: 'v1', tier0Clips, ...overrides });
-  return { sink, player, tts, tier0Clips, router };
+  const router = new ProactiveVoiceRouter({ player, tts, voice: 'v1', ...overrides });
+  return { sink, player, tts, router };
 };
 
 describe('templatePhraser', () => {
@@ -106,10 +105,7 @@ describe('templatePhraser', () => {
 });
 
 describe('defaultVoicePriority', () => {
-  it('maps reflex calls to SPOTTER, clear to STRATEGY, and fuel_low by urgency', () => {
-    expect(defaultVoicePriority(ev('car_left'))).toBe(VoicePriority.SPOTTER);
-    expect(defaultVoicePriority(ev('three_wide'))).toBe(VoicePriority.SPOTTER);
-    expect(defaultVoicePriority(ev('clear'))).toBe(VoicePriority.STRATEGY);
+  it('maps fuel_low by urgency (≤2 laps urgent, else a heads-up)', () => {
     expect(defaultVoicePriority(ev('fuel_low', { thresholdLaps: 2 }, { tier: 1 }))).toBe(
       VoicePriority.WARNING,
     );
@@ -136,37 +132,8 @@ describe('defaultVoicePriority', () => {
 });
 
 describe('ProactiveVoiceRouter', () => {
-  it('routes a reflex spotter event to its pre-rendered clip with no live synthesis', async () => {
-    const { router, tts, tier0Clips, player } = await makeRouter();
-    const outcome = await router.route(ev('car_right', { carId: 31 }));
-    if (outcome.kind !== 'prerendered') throw new Error('expected prerendered');
-    expect(outcome.clip.id).toBe(tier0Clips.get('car_right')!.id);
-    expect(outcome.priority).toBe(VoicePriority.SPOTTER);
-    expect(tts.synthCalls).toBe(0); // Tier-0 reflex is pre-rendered — never synthesizes
-    expect(player.playing?.clip.id).toBe(tier0Clips.get('car_right')!.id);
-  });
-
-  it('a reflex call preempts chatter already playing', async () => {
-    const { router, player, tier0Clips } = await makeRouter();
-    player.enqueue(
-      { id: 'chatter-1', label: 'a long strategy explanation' },
-      VoicePriority.CHATTER,
-    );
-    expect(player.playing?.clip.id).toBe('chatter-1');
-    await router.route(ev('car_left'));
-    expect(player.playing?.clip.id).toBe(tier0Clips.get('car_left')!.id);
-  });
-
-  it('a clear release queues behind chatter — it does not preempt', async () => {
-    const { router, player } = await makeRouter();
-    player.enqueue({ id: 'chatter-1' }, VoicePriority.CHATTER);
-    await router.route(ev('clear', { sides: ['right'] }));
-    expect(player.playing?.clip.id).toBe('chatter-1'); // still playing
-    expect(player.queueLength).toBe(1); // clear queued behind it
-  });
-
   it('phrases fuel_low and speaks it (template), quoting the payload number', async () => {
-    const { router, tts } = await makeRouter();
+    const { router, tts } = makeRouter();
     const outcome = await router.route(
       ev('fuel_low', { lapsRemaining: 3.8, thresholdLaps: 4 }, { tier: 1 }),
     );
@@ -179,7 +146,7 @@ describe('ProactiveVoiceRouter', () => {
 
   it('phrases fuel_low via an LLM provider (llmPhraser)', async () => {
     const provider = new FakeProvider([{ text: 'Fuel low, about three to go. Box soon.' }]);
-    const { router } = await makeRouter({ phrase: llmPhraser(provider) });
+    const { router } = makeRouter({ phrase: llmPhraser(provider) });
     const outcome = await router.route(
       ev('fuel_low', { lapsRemaining: 3.2, thresholdLaps: 4 }, { tier: 1 }),
     );
@@ -187,8 +154,8 @@ describe('ProactiveVoiceRouter', () => {
     expect(outcome.text).toBe('Fuel low, about three to go. Box soon.');
   });
 
-  it('skips an event with no clip and no phrase', async () => {
-    const { router } = await makeRouter({ phrase: () => null });
+  it('skips an event the phraser stays silent on', async () => {
+    const { router } = makeRouter({ phrase: () => null });
     const outcome = await router.route(ev('strategy_update', {}, { tier: 2 }));
     expect(outcome).toEqual({
       kind: 'skipped',
@@ -196,17 +163,48 @@ describe('ProactiveVoiceRouter', () => {
       reason: 'no-audio',
     });
   });
+});
 
-  it('routeAll enqueues reflex calls before phrased ones, preserving result order', async () => {
-    const { router, sink, tier0Clips } = await makeRouter();
-    const events = [
-      ev('fuel_low', { lapsRemaining: 3.5, thresholdLaps: 4 }, { tier: 1 }),
-      ev('car_left'),
-    ];
-    const outcomes = await router.routeAll(events);
-    expect(outcomes.map((o) => o.kind)).toEqual(['spoken', 'prerendered']); // input order kept
-    // The reflex clip was enqueued first, so it started before the phrased reply.
-    expect(sink.started[0]).toBe(tier0Clips.get('car_left')!.id);
+describe('engineerPhraser (the AI default) — visible degrade', () => {
+  it('falls back to the template AND fires onFallback when the AI turn throws', async () => {
+    const failing: LlmProvider = {
+      name: 'down',
+      complete: () => Promise.reject(new Error('ollama not running')),
+    };
+    const fellBack: unknown[] = [];
+    const phrase = engineerPhraser({
+      provider: failing,
+      context: () => {
+        throw new Error('unused — the provider throws first');
+      },
+      onFallback: (err) => fellBack.push(err),
+    });
+
+    const text = await phrase(
+      ev('fuel_low', { lapsRemaining: 3.8, thresholdLaps: 4 }, { tier: 1 }),
+    );
+    expect(text).toBe("Fuel's low — about 3 laps left."); // degraded to the pre-written template
+    expect(fellBack).toHaveLength(1); // ...but the degrade is surfaced, not silent
+  });
+
+  it('drops a call-out whose spoken number is ungrounded, firing onHallucination (silence > wrong number)', async () => {
+    const fuelPlan = computeFuelPlan({
+      fuelLiters: 38,
+      consumption: estimatePerLapConsumption({ greenLapFuelDeltas: [2.6, 2.6, 2.6] }),
+    });
+    const ctx: RaceContext = { raceState: multiClassTrafficState, fuelPlan };
+    const provider = new FakeProvider([
+      { tools: [{ name: 'get_fuel_plan' }] },
+      { text: 'Fuel good for 999 laps.' }, // invented number — not in the fuel plan
+    ]);
+    const flagged: unknown[] = [];
+    const phrase = engineerPhraser({
+      provider,
+      context: () => ctx,
+      onHallucination: (r) => flagged.push(r),
+    });
+    expect(await phrase(ev('fuel_low', {}, { tier: 1 }))).toBeNull(); // dropped, not spoken
+    expect(flagged).toHaveLength(1);
   });
 });
 
@@ -222,7 +220,7 @@ describe('synthetic arcs → right audio (real EventDetector + rules)', () => {
   });
 
   it('a declining-fuel arc fires fuel_low and routes it to spoken audio at escalating priority', async () => {
-    const { router } = await makeRouter();
+    const { router } = makeRouter();
     const detector = new EventDetector([fuelLowRule()]);
 
     const out0 = await router.routeAll(detector.process(withFuelLaps(6, 0)));
@@ -238,18 +236,5 @@ describe('synthetic arcs → right audio (real EventDetector + rules)', () => {
     if (o1.kind !== 'spoken' || o2.kind !== 'spoken') throw new Error('expected spoken');
     expect(o1.priority).toBe(VoicePriority.STRATEGY); // 4-lap heads-up
     expect(o2.priority).toBe(VoicePriority.WARNING); // 2-lap urgent
-  });
-
-  it('a car drawing alongside fires a reflex car_right routed to its pre-rendered clip', async () => {
-    const { router, tts, tier0Clips } = await makeRouter();
-    const detector = new EventDetector([spotterRule()]);
-
-    const outcomes = await router.routeAll(detector.process(multiClassTrafficState));
-
-    const reflex = outcomes.find((o) => o.kind === 'prerendered');
-    if (!reflex || reflex.kind !== 'prerendered') throw new Error('expected a prerendered outcome');
-    expect(reflex.event.type).toBe('car_right');
-    expect(reflex.clip.id).toBe(tier0Clips.get('car_right')!.id);
-    expect(tts.synthCalls).toBe(0); // reflex spotter audio is never synthesized live
   });
 });

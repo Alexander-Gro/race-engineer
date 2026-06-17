@@ -11,29 +11,24 @@ import type { EngineerEvent, EventType } from '@race-engineer/core';
  * `AudioSink`, with payload-number phrasing via the radio `templatePhraser`), which remains T10.1's
  * native/premium half.
  *
- * **Tier-0 reflex spotter calls (`car_left`/`car_right`/`three_wide`) are excluded by design.** docs/01
- * §tiers + docs/07 §interim-TTS require those to be **pre-rendered clips** played through the tiered
- * `VoicePlayer` (the <300 ms safety path) — never a live `speechSynthesis` round-trip. So this free path
- * voices only **Tier ≥ 1** events (a structural guard enforces it). For those, the call-out is a terse,
- * fixed phrase per type — appropriate for an alert ("box this lap"), not a readout; for numbers the
- * driver asks the engineer (the text-ask path). Tier-2 events the premium path would phrase via the LLM
- * get a terse **templated fallback** here — a deliberate degraded mode for the free/no-key profile.
- * No number is invented (CLAUDE.md rule 1) — the detection/strategy math already happened in the Core;
- * this only voices the event, exactly as the dashboard already labels it.
+ * The call-out is a terse, fixed phrase per type — appropriate for an alert ("box this lap"), not a
+ * readout; for numbers the driver asks the engineer (the text-ask path). Tier-2 events the premium
+ * path would phrase via the LLM get a terse **templated fallback** here — a deliberate degraded mode
+ * for the free/no-key profile. No number is invented (CLAUDE.md rule 1) — the detection/strategy math
+ * already happened in the Core; this only voices the event, exactly as the dashboard already labels it.
  *
  * Pure over an injected {@link CalloutSpeechPort} (no DOM types), so the priority/preemption logic is
  * unit-tested in Node; the renderer supplies a port wrapping `speechSynthesis`. Output-only — it speaks
  * the engineer's own call-outs and never touches the game (CLAUDE.md rule 5).
  */
 
-/** Terse spoken phrases per event type. Tier ≥ 1 only — Tier-0 reflex spotter calls
- * (`car_left`/`car_right`/`three_wide`) stay on the pre-rendered `VoicePlayer` path (docs/01/07) and are
- * never listed here; markers (`lap_completed`, `clear`, `flag_changed`, `driver_question`) are silent
- * so the engineer isn't chatty. */
+/** Terse spoken phrases per event type. Markers (`lap_completed`, `flag_changed`, `driver_question`)
+ * are deliberately absent — silent — so the engineer isn't chatty. */
 export const SPOKEN_PHRASES: Partial<Record<EventType, string>> = {
   // Tier 1 — templated alerts
   fuel_low: 'Fuel running low.',
   tire_temp_out_of_window: 'Tyres are out of their window.',
+  tire_temp_recovered: 'Tyres are up to temperature now.',
   pit_window_open: 'Pit window is open.',
   box_this_lap: 'Box this lap.',
   blue_flag: 'Blue flag — faster car coming through.',
@@ -57,11 +52,8 @@ export interface SpokenCallout {
   eventType: EventType;
 }
 
-/** Phrase a single event, or `null` if it isn't a speakable call-out. Tier-0 reflex spotter calls are
- * **always** rejected here — they belong to the pre-rendered `VoicePlayer` safety path (docs/01/07),
- * not this live-synthesis path — so even a stray Tier-0 phrase can never reach `speechSynthesis`. */
+/** Phrase a single event, or `null` if it isn't a speakable call-out (no fixed phrase for its type). */
 export const calloutForEvent = (event: EngineerEvent): SpokenCallout | null => {
-  if (event.tier === 0) return null;
   const text = SPOKEN_PHRASES[event.type];
   return text ? { text, priority: event.priority, id: event.id, eventType: event.type } : null;
 };

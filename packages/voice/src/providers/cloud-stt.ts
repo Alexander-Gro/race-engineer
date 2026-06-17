@@ -87,7 +87,8 @@ export class CloudSttProvider implements SttProvider {
         }
         const wav = pcmToWav(pcm, { sampleRate: MIC_SAMPLE_RATE_HZ });
         const form = new FormData();
-        form.append('file', new Blob([wav], { type: 'audio/wav' }), 'audio.wav');
+        // Fresh ArrayBuffer-backed view: the byte source may be `ArrayBufferLike`, which `BlobPart` rejects.
+        form.append('file', new Blob([new Uint8Array(wav)], { type: 'audio/wav' }), 'audio.wav');
         form.append('model', model);
         form.append('response_format', 'json');
         const res = await post(url, {

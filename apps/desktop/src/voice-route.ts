@@ -41,13 +41,15 @@ export const voiceRouteIsCloud = (route: VoiceProviderConfig): boolean =>
   route.tts === 'openai' || route.stt === 'openai';
 
 /**
- * Is the selected local **TTS** engine ready to actually speak — its native backend can attach because
- * both the binary and model paths are configured? Today only Piper has a backend (Kokoro is a follow-up).
- * This is the single source of truth shared by `attachLocalBackends` (whether to wire the backend) and
- * the worker build-gate (whether to build the voice layer at all) — so the two can't drift.
+ * Is the selected local **TTS** engine ready to actually speak — can a native backend attach?
+ * **Piper** needs its binary + model paths configured; **Kokoro** runs in-process via `kokoro-js`,
+ * which self-downloads its model, so selecting it is enough (the model is fetched on first use). This
+ * is the single source of truth shared by `attachLocalBackends` (whether to wire the backend) and the
+ * worker build-gate (whether to build the voice layer) — so the two can't drift.
  */
 export const ttsLocalReady = (route: VoiceProviderConfig): boolean =>
-  route.tts === 'piper' && !!route.ttsConfig?.binaryPath && !!route.ttsConfig?.modelPath;
+  (route.tts === 'piper' && !!route.ttsConfig?.binaryPath && !!route.ttsConfig?.modelPath) ||
+  route.tts === 'kokoro';
 
 /**
  * Is the selected local **STT** engine ready to transcribe — binary + model configured? Today only

@@ -3,6 +3,7 @@ import {
   app,
   BrowserWindow,
   ipcMain,
+  screen,
   session,
   shell,
   utilityProcess,
@@ -26,13 +27,14 @@ import type {
 import { AUDIO_ENDED_CHANNEL, AUDIO_OUT_CHANNEL } from '../src/audio-bridge';
 import { RADIO_FRAME_CHANNEL, RADIO_LOG_CHANNEL, RADIO_PTT_CHANNEL } from '../src/mic-bridge';
 import { MIC_SETTINGS_DEEPLINK } from '../src/audio-io';
-import { resolveLlmRouteConfig } from '../src/llm-route';
+import { freeRouteWithLocalOllama, resolveLlmRouteConfig } from '../src/llm-route';
 import { resolveVoiceRoute, voiceRouteIsReady } from '../src/voice-route';
 import {
   formatPttBinding,
   PttMapper,
   PTT_EVENT_CHANNEL,
   PTT_GET_CHANNEL,
+  PTT_LIVE_CHANNEL,
   PTT_MAP_BEGIN_CHANNEL,
   PTT_MAP_CANCEL_CHANNEL,
   PTT_MAP_CLEAR_CHANNEL,
@@ -41,12 +43,14 @@ import {
 } from '../src/ptt-mapping';
 import { isSecretSlot, SettingsStore, type AppSettings } from '../src/settings';
 import {
+  OLLAMA_MODELS_CHANNEL,
   SECRET_DELETE_CHANNEL,
   SECRET_LIST_CHANNEL,
   SECRET_SET_CHANNEL,
   SETTINGS_LOAD_CHANNEL,
   SETTINGS_SAVE_CHANNEL,
 } from '../src/settings-bridge';
+import { detectOllama, type HttpGetJson } from '@race-engineer/platform';
 import { requestSingleInstanceLock } from '../src/single-instance';
 import { fsSettingsStorage, SafeStorageSecretStore } from './stores';
 
@@ -99,6 +103,10 @@ let pushEngineerConfig: (() => void) | null = null;
 // PTT-mapping coordinator (T10.1, docs/08 §1). Built in `whenReady` (it persists into settings). Reads
 // the wheel **passively** to learn which button is push-to-talk — there is no write path to the game.
 let pttMapper: PttMapper | null = null;
+// Runtime PTT watcher: reads the *bound* wheel button (SDL2) and pushes its edges to the renderer so
+// the hardware button keys the radio. Assigned in `whenReady`; stopped during mapping + on quit (one
+// SDL2 instance — the mapper and this watcher never run at once). Passive read only — no game path.
+let pttReader: { stop(): void } | null = null;
 
 /** Push a PTT mapping-flow event to every open window (the renderer reflects listening/captured/…). */
 const broadcastPttEvent = (event: PttMappingEvent): void => {
@@ -201,6 +209,70 @@ const toggleOverlay = (): boolean => {
   return overlayWindow.isVisible();
 };
 
+// The push-to-talk indicator (a tiny always-on-top, click-through pill at the bottom-centre of the
+// screen) — shown *only while PTT is held* so the driver gets a visible "mic is live" cue over the
+// (borderless) game. It carries no telemetry and no input; main just shows/hides it on the PTT edge.
+const PTT_OVERLAY_WIDTH = 188;
+const PTT_OVERLAY_HEIGHT = 52;
+const PTT_OVERLAY_BOTTOM_MARGIN = 96; // px up from the screen bottom — "bottom-ish middle"
+let pttOverlayWindow: BrowserWindow | null = null;
+
+/** Centre the PTT pill horizontally and float it just above the bottom edge of the primary display. */
+const positionPttOverlay = (win: BrowserWindow): void => {
+  const { x, y, width, height } = screen.getPrimaryDisplay().bounds; // full bounds — over the game
+  win.setBounds({
+    x: Math.round(x + (width - PTT_OVERLAY_WIDTH) / 2),
+    y: Math.round(y + height - PTT_OVERLAY_HEIGHT - PTT_OVERLAY_BOTTOM_MARGIN),
+    width: PTT_OVERLAY_WIDTH,
+    height: PTT_OVERLAY_HEIGHT,
+  });
+};
+
+const createPttOverlayWindow = (): BrowserWindow => {
+  const win = new BrowserWindow({
+    width: PTT_OVERLAY_WIDTH,
+    height: PTT_OVERLAY_HEIGHT,
+    show: false, // shown only while PTT is held
+    frame: false,
+    transparent: true,
+    resizable: false,
+    minimizable: false,
+    maximizable: false,
+    fullscreenable: false,
+    skipTaskbar: true,
+    focusable: false, // never steal focus from the game
+    alwaysOnTop: true,
+    webPreferences: {
+      preload: path.join(__dirname, '../preload/index.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true,
+    },
+  });
+  win.setAlwaysOnTop(true, 'screen-saver'); // float above borderless-fullscreen games (docs/09)
+  win.setIgnoreMouseEvents(true, { forward: true }); // click-through — input passes to the game
+  win.on('closed', () => {
+    pttOverlayWindow = null;
+  });
+  const devUrl = process.env['ELECTRON_RENDERER_URL'];
+  if (devUrl) void win.loadURL(`${devUrl}/ptt-overlay.html`);
+  else void win.loadFile(path.join(__dirname, '../renderer/ptt-overlay.html'));
+  return win;
+};
+
+/** Show/hide the PTT pill on a PTT edge (lazily creating it). Re-centres each time in case the display changed. */
+const setPttOverlay = (active: boolean): void => {
+  if (active) {
+    if (!pttOverlayWindow || pttOverlayWindow.isDestroyed()) {
+      pttOverlayWindow = createPttOverlayWindow();
+    }
+    positionPttOverlay(pttOverlayWindow);
+    pttOverlayWindow.showInactive(); // show without focusing — keep the game focused
+  } else {
+    pttOverlayWindow?.hide();
+  }
+};
+
 /** One worker for the app's lifetime, broadcasting snapshots to every open window. */
 const startEngineerWorker = (): void => {
   // The worker runs the tick pipeline; the bundler emits `engineer-worker.js` alongside main.
@@ -296,6 +368,7 @@ const main = (): void => {
   ipcMain.on(RADIO_PTT_CHANNEL, (_event, down: unknown) => {
     if (typeof down === 'boolean') {
       worker?.postMessage({ type: 'radio-ptt', down } satisfies RadioPttRelayMessage);
+      setPttOverlay(down); // show/hide the bottom-centre "mic live" pill (both wheel + on-screen PTT)
     }
   });
   ipcMain.on(RADIO_FRAME_CHANNEL, (_event, frame: unknown) => {
@@ -316,10 +389,26 @@ const main = (): void => {
     );
     // Resolve the saved route (reads the decrypted key) and hand it to the worker, which builds the
     // provider. Re-pushed on every settings/secret change so switching the engineer takes effect live.
-    pushEngineerConfig = (): void => {
+    pushEngineerConfig = async (): Promise<void> => {
       if (!worker) return;
       const settings = settingsStore.load();
-      const llmRoute = resolveLlmRouteConfig(settings.llm, secretStore);
+      let llmRoute = resolveLlmRouteConfig(settings.llm, secretStore);
+      // Vision (docs/15): the free profile is **local AI**, not the deterministic template. If the user
+      // is on the free `template` route and a local Ollama is actually running with a model pulled,
+      // auto-upgrade to it so call-outs + answers are LLM-generated at $0 — degrading to template only
+      // when no local model is reachable (so the app still talks with nothing installed).
+      if (llmRoute.provider === 'template') {
+        try {
+          llmRoute = freeRouteWithLocalOllama(llmRoute, await detectOllama(ollamaGet));
+          if (llmRoute.provider === 'ollama') {
+            console.log(
+              `[engineer] free profile → local Ollama (${llmRoute.model}) — local AI, $0`,
+            );
+          }
+        } catch {
+          /* probe failed → keep the template fallback */
+        }
+      }
       const voiceRoute = resolveVoiceRoute(settings.voice, secretStore);
       // Predict whether the worker will voice call-outs audibly (ready route or the offline preview) and
       // tell the renderer now, so its Web-Speech fallback is muted before the first call-out. The worker
@@ -353,6 +442,25 @@ const main = (): void => {
     });
     ipcMain.handle(SECRET_LIST_CHANNEL, () => secretStore.listSetKeys());
 
+    // Live Ollama probe for the renderer's model picker (T6.3 follow-up). Read-only: a GET to the local
+    // daemon's tag list so the UI can offer the models you've already pulled. `detectOllama` never throws
+    // (unreachable ⇒ empty list), so the picker degrades to its static suggestions with no daemon.
+    const ollamaGet: HttpGetJson = async (url) => {
+      const f = (
+        globalThis as {
+          fetch?: (
+            u: string,
+          ) => Promise<{ ok: boolean; status: number; json: () => Promise<unknown> }>;
+        }
+      ).fetch;
+      if (!f) return { ok: false, status: 0, json: async () => ({}) };
+      return f(url);
+    };
+    ipcMain.handle(OLLAMA_MODELS_CHANNEL, async () => {
+      const status = await detectOllama(ollamaGet);
+      return { reachable: status.reachable, models: status.models };
+    });
+
     // PTT mapping (T10.1, docs/08 §1). The backend is opened only when the user maps — and the SDL2
     // (koffi, Windows-only) backend is loaded lazily, so the default path never touches it. On the dev
     // box there's no joystick backend, so the flow runs but finds nothing to press: the live capture is
@@ -361,6 +469,43 @@ const main = (): void => {
       const ptt = settingsStore.load().ptt;
       return { ptt, label: formatPttBinding(ptt) };
     };
+
+    // Runtime PTT: watch the bound hardware button and forward its edges to the renderer, which drives
+    // the radio exactly like the on-screen hold-to-talk button (mic → STT → AI → spoken reply). SDL2 is
+    // single-instance, so this is stopped while the mapper is capturing and rebuilt afterwards.
+    const stopRuntimePtt = (): void => {
+      pttReader?.stop(); // releases the device (passive read only — no write path) + SDL_Quit
+      pttReader = null;
+    };
+    const startRuntimePtt = async (): Promise<void> => {
+      stopRuntimePtt();
+      const ptt = settingsStore.load().ptt;
+      if (!ptt || process.platform !== 'win32') return; // nothing bound, or no SDL (non-Windows dev)
+      try {
+        const { InputReader, Sdl2Backend, BindingSet } = await import('@race-engineer/input');
+        const backend = new Sdl2Backend(process.env['ENGINEER_SDL2_DLL']);
+        const bindings = new BindingSet();
+        bindings.set({ action: 'ptt', button: ptt, deviceName: ptt.deviceGuid });
+        const reader = new InputReader({
+          backend,
+          bindings,
+          events: {
+            onPtt: (down) => {
+              if (mainWindow && !mainWindow.isDestroyed()) {
+                mainWindow.webContents.send(PTT_LIVE_CHANNEL, down);
+              }
+            },
+          },
+        });
+        reader.start(60); // ~60 Hz button poll — responsive PTT, off the telemetry hot path
+        pttReader = reader;
+        console.log(`[ptt] live watcher armed on ${formatPttBinding(ptt)}`);
+      } catch (err) {
+        // SDL2 missing / load failure — the on-screen hold-to-talk button still works.
+        console.error('[ptt] live watcher failed to start', err);
+      }
+    };
+
     pttMapper = new PttMapper({
       openReader: async (onMapped) => {
         // Dynamic import keeps koffi/SDL2 off the default path (the synthetic demo never loads it).
@@ -384,15 +529,26 @@ const main = (): void => {
       onCaptured: (ptt) => {
         settingsStore.save({ ...settingsStore.load(), ptt }); // persist the bound button
       },
-      emit: broadcastPttEvent,
+      emit: (event) => {
+        broadcastPttEvent(event);
+        // Mapping finished (captured / cancelled / error) → re-arm the runtime watcher on the (possibly
+        // new) binding. The SDL2 instance the mapper held is now released, so it's safe to reopen.
+        if (event.type !== 'listening') void startRuntimePtt();
+      },
     });
-    ipcMain.handle(PTT_MAP_BEGIN_CHANNEL, () => pttMapper?.begin());
+    // Free the single SDL2 instance for the mapper before it captures, then `emit` re-arms us after.
+    ipcMain.handle(PTT_MAP_BEGIN_CHANNEL, () => {
+      stopRuntimePtt();
+      return pttMapper?.begin();
+    });
     ipcMain.handle(PTT_MAP_CANCEL_CHANNEL, () => pttMapper?.cancel());
     ipcMain.handle(PTT_MAP_CLEAR_CHANNEL, () => {
       settingsStore.save({ ...settingsStore.load(), ptt: null });
+      void startRuntimePtt(); // binding cleared → tear the watcher down (no-op rebuild)
       return currentBinding();
     });
     ipcMain.handle(PTT_GET_CHANNEL, () => currentBinding());
+    void startRuntimePtt(); // arm the live wheel-button watcher for the saved binding on boot
 
     // Grant the renderer's own microphone requests (Windows uses the standard getUserMedia flow;
     // docs/16 §1). Only read-only mic capture for push-to-talk is auto-approved; everything else denied.
@@ -414,10 +570,14 @@ const main = (): void => {
   });
 
   app.on('will-quit', () => {
+    pttReader?.stop(); // release the wheel device (passive read only)
+    pttReader = null;
     pttMapper?.dispose();
     pttMapper = null;
     overlayWindow?.destroy();
     overlayWindow = null;
+    pttOverlayWindow?.destroy();
+    pttOverlayWindow = null;
     worker?.kill();
     worker = null;
   });

@@ -4,7 +4,7 @@ export * from './rules/lap-completed';
 export * from './rules/fuel-low';
 export * from './rules/energy-low';
 export * from './rules/tire-temp';
-export * from './rules/spotter';
+export * from './rules/tire-temp-recovered';
 export * from './rules/traffic';
 export * from './rules/fcy';
 export * from './rules/strategy';

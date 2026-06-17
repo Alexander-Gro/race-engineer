@@ -2,18 +2,17 @@
 
 The AI Engineer is the conversational brain. It is built on **Anthropic Claude** via the
 official TypeScript SDK, using **tool use** to read live state and strategy. It provides
-**language and judgment framing** — never arithmetic, and never the hot-path reflex calls.
+**language and judgment framing** — never arithmetic. Every engineer utterance (proactive
+call-outs *and* answers) is generated here from the live data.
 
 ## Hard rules
 
 1. **No math in the model.** All numbers come from tool calls into the Strategy Engine
    ([05](05-STRATEGY-ENGINE.md)) and `RaceState` ([04](04-DATA-MODEL.md)). The model may
    compare and explain, but the authoritative figures are the tool outputs.
-2. **No reflex calls — but the LLM voices everything else.** "Car left", "3-wide", "clear" are
-   Tier-0 pre-rendered audio triggered by the Event Detector, **never** the LLM (< 300 ms safety).
-   **Every other tier (1–3) is LLM-generated from data, by default** — proactive strategy call-outs
-   *and* driver answers. Template phrasing is a **degraded fallback only** (no model / cost cap /
-   offline), never the default voice. Routing is by event tier, not a runtime decision.
+2. **The LLM voices everything.** **Every tier (1–3) is LLM-generated from data, by default** —
+   proactive strategy call-outs *and* driver answers. Template phrasing is a **degraded fallback
+   only** (no model / cost cap / offline), never the default voice.
 3. **Bounded and honest.** The model is instructed to defer to tool data, to hedge when
    `confidence01` is low, and to say "I don't have that" rather than invent.
 4. **Cheap by default.** Endurance races are long; token/character budgets and model
@@ -33,17 +32,25 @@ Target: **< 2 s to first audio.** Use a fast model and stream both the LLM and T
 the driver hears the first words while the rest generates.
 
 ### Proactive (engineer call-outs) — Tier 1/2/3
-The Event Detector emits strategy-class events. For these, the LLM produces a short,
-natural call-out *from structured data*:
+The Event Detector emits strategy-class events. For these the LLM produces a short, natural call-out
+by reasoning over the live data — through the **same tool-driven brain as the Q&A path**, so a flagged
+event is a *candidate moment*, not a phrase to recite:
 ```
-event {type: pit_window_open, payload: {...}} + RaceState summary
-   → Claude (short system + compact context) → one or two sentences → TTS queue
+event {type: tire_temp_out_of_window, payload:{direction:'cold'}}  // a monitor flag, not a script
+   → runProactiveTurn (engineer prompt + skill + read-only tools)
+   → engineer reads phase/lap/tyre/handling/fuel via tools, reasons about the cause
+   → one short call-out  (or SILENT — judged not worth a word)  → TTS queue
 ```
-Latency budget is looser (Tier 1–3), so these are **LLM-generated from the structured data every
-time** — that is the product: an engineer reasoning about *this* moment, not reading a fixed phrase
-book. Template phrasing exists **only as a degraded fallback** when no model is available (no key /
-no local model / cost cap / offline); it is not the default, and not an optimization to reach for.
-A line the driver hears that the LLM didn't generate (above Tier-0) means the AI engineer isn't
+Implementation: `runProactiveTurn` (`packages/ai/src/proactive.ts`) reuses `runRadioTurn`'s tool loop;
+`engineerPhraser` (`packages/radio`) is the `ProactivePhraser` the `ProactiveVoiceRouter` calls, and
+`EngineerVoice` defaults to it whenever a provider is configured. Because the engineer pulls every
+number from the audited read-only tools, "the LLM never computes numbers" holds by construction.
+
+Latency budget is looser (Tier 1–3), so these are **LLM-generated from the live data every time** —
+that is the product: an engineer reasoning about *this* moment (cold tyres on the formation lap → "they
+'ll be cold for the start, ease in") not reading a fixed phrase book. Template phrasing exists **only as
+a degraded fallback** when no model is available (no key / no local model / cost cap / offline); it is
+not the default. A line the driver hears that the LLM didn't generate means the AI engineer isn't
 running — a bug, not the design.
 
 **Background strategist (always on).** The Strategy Engine recomputes every tick, so the
@@ -53,6 +60,66 @@ worth reacting to, a fuel-save that unlocks a strategy, a tire/aid tweak that ch
 stint — it proactively keys the radio (subject to confidence gating and quiet windows so
 it never natters mid-corner). The driver can dial proactivity from "chatty" to "only when
 it matters" to "silent unless I ask."
+
+## The engineer skill (reasoning playbook)
+
+The system prompt below is the *persona and hard rules*. On top of it sits the **engineer skill** —
+a per-domain reasoning playbook that is the difference between an engineer and a phrase book. It does
+not say *what to say*; it says *how a real engineer reads each kind of data, decides whether it's
+worth the radio at all, and phrases it*. Lives in `packages/ai/src/skill.ts` (`ENGINEER_SKILL`),
+composed into every system prompt by `buildSystemPrompt` and prompt-cached with it.
+
+It encodes the judgment the old rules-engine lacked — the reasons behind a call, not a threshold:
+
+- **How it sounds — real radio, not a report.** The output is read aloud by TTS, so it's **plain
+  spoken words only: no markdown, asterisks, bullet lists, or headings** (a hard rule in
+  `BASE_SYSTEM_PROMPT`, belt-and-braces stripped by `stripSpokenFormatting` in `@race-engineer/voice`
+  so a leaky local model can never voice a "*"). And it's **terse** — grounded in real F1/WEC team
+  radio, where a call is a handful of words ("Box, box.", "Save the tyres, Turn 4."): one or two
+  short sentences and stop, *even when asked*, leading with the instruction or the one number, the
+  rest only if the driver asks. This is the fix to "the answers are too in-depth."
+- **When to speak at all.** Speak only when it needs an action, changes a decision, or is something
+  the driver can't see/feel himself. Otherwise stay silent — a quiet engineer is trusted, a chatty
+  one gets muted.
+- **Memory / don't repeat.** The driver remembers what you told him. Never re-raise a settled thing;
+  only speak again if it crossed into a new, worse band. (This is the *judgment-layer* answer to the
+  "it told me already" complaint.)
+- **One idea per call; timing beats completeness.** Don't stack domains; don't talk into a corner.
+- **Per domain** — tyres (window + trend, not absolute temps), fuel/**Virtual Energy** (the binding
+  constraint), strategy/pit windows (confident + material only), anticipatory traffic (a faster class
+  closing or a blue flag — *not* split-second proximity), pace (patterns, not raw lap times),
+  aids/setup (directional advice, never a write).
+
+The skill changes none of the hard rules: numbers still come only from tools (rule 1), and the
+engineer never writes to the game (rule 5). It adds *relevance, timing, memory, and brevity*.
+
+## How a call is decided (hybrid trigger model)
+
+The deterministic layer and the AI split the work — neither does the other's job:
+
+```
+hot path (TS, per tick)            engineer (AI, at flagged moments)
+─────────────────────              ─────────────────────────────────
+Event Detector rules               buildSystemPrompt() = persona + rules + ENGINEER_SKILL
+  detect a *candidate moment*  ──►  receives the FULL race-state digest (not just the trigger fact)
+  + compute all the numbers          → reasons across domains with the skill
+  (tyre Δ, fuel/VE, gaps, deg)        → decides: speak once, or stay silent
+                                       → phrases it from the tool numbers → TTS
+```
+
+- **Rules are triggers, not phrasing.** A rule like `tire_temp_out_of_window` no longer *is* the
+  call-out "tyres too hot" — it flags that this moment is worth the engineer's attention and hands
+  over the computed facts. The AI owns whether it's worth voicing and how to say it.
+- **Full digest at the flagged moment** (the chosen model — see the build plan), so the engineer can
+  connect tyres → energy → strategy rather than reacting to one isolated fact. This keeps the hot
+  path clean and token cost bounded (the AI wakes on candidates, it doesn't poll every tick) while
+  still giving it the whole picture when it does speak.
+- **Traffic is anticipatory only** — a faster class closing, a blue flag, a slower car ahead in a
+  braking zone. There is **no** instant "car alongside" proximity call; that split-second awareness is
+  the driver's own eyes and mirrors.
+- **Latency nuance.** A real engineer takes a beat — so the budget for engineer-class calls (tyres,
+  fuel, strategy, anticipatory traffic) is the Tier-1–3 budget. The reasoning *is* the product; a
+  1–2 s considered call beats an instant canned one.
 
 ## Model tiering
 

@@ -1,12 +1,13 @@
 import type { AudioClip, AudioSink, PlaybackHandle } from './types';
-import { VoicePriority } from './types';
 
 /**
- * The voice priority queue (docs/07 §Audio playback). Each utterance has a priority; an
- * urgent item (≥ `urgentThreshold`, default {@link VoicePriority.WARNING}) **preempts** the
- * current one so a long strategy explanation never steps on a "car left". Lower-priority items
- * **queue** and play in priority order (FIFO within a priority). `bargeInStop` (driver presses
- * PTT) stops the engineer immediately and clears pending chatter.
+ * The voice priority queue (docs/07 §Audio playback). Each utterance has a priority; items **queue**
+ * and play in priority order (FIFO within a priority): a higher-priority call jumps ahead of
+ * lower-priority ones but waits for the current clip to finish rather than chopping it mid-sentence.
+ * Nothing preempts by priority alone (the default `urgentThreshold` is unreachable), so a generic
+ * call-out never cuts off a driver's-question reply — it queues behind it. The interrupts are the
+ * driver keying PTT (`bargeInStop`, stops + clears the queue) and an explicit `preempt` flag on
+ * `enqueue`.
  *
  * Pure scheduling over an injectable {@link AudioSink} — fully unit-testable with a mock sink.
  */
@@ -19,7 +20,12 @@ export interface VoicePlayerEvents {
 }
 
 export interface VoicePlayerOptions {
-  /** Priority at/above which an item preempts the current utterance. Default WARNING (80). */
+  /**
+   * Priority at/above which an item preempts (cuts off) the current utterance. Defaults to
+   * unreachable (`+Infinity`) — nothing interrupts by priority alone; call-outs queue and play in
+   * order. (Driver barge-in and the explicit `preempt` flag are the interrupts.) Set a finite value
+   * to opt a deployment back into priority-based preemption.
+   */
   urgentThreshold?: number;
   /** Output volume 0..1. Default 1. */
   volume?: number;
@@ -51,7 +57,7 @@ export class VoicePlayer {
 
   constructor(sink: AudioSink, opts: VoicePlayerOptions = {}) {
     this.#sink = sink;
-    this.#urgentThreshold = opts.urgentThreshold ?? VoicePriority.WARNING;
+    this.#urgentThreshold = opts.urgentThreshold ?? Number.POSITIVE_INFINITY;
     this.#volume = opts.volume ?? 1;
     this.#events = opts.events ?? {};
   }

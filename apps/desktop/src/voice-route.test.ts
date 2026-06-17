@@ -85,7 +85,7 @@ describe('resolveVoiceRoute', () => {
     });
   });
 
-  it('ignores local paths that do not match the selected engine (kokoro has no backend yet)', () => {
+  it('ignores local paths that do not match the selected engine (kokoro self-downloads, no paths)', () => {
     const route = resolveVoiceRoute(
       { tts: 'kokoro', stt: 'fake', local: { piper: { binaryPath: '/p', modelPath: '/m' } } },
       secretsWith({}),
@@ -132,20 +132,14 @@ describe('local voice readiness + the build gate', () => {
     sttConfig: { binaryPath: '/w', modelPath: '/g' },
   };
 
-  it('ttsLocalReady requires piper AND both binary and model paths', () => {
+  it('ttsLocalReady: piper needs both paths; kokoro is ready when selected (self-downloads)', () => {
     expect(ttsLocalReady(piperReady)).toBe(true);
     expect(ttsLocalReady({ tts: 'piper', stt: 'fake', ttsConfig: { binaryPath: '/p' } })).toBe(
       false,
     );
     expect(ttsLocalReady({ tts: 'piper', stt: 'fake' })).toBe(false);
-    // kokoro has no native backend yet, so paths don't make it ready.
-    expect(
-      ttsLocalReady({
-        tts: 'kokoro',
-        stt: 'fake',
-        ttsConfig: { binaryPath: '/p', modelPath: '/m' },
-      }),
-    ).toBe(false);
+    // kokoro runs in-process via kokoro-js (model fetched on first use), so selecting it is enough.
+    expect(ttsLocalReady({ tts: 'kokoro', stt: 'fake' })).toBe(true);
   });
 
   it('sttLocalReady requires whisper-cpp AND both binary and model paths', () => {
@@ -172,7 +166,8 @@ describe('local voice readiness + the build gate', () => {
     expect(voiceRouteIsReady({ tts: 'openai', stt: 'fake' })).toBe(true); // cloud (BYO-key)
     expect(voiceRouteIsReady(piperReady)).toBe(true); // local, configured
     expect(voiceRouteIsReady(whisperReady)).toBe(true);
-    expect(voiceRouteIsReady({ tts: 'kokoro', stt: 'faster-whisper' })).toBe(false); // default, no backends
+    expect(voiceRouteIsReady({ tts: 'kokoro', stt: 'fake' })).toBe(true); // kokoro self-downloads
+    expect(voiceRouteIsReady({ tts: 'piper', stt: 'whisper-cpp' })).toBe(false); // bare default, no paths
     expect(voiceRouteIsReady({ tts: 'fake', stt: 'fake' })).toBe(false);
   });
 });

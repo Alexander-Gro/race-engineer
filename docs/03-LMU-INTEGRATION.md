@@ -745,6 +745,7 @@ toggled TC/ABS/brake-bias on the fly. (164 MB raw — git-ignored, never committ
 - **Spotter lateral *sign*** — `lateralPos` reads (±13–17 m); the real `spotterRule` now runs over the
   committed fixture and emits `car_left`/`car_right` on the side-by-side, so the rule is validated on real
   data — only `left = physical-left` still wants one annotated "car on my left at mm:ss" frame (low risk).
+  (The spotter feature was later removed; the lateral-sign finding still stands for `lateralPos`.)
 - **FCY / pit enums** — clean green throughout, no pit stop; still need a yellow + pit session.
 
 **Resolved (2026-06-15, post-analysis)**
@@ -755,7 +756,7 @@ toggled TC/ABS/brake-bias on the fly. (164 MB raw — git-ignored, never committ
   artifacts) are now reported `null`; see `MAX_PLAUSIBLE_CLOSING_RATE_MPS`.
 - **Fixture committed (T1.5):** a 60-frame multi-class slice →
   `packages/adapters/sim-replay/fixtures/lemans-multiclass.replay.jsonl`, replay-tested (schema + the
-  spotter on real traffic).
+  spotter on real traffic). (The spotter feature was later removed; the lateral-sign finding still stands.)
 
 ## S1 — live confirmation #4 (re-confirm on current build + UTF-8 fix — 2026-06-16)
 
@@ -815,6 +816,7 @@ and shake out anything the earlier (mostly stationary / short) captures missed.
 - [~] **Spotter lateral sign** `+mPathLateral = driver's right` (T3.4 `rightIsPositive`) — the real
   `spotterRule` runs over the S1#3 fixture and emits `car_left`/`car_right` on real side-by-side traffic
   (validated on real data); only `left = physical-left` still wants one annotated "car on my left" frame.
+  (The spotter feature was later removed; the lateral-sign finding still stands for `lateralPos`/`mPathLateral`.)
 - [x] **Brake-bias front/rear** — **CONFIRMED S1#3**: user verified **52.5 = front** in the garage,
   matching our `frontPct` (= raw `mRearBrakeBias × 100`; the rF2 field's `Rear` name is a misnomer).
 - [x] **Closing-rate end-to-end** — `closingRateMps` (`(|prevGap| − |gap|)/dt`, **+ = closing**) computes;

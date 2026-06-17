@@ -44,8 +44,14 @@ export interface VoiceProviderConfig {
   cloudSttConfig?: CloudSttConfig;
 }
 
-/** The free profile (docs/15, default, ships enabled): fully local, no signup, no key. */
-export const DEFAULT_VOICE_PROFILE: VoiceProviderConfig = { tts: 'kokoro', stt: 'faster-whisper' };
+/**
+ * The free profile (docs/15, default, ships enabled): fully local, no signup, no key. Defaults to the
+ * engines that **actually have a native backend today — Piper (TTS) + whisper.cpp (STT)** — so the
+ * default can speak/listen once its model paths are set, rather than pointing at an engine with no
+ * backend (it would silently fall back to the fake). Kokoro + faster-whisper are the planned quality
+ * upgrades; switch to them once their backends land.
+ */
+export const DEFAULT_VOICE_PROFILE: VoiceProviderConfig = { tts: 'piper', stt: 'whisper-cpp' };
 
 export const selectTtsProvider = (config: VoiceProviderConfig): TtsProvider => {
   switch (config.tts) {

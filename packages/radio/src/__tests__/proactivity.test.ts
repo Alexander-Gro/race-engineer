@@ -26,8 +26,7 @@ describe('shouldAnnounce — proactivity level cap', () => {
   const allow = (level: ProactivityLevel, tier: EngineerEvent['tier']): boolean =>
     shouldAnnounce(at(tier), { level });
 
-  it('off speaks only the Tier-0 safety reflex', () => {
-    expect(allow('off', 0)).toBe(true);
+  it('off suppresses every tier — nothing is announced', () => {
     expect(allow('off', 1)).toBe(false);
     expect(allow('off', 2)).toBe(false);
     expect(allow('off', 3)).toBe(false);
@@ -45,8 +44,7 @@ describe('shouldAnnounce — quiet windows', () => {
     // Tier-2 strategy heads-up is held mid-corner, spoken when calm.
     expect(shouldAnnounce(at(2), { level: 'normal', inputs: CORNERING })).toBe(false);
     expect(shouldAnnounce(at(2), { level: 'normal', inputs: CALM })).toBe(true);
-    // Safety reflex + urgent call still get through under heavy braking.
-    expect(shouldAnnounce(at(0), { level: 'normal', inputs: BRAKING })).toBe(true);
+    // An urgent (Tier 1) call still gets through under heavy braking.
     expect(shouldAnnounce(at(1), { level: 'normal', inputs: BRAKING })).toBe(true);
   });
 

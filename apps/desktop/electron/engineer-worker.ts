@@ -1,4 +1,4 @@
-import { selectLlmProvider } from '@race-engineer/ai';
+import { selectLlmProvider, type LlmProvider } from '@race-engineer/ai';
 import type { EngineerEvent } from '@race-engineer/core';
 import type { EngineerSnapshot, SnapshotTransport } from '@race-engineer/engineer-core';
 import type { ProactivityLevel } from '@race-engineer/radio';
@@ -35,6 +35,10 @@ let onPtt: ((down: boolean) => void) | null = null;
 let handleMicFrame: ((frame: Uint8Array) => void) | null = null;
 let proactivity: ProactivityLevel = 'normal';
 let latestSnapshot: EngineerSnapshot | null = null;
+// The configured LLM (or null = template mode), shared by the reactive reply (via the responder) and
+// the proactive voice (so call-outs are LLM-generated with an emotional tone — the vision). Set on
+// configure; the voice is rebuilt when it changes (its identity is part of the rebuild key below).
+let llmProvider: LlmProvider | null = null;
 
 const post = (audio: AudioOutMessage): void =>
   process.parentPort.postMessage({ type: 'audio', audio } satisfies WorkerMessage);
@@ -51,16 +55,19 @@ const shouldBuildVoice = (route: VoiceProviderConfig): boolean =>
 let lastVoiceRouteKey: string | null = null;
 let voiceBuildChain: Promise<void> = Promise.resolve();
 
-const rebuildVoice = (route: VoiceProviderConfig): void => {
+const rebuildVoice = (route: VoiceProviderConfig, llmRouteKey: string): void => {
   if (!shouldBuildVoice(route)) return;
-  const key = JSON.stringify(route);
+  // Key on the voice route **and** the LLM route, so switching the engineer (template ↔ Ollama ↔ cloud)
+  // rebuilds the proactive voice with the new provider — not just a TTS/STT engine change.
+  const key = JSON.stringify({ route, llm: llmRouteKey });
   if (key === lastVoiceRouteKey) return; // unchanged — keep the current voice
   lastVoiceRouteKey = key;
+  const provider = llmProvider; // snapshot the provider for this build
   voiceBuildChain = voiceBuildChain.then(async () => {
     try {
       const wv = await (
         await import('./worker-voice')
-      ).createWorkerVoice(post, answer, route, (msg) =>
+      ).createWorkerVoice(post, answer, route, provider, (msg) =>
         process.parentPort.postMessage({
           type: 'radio',
           heard: msg.heard,
@@ -106,14 +113,17 @@ process.parentPort.on('message', (event: { data: MainToWorkerMessage }): void =>
     // Apply the saved engineer route. A bad/keyless cloud route throws — fall back to template mode
     // rather than crash (docs/15 §fallback); the renderer never sent us the key, main did.
     try {
-      responder.setProvider(selectLlmProvider(msg.llmRoute));
+      llmProvider = selectLlmProvider(msg.llmRoute);
     } catch (err) {
       console.error('[configure] invalid LLM route — using free template mode', err);
-      responder.setProvider(null);
+      llmProvider = null;
     }
+    responder.setProvider(llmProvider); // reactive reply + text-ask share this provider
     proactivity = msg.proactivity;
     voice?.setProactivity(proactivity);
-    rebuildVoice(msg.voiceRoute); // (re)build the voice layer if the route activates/changed it
+    // (Re)build the voice layer if the voice route OR the engineer (provider) activated/changed it — so
+    // proactive call-outs pick up the new LLM (and its emotional tone) live.
+    rebuildVoice(msg.voiceRoute, JSON.stringify(msg.llmRoute));
   } else if (msg?.type === 'audio-ended') {
     handleAudioEnded?.(msg.pid); // renderer finished a clip → drain the next utterance
   } else if (msg?.type === 'radio-ptt') {

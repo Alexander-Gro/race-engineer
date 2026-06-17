@@ -55,6 +55,10 @@ const collect = async (it: AsyncIterable<AudioChunk>): Promise<AudioChunk[]> => 
 
 const CONFIG = { binaryPath: '/opt/piper/piper', modelPath: '/models/en_GB-voice.onnx' };
 
+// The prosody flags appended for the neutral default tone (calm) — see PROSODY_BY_TONE. Brisker than
+// Piper's stock length_scale 1.0 (the "slow/monotone" fix), with the default noise values.
+const CALM_PROSODY = ['--length_scale', '0.92', '--noise_scale', '0.667', '--noise_w', '0.8'];
+
 // A model config that pins the sample rate, so the WAV-wrap tests don't touch the disk.
 const readText22050 = (): string => JSON.stringify({ audio: { sample_rate: 22050 } });
 
@@ -114,23 +118,56 @@ describe('piperTtsBackend', () => {
     expect(fake.wasEnded()).toBe(true);
   });
 
-  it('invokes the configured binary with --output-raw and --model', async () => {
+  it('invokes the configured binary with --output-raw, --model, and the default prosody', async () => {
     const fake = makeSpawn({ chunks: [new Uint8Array([1])] });
     await collect(
       piperTtsBackend({ spawn: fake.spawn, readText: readText22050 })('hi', 'default', CONFIG),
     );
     expect(fake.calls[0]?.command).toBe('/opt/piper/piper');
-    expect(fake.calls[0]?.args).toEqual(['--output-raw', '--model', '/models/en_GB-voice.onnx']);
+    expect(fake.calls[0]?.args).toEqual([
+      '--output-raw',
+      '--model',
+      '/models/en_GB-voice.onnx',
+      ...CALM_PROSODY,
+    ]);
   });
 
-  it('omits --model when no model path is configured', async () => {
+  it('omits --model when no model path is configured (prosody still applied)', async () => {
     const fake = makeSpawn({ chunks: [new Uint8Array([1])] });
     await collect(
       piperTtsBackend({ spawn: fake.spawn, readText: () => null })('hi', 'default', {
         binaryPath: '/p/piper',
       }),
     );
-    expect(fake.calls[0]?.args).toEqual(['--output-raw']);
+    expect(fake.calls[0]?.args).toEqual(['--output-raw', ...CALM_PROSODY]);
+  });
+
+  it('bends the prosody flags by the delivery tone (urgent ⇒ faster + livelier than calm)', async () => {
+    const fake = makeSpawn({ chunks: [new Uint8Array([1])] });
+    await collect(
+      piperTtsBackend({ spawn: fake.spawn, readText: readText22050 })('box this lap', 'default', CONFIG, {
+        tone: 'urgent',
+      }),
+    );
+    expect(fake.calls[0]?.args).toEqual([
+      '--output-raw',
+      '--model',
+      '/models/en_GB-voice.onnx',
+      '--length_scale',
+      '0.8', // shorter phonemes than calm's 0.92 → audibly faster/clipped
+      '--noise_scale',
+      '0.72',
+      '--noise_w',
+      '0.9',
+    ]);
+  });
+
+  it('falls back to the calm prosody when no delivery tone is given', async () => {
+    const fake = makeSpawn({ chunks: [new Uint8Array([1])] });
+    await collect(
+      piperTtsBackend({ spawn: fake.spawn, readText: readText22050 })('hi', 'default', CONFIG, {}),
+    );
+    expect(fake.calls[0]?.args.slice(-6)).toEqual(CALM_PROSODY);
   });
 
   it('throws synchronously when no binary path is configured (never a silent stream)', () => {

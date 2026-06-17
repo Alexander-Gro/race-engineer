@@ -32,14 +32,17 @@ describe('attachLocalBackends', () => {
     expect(stt.sttBackend).toBeUndefined();
   });
 
-  it('leaves engines without a native backend yet (kokoro, faster-whisper) to fall back', () => {
+  it('attaches the Kokoro TTS backend when kokoro is selected (it self-downloads its model)', () => {
+    const route = attachLocalBackends({ tts: 'kokoro', stt: 'fake' });
+    expect(typeof route.ttsBackend).toBe('function');
+  });
+
+  it('leaves an STT engine without a native backend yet (faster-whisper) to fall back', () => {
     const route = attachLocalBackends({
-      tts: 'kokoro',
+      tts: 'fake',
       stt: 'faster-whisper',
-      ttsConfig: { binaryPath: '/x' },
       sttConfig: { binaryPath: '/y', modelPath: '/z' },
     });
-    expect(route.ttsBackend).toBeUndefined();
     expect(route.sttBackend).toBeUndefined();
   });
 

@@ -18,9 +18,10 @@ export type {
   MicSource,
 } from './types';
 export { VoicePriority } from './types';
+export { parseToneTag, stripSpokenFormatting, VOCAL_TONES, DEFAULT_TONE } from './tone';
+export type { VocalTone, VoiceDelivery } from './tone';
 export { VoicePlayer } from './player';
 export type { VoicePlayerOptions, VoicePlayerEvents, EnqueueOptions } from './player';
-export { TIER0_PHRASES, prerenderTier0 } from './prerender';
 export { speak, splitSentences, synthesizeClip } from './speak';
 export type { SpeakOptions } from './speak';
 export { RadioCapture } from './capture';

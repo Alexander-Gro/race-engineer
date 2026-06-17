@@ -10,7 +10,9 @@ import {
   type ToolDef,
 } from '@race-engineer/ai';
 import {
+  parseToneTag,
   speak,
+  VoicePriority,
   type AudioClip,
   type RadioCapture,
   type TtsProvider,
@@ -132,7 +134,7 @@ export class ReactiveRadioLoop {
     this.#events.onTranscript?.(text);
 
     try {
-      const result = await runRadioTurn({
+      const rawResult = await runRadioTurn({
         provider: this.#opts.provider,
         context: this.#opts.context,
         userMessage: text,
@@ -141,6 +143,13 @@ export class ReactiveRadioLoop {
         history: this.#history,
       });
       const replyAtMs = this.#now();
+
+      // Split the LLM's leading tone tag from the words (docs/06 vision): `tone` drives the voice,
+      // `spoken` is the clean line everything else sees — the transcript log, the hallucination guard
+      // (the tag has no numbers, but stripping keeps it honest), the dialogue history, and the UI.
+      const { tone, text: spoken } = parseToneTag(rawResult.text);
+      const result: RadioTurnResult =
+        spoken === rawResult.text ? rawResult : { ...rawResult, text: spoken };
 
       // Driver re-keyed PTT while we were thinking — don't talk over the new question.
       if (myGen !== this.#generation) {
@@ -161,6 +170,10 @@ export class ReactiveRadioLoop {
         tts: this.#opts.tts,
         voice: this.#opts.voice,
         text: result.text,
+        delivery: { tone },
+        // A reply to the driver's own question: only the safety reflex may cut it off, and it plays
+        // ahead of queued call-outs — generic call-outs wait their turn instead of chopping it.
+        priority: VoicePriority.CONVERSATION,
         shouldStop: () => myGen !== this.#generation,
         onFirstClip: () => {
           firstAudioAtMs = this.#now();

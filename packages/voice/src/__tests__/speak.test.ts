@@ -3,7 +3,26 @@ import { MockAudioSink } from '../backends/mock-sink';
 import { VoicePlayer } from '../player';
 import { FakeTtsProvider } from '../providers/fake-tts';
 import { speak, splitSentences } from '../speak';
+import type { VoiceDelivery } from '../tone';
+import type { AudioChunk, AudioClip, TtsProvider, VoiceId } from '../types';
 import { VoicePriority } from '../types';
+
+/** A TTS that records every (text, delivery) it is asked to synthesize — to assert tone plumbing. */
+class RecordingTts implements TtsProvider {
+  readonly name = 'recording';
+  readonly calls: { text: string; delivery?: VoiceDelivery }[] = [];
+  async *synthesizeStream(
+    text: string,
+    _voice: VoiceId,
+    delivery?: VoiceDelivery,
+  ): AsyncIterable<AudioChunk> {
+    this.calls.push({ text, delivery });
+    yield { seq: 0, data: new Uint8Array([1]) };
+  }
+  async prerender(): Promise<Map<string, AudioClip>> {
+    return new Map();
+  }
+}
 
 describe('splitSentences', () => {
   it('splits a reply into sentences, keeping terminal punctuation', () => {
@@ -66,5 +85,29 @@ describe('speak (sentence-streamed TTS → VoicePlayer)', () => {
       shouldStop: () => stop,
     });
     expect(none).toEqual([]);
+  });
+
+  it('strips a leading tone tag and forwards the tone to the provider (never speaks the tag)', async () => {
+    const tts = new RecordingTts();
+    const player = new VoicePlayer(new MockAudioSink());
+    const clips = await speak({
+      player,
+      tts,
+      voice: 'v1',
+      text: '[urgent] Box this lap. Pit entry is clear.',
+    });
+    // The tag is gone from the spoken clips, split per sentence...
+    expect(clips.map((c) => c.label)).toEqual(['Box this lap.', 'Pit entry is clear.']);
+    // ...and every sentence was synthesized with the parsed tone.
+    expect(tts.calls.map((c) => c.text)).toEqual(['Box this lap.', 'Pit entry is clear.']);
+    expect(tts.calls.every((c) => c.delivery?.tone === 'urgent')).toBe(true);
+  });
+
+  it('an explicit delivery overrides the inline tag', async () => {
+    const tts = new RecordingTts();
+    const player = new VoicePlayer(new MockAudioSink());
+    await speak({ player, tts, voice: 'v1', text: '[upbeat] Nice lap.', delivery: { tone: 'serious' } });
+    expect(tts.calls[0]?.text).toBe('Nice lap.'); // tag still stripped from the words
+    expect(tts.calls[0]?.delivery?.tone).toBe('serious'); // caller's delivery wins
   });
 });

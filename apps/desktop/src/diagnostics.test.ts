@@ -29,7 +29,7 @@ describe('buildDiagnosticsReport', () => {
     expect(r.source).toBe('synthetic');
     expect(r.config.profile).toBe('free');
     expect(r.config.llmProvider).toBe('template');
-    expect(r.config.tts).toBe('kokoro');
+    expect(r.config.tts).toBe('piper');
     expect(r.config.proactivity).toBe('normal');
   });
 
@@ -104,11 +104,11 @@ describe('buildDiagnosticsReport', () => {
       baseInput({
         source: 'lmu',
         health: { restAvailable: true, shmAvailable: true, tier2FirstAudioP95Ms: 850 },
-        eventCounts: { fuel_low: 2, energy_low: 1, car_left: 5 },
+        eventCounts: { fuel_low: 2, energy_low: 1, blue_flag: 5 },
       }),
     );
     expect(r.health.tier2FirstAudioP95Ms).toBe(850);
-    expect(r.eventCounts).toEqual({ fuel_low: 2, energy_low: 1, car_left: 5 });
+    expect(r.eventCounts).toEqual({ fuel_low: 2, energy_low: 1, blue_flag: 5 });
   });
 });
 

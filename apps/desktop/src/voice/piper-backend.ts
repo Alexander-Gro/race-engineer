@@ -1,7 +1,14 @@
 import { readFileSync } from 'node:fs';
 import { spawn as nodeSpawn } from 'node:child_process';
-import { pcmToWav } from '@race-engineer/voice';
-import type { AudioChunk, LocalTtsConfig, LocalTtsBackend, VoiceId } from '@race-engineer/voice';
+import { DEFAULT_TONE, pcmToWav } from '@race-engineer/voice';
+import type {
+  AudioChunk,
+  LocalTtsConfig,
+  LocalTtsBackend,
+  VocalTone,
+  VoiceDelivery,
+  VoiceId,
+} from '@race-engineer/voice';
 
 /**
  * Piper local-TTS native backend (build-plan T10.1, docs/07 / docs/15 free profile). Fills the
@@ -56,6 +63,44 @@ const defaultReadText = (path: string): string | null => {
 /** Piper voices are 16-bit mono; the sample rate varies by voice (commonly 22050). */
 const DEFAULT_SAMPLE_RATE = 22050;
 
+/**
+ * Tone → Piper prosody (the only expressiveness Piper has). Piper takes three scalars:
+ *  - `length_scale` — phoneme duration; **lower = faster** (Piper's default 1.0 is what makes the
+ *    stock voice feel slow/dragging). Even the neutral `calm` shaves it to 0.92 so the engineer
+ *    sounds brisk, not sleepy.
+ *  - `noise_scale` — generator noise; **higher = more pitch/timbre variation** (less monotone).
+ *  - `noise_w` — phoneme-width noise; higher = more rhythmic variation (more lively cadence).
+ *
+ * These bend a flat vocoder toward "has a pulse"; they don't make Piper expressive (that's Kokoro /
+ * a cloud voice), but `urgent` is audibly faster and tenser, `upbeat` livelier, `serious` slower and
+ * flatter. Tunable here without touching the spawn logic.
+ */
+interface PiperProsody {
+  lengthScale: number;
+  noiseScale: number;
+  noiseW: number;
+}
+
+const PROSODY_BY_TONE: Record<VocalTone, PiperProsody> = {
+  calm: { lengthScale: 0.92, noiseScale: 0.667, noiseW: 0.8 },
+  urgent: { lengthScale: 0.8, noiseScale: 0.72, noiseW: 0.9 },
+  upbeat: { lengthScale: 0.9, noiseScale: 0.8, noiseW: 0.9 },
+  serious: { lengthScale: 1.0, noiseScale: 0.6, noiseW: 0.7 },
+};
+
+/** Piper prosody flags for a delivery tone (defaults to the neutral {@link DEFAULT_TONE}). */
+const prosodyArgs = (delivery: VoiceDelivery | undefined): string[] => {
+  const p = PROSODY_BY_TONE[delivery?.tone ?? DEFAULT_TONE];
+  return [
+    '--length_scale',
+    String(p.lengthScale),
+    '--noise_scale',
+    String(p.noiseScale),
+    '--noise_w',
+    String(p.noiseW),
+  ];
+};
+
 /** Read the voice's sample rate from its sibling `<model>.onnx.json` (`audio.sample_rate`), else default. */
 const sampleRateFor = (
   modelPath: string | undefined,
@@ -90,7 +135,12 @@ const concat = (parts: readonly Uint8Array[], total: number): Uint8Array => {
 export const piperTtsBackend = (opts: PiperBackendOptions = {}): LocalTtsBackend => {
   const spawn = opts.spawn ?? defaultSpawn;
   const readText = opts.readText ?? defaultReadText;
-  return (text: string, _voice: VoiceId, config: LocalTtsConfig): AsyncIterable<AudioChunk> => {
+  return (
+    text: string,
+    _voice: VoiceId,
+    config: LocalTtsConfig,
+    delivery?: VoiceDelivery,
+  ): AsyncIterable<AudioChunk> => {
     if (!config.binaryPath) {
       throw new Error('piper: binaryPath not configured (set it from the model manager, T4.6)');
     }
@@ -98,7 +148,11 @@ export const piperTtsBackend = (opts: PiperBackendOptions = {}): LocalTtsBackend
     const modelPath = config.modelPath;
 
     return (async function* stream(): AsyncGenerator<AudioChunk> {
-      const args = ['--output-raw', ...(modelPath ? ['--model', modelPath] : [])];
+      const args = [
+        '--output-raw',
+        ...(modelPath ? ['--model', modelPath] : []),
+        ...prosodyArgs(delivery),
+      ];
       const child = spawn(binaryPath, args);
       if (!child.stdout || !child.stdin) {
         throw new Error('piper: child process has no stdio');

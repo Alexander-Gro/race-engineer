@@ -1,8 +1,12 @@
-import { FakeProvider } from '@race-engineer/ai';
+import {
+  FakeProvider,
+  type CompletionRequest,
+  type LlmProvider,
+  type ProviderResponse,
+} from '@race-engineer/ai';
 import {
   EventDetector,
   fuelLowRule,
-  spotterRule,
   type EngineerEvent,
   type RaceState,
 } from '@race-engineer/core';
@@ -14,7 +18,6 @@ import {
   FakeTtsProvider,
   MockAudioSink,
   MockMicSource,
-  prerenderTier0,
   RadioCapture,
   VoicePriority,
   type AudioClip,
@@ -36,21 +39,15 @@ const snapshotOf = (raceState: RaceState): EngineerSnapshot => ({
 
 const makeVoice = async (
   overrides: Partial<EngineerVoiceDeps> = {},
-): Promise<{
-  voice: EngineerVoice;
-  sink: MockAudioSink;
-  tier0Clips: ReadonlyMap<string, AudioClip>;
-}> => {
+): Promise<{ voice: EngineerVoice; sink: MockAudioSink }> => {
   const sink = new MockAudioSink();
-  const tier0Clips = await prerenderTier0(new FakeTtsProvider(), 'v1');
   const voice = new EngineerVoice({
     tts: new FakeTtsProvider(),
     sink,
-    tier0Clips,
     voice: 'v1',
     ...overrides,
   });
-  return { voice, sink, tier0Clips };
+  return { voice, sink };
 };
 
 const withFuelLaps = (laps: number, tick: number): RaceState => ({
@@ -64,20 +61,6 @@ const withFuelLaps = (laps: number, tick: number): RaceState => ({
 });
 
 describe('EngineerVoice — proactive call-outs from Core events', () => {
-  it('routes a spotter event to its pre-rendered Tier-0 clip (no live synthesis)', async () => {
-    const { voice, tier0Clips } = await makeVoice();
-    const events = new EventDetector([spotterRule()]).process(multiClassTrafficState);
-
-    const outcomes = await voice.routeEvents(events);
-
-    const reflex = outcomes.find((o) => o.kind === 'prerendered');
-    if (!reflex || reflex.kind !== 'prerendered') throw new Error('expected a prerendered outcome');
-    expect(reflex.event.type).toBe('car_right');
-    expect(reflex.clip.id).toBe(tier0Clips.get('car_right')!.id);
-    expect(reflex.priority).toBe(VoicePriority.SPOTTER);
-    expect(voice.player.playing?.clip.id).toBe(tier0Clips.get('car_right')!.id);
-  });
-
   it('routes a fuel_low event to a spoken template call-out, quoting the payload number', async () => {
     const { voice } = await makeVoice();
     const detector = new EventDetector([fuelLowRule()]);
@@ -95,6 +78,33 @@ describe('EngineerVoice — proactive call-outs from Core events', () => {
   it('routeEvents on an empty batch is a no-op', async () => {
     const { voice } = await makeVoice();
     expect(await voice.routeEvents([])).toEqual([]);
+  });
+
+  it('feeds recent call-outs back as history so the engineer can avoid repeating itself', async () => {
+    const seen: CompletionRequest[] = [];
+    const provider: LlmProvider = {
+      name: 'capture',
+      complete: (req): Promise<ProviderResponse> => {
+        seen.push(req);
+        return Promise.resolve({ text: '[calm] Fronts are coming in.', toolCalls: [] });
+      },
+    };
+    const { voice } = await makeVoice({ provider }); // provider set → default engineerPhraser (with memory)
+    voice.onSnapshot(snapshotOf(multiClassTrafficState));
+    const flag = (id: string): EngineerEvent => ({
+      id,
+      tick: 0,
+      type: 'fuel_low',
+      tier: 1,
+      priority: 5,
+      payload: {},
+    });
+
+    await voice.routeEvents([flag('a')]); // spoken + remembered
+    await voice.routeEvents([flag('b')]); // its turn should carry the first call-out as history
+
+    const last = seen[seen.length - 1]!;
+    expect(last.messages.some((m) => m.content === 'Fronts are coming in.')).toBe(true);
   });
 });
 
@@ -217,15 +227,6 @@ describe('EngineerVoice — proactivity gating + quiet windows (T8.5)', () => {
 
     voice.onSnapshot(withInputs(0.9, 0)); // hard on the brakes
     expect(await voice.routeEvents([tier2Heads()])).toEqual([]);
-  });
-
-  it('a Tier-0 spotter reflex always passes — even off and under load', async () => {
-    const { voice } = await makeVoice();
-    voice.setProactivity('off');
-    voice.onSnapshot(withInputs(0.9, 0.9));
-    const events = new EventDetector([spotterRule()]).process(multiClassTrafficState);
-    const outcomes = await voice.routeEvents(events);
-    expect(outcomes.some((o) => o.kind === 'prerendered')).toBe(true);
   });
 });
 

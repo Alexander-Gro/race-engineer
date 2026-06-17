@@ -23,6 +23,7 @@ import {
 import {
   PTT_EVENT_CHANNEL,
   PTT_GET_CHANNEL,
+  PTT_LIVE_CHANNEL,
   PTT_MAP_BEGIN_CHANNEL,
   PTT_MAP_CANCEL_CHANNEL,
   PTT_MAP_CLEAR_CHANNEL,
@@ -32,11 +33,13 @@ import {
 } from '../src/ptt-mapping';
 import type { AppSettings, SecretSlot } from '../src/settings';
 import {
+  OLLAMA_MODELS_CHANNEL,
   SECRET_DELETE_CHANNEL,
   SECRET_LIST_CHANNEL,
   SECRET_SET_CHANNEL,
   SETTINGS_LOAD_CHANNEL,
   SETTINGS_SAVE_CHANNEL,
+  type OllamaModels,
   type SettingsApi,
 } from '../src/settings-bridge';
 
@@ -77,6 +80,7 @@ const settings: SettingsApi = {
   deleteApiKey: (slot: SecretSlot) =>
     ipcRenderer.invoke(SECRET_DELETE_CHANNEL, slot) as Promise<SecretSlot[]>,
   listApiKeys: () => ipcRenderer.invoke(SECRET_LIST_CHANNEL) as Promise<SecretSlot[]>,
+  listOllamaModels: () => ipcRenderer.invoke(OLLAMA_MODELS_CHANNEL) as Promise<OllamaModels>,
 };
 
 // PTT mapping (T10.1, docs/08 §1): arm capture, then learn which button was bound — advisory only.
@@ -90,6 +94,11 @@ const ptt: PttApi = {
       listener(mappingEvent);
     ipcRenderer.on(PTT_EVENT_CHANNEL, handler);
     return () => ipcRenderer.removeListener(PTT_EVENT_CHANNEL, handler);
+  },
+  onLivePtt(listener: (down: boolean) => void): () => void {
+    const handler = (_event: IpcRendererEvent, down: boolean): void => listener(down);
+    ipcRenderer.on(PTT_LIVE_CHANNEL, handler);
+    return () => ipcRenderer.removeListener(PTT_LIVE_CHANNEL, handler);
   },
 };
 

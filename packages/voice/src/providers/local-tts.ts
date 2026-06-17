@@ -1,3 +1,4 @@
+import type { VoiceDelivery } from '../tone';
 import type { AudioChunk, AudioClip, TtsProvider, VoiceId } from '../types';
 import { ProviderNotReadyError } from './errors';
 
@@ -37,6 +38,7 @@ export type LocalTtsBackend = (
   text: string,
   voice: VoiceId,
   config: LocalTtsConfig,
+  delivery?: VoiceDelivery,
 ) => AsyncIterable<AudioChunk>;
 
 export class LocalTtsProvider implements TtsProvider {
@@ -59,11 +61,15 @@ export class LocalTtsProvider implements TtsProvider {
     return this.#backend !== null;
   }
 
-  synthesizeStream(text: string, voice: VoiceId): AsyncIterable<AudioChunk> {
+  synthesizeStream(
+    text: string,
+    voice: VoiceId,
+    delivery?: VoiceDelivery,
+  ): AsyncIterable<AudioChunk> {
     if (!this.#backend) {
       throw new ProviderNotReadyError(this.name, 'native TTS backend not wired yet (T10.1)');
     }
-    return this.#backend(text, voice || this.#config.voice || 'default', this.#config);
+    return this.#backend(text, voice || this.#config.voice || 'default', this.#config, delivery);
   }
 
   async prerender(phrases: readonly string[], voice: VoiceId): Promise<Map<string, AudioClip>> {

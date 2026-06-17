@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; style-src 'unsafe-inline'"
+    />
+    <title>Race Engineer — push-to-talk</title>
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+      /* Transparent window — only the pill is visible over the (borderless) game. */
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        background: transparent;
+        overflow: hidden;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font:
+          13px/1 ui-monospace,
+          monospace;
+        color: #e6edf3;
+        -webkit-user-select: none;
+        user-select: none;
+      }
+      .ptt {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        padding: 9px 16px;
+        border-radius: 999px;
+        /* Semi-opaque dark pill with a red "live" edge — reads over light or dark scenery. */
+        background: rgba(11, 15, 20, 0.78);
+        border: 1px solid rgba(255, 123, 114, 0.55);
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.35);
+        backdrop-filter: blur(2px);
+        letter-spacing: 0.04em;
+      }
+      .dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        background: #ff5a52;
+        box-shadow: 0 0 8px rgba(255, 90, 82, 0.9);
+        animation: pulse 1s ease-in-out infinite;
+      }
+      .label {
+        font-weight: 600;
+      }
+      @keyframes pulse {
+        0%,
+        100% {
+          opacity: 1;
+          transform: scale(1);
+        }
+        50% {
+          opacity: 0.35;
+          transform: scale(0.8);
+        }
+      }
+      /* Respect reduced-motion: keep the dot solid rather than pulsing. */
+      @media (prefers-reduced-motion: reduce) {
+        .dot {
+          animation: none;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="ptt" role="status" aria-label="Push to talk active">
+      <span class="dot"></span>
+      <span class="label">RADIO LIVE</span>
+    </div>
+  </body>
+</html>

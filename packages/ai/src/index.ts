@@ -15,10 +15,18 @@ export type {
 export type { RaceContext, RaceContextProvider } from './context';
 export { READ_ONLY_TOOLS, toolRegistry, toToolSpecs } from './tools';
 export type { ToolDef } from './tools';
-export { BASE_SYSTEM_PROMPT, buildSystemPrompt } from './prompt';
+export { BASE_SYSTEM_PROMPT, buildSystemPrompt, TONE_TAG_INSTRUCTION } from './prompt';
 export type { Persona } from './prompt';
+export { ENGINEER_SKILL } from './skill';
 export { runRadioTurn } from './orchestrator';
 export type { RadioTurnInput, RadioTurnResult, ExecutedToolCall } from './orchestrator';
+export {
+  runProactiveTurn,
+  buildProactiveSystemPrompt,
+  PROACTIVE_SILENT,
+  PROACTIVE_ADDENDUM,
+} from './proactive';
+export type { ProactiveTurnInput, ProactiveTurnResult } from './proactive';
 export { templateAnswer } from './template';
 export { askEngineer, ASK_FALLBACK } from './ask';
 export { selectLlmProvider } from './select';

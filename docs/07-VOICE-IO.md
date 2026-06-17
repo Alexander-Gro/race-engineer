@@ -8,11 +8,10 @@ it feel like a real team radio without distracting the driver.
 
 - **Push-to-talk, not always-listening.** Simpler, privacy-friendly, no wake word, no
   false triggers from engine noise. The driver holds a mapped wheel button to talk.
-- **Tiered output (see [01](01-ARCHITECTURE.md)).** Only the **Tier-0 reflex** spotter calls ("car
-  left / 3-wide / clear") are pre-rendered audio (< 300 ms, never the LLM). **Everything above Tier-0
-  — proactive call-outs and replies — is LLM-generated from data and streamed to TTS** (the north star
-  in [CLAUDE.md](../CLAUDE.md) / [06](06-AI-ENGINEER.md)); pre-rendered/templated phrasing for those is
-  a **degraded fallback only** (no model / cost cap / offline), not the default.
+- **Tiered output (see [01](01-ARCHITECTURE.md)).** **Every utterance — proactive call-outs and
+  replies — is LLM-generated from data and streamed to TTS** (the north star in [CLAUDE.md](../CLAUDE.md)
+  / [06](06-AI-ENGINEER.md)); templated phrasing is a **degraded fallback only** (no model / cost cap /
+  offline), not the default. Nothing is pre-rendered.
 - **Never block driving.** Audio is queued, preemptible, and ducked sensibly; the
   engineer stays quiet at the worst moments (mid-corner) unless it is urgent.
 - **Cloud for quality, local for endurance.** Long races must be runnable cheaply/offline.
@@ -69,29 +68,51 @@ is generated), selectable persona/voice.
 | **Azure Neural TTS** (cloud) | Opt-in BYO-key: very low latency, many voices |
 | **OpenAI TTS** (cloud) | Opt-in BYO-key: good quality, simple |
 
+### Vocal tone — emotion, not just words (the vision)
+
+The engineer must not sound flat and monotone. The AI generates *how a line is felt*, not only what
+it says: the model prefixes each spoken line with one **tone tag** — `[calm]`, `[urgent]`, `[upbeat]`,
+or `[serious]` — chosen from the live moment (a routine fuel read is `[calm]`; "box this lap" under an
+FCY is `[urgent]`; a personal best is `[upbeat]`). The voice layer (`parseToneTag` in
+`packages/voice`) strips the tag — it is **never spoken aloud** — and renders the register per provider:
+
+- **Piper (local default):** bends its only prosody knobs — `length_scale` (pace; lower = faster),
+  `noise_scale` (pitch/timbre variation), `noise_w` (cadence). Even the neutral `[calm]` runs a brisker
+  `length_scale` than Piper's draggy stock 1.0; `[urgent]` is faster and tenser. This is the fix for
+  "slow and robotic" on the free path — but Piper has a low ceiling; **Kokoro** (next) and the cloud
+  voices are markedly more natural.
+- **Cloud (OpenAI `gpt-4o-mini-tts`):** the tone becomes a literal `instructions` string ("speak with
+  urgency and tension…") — genuine, audible emotion.
+
+It is **delivery only** — tone never changes the words or a number (the hard rules hold). An untagged
+reply (a fallback path, an older model) degrades cleanly to the neutral default. The tag set here must
+stay in sync with `VocalTone` (`packages/voice`) and `TONE_TAG_INSTRUCTION` (`packages/ai`).
+
 Tactics:
 - **Sentence-streaming:** as Claude streams its first sentence, synthesize and play it
   while the next is generated → shrinks perceived latency dramatically.
-- **Pre-rendered Tier-0 library:** synthesize the fixed spotter phrases ("car left", "car
-  right", "3-wide", "clear", "P-up", "P-down", common numbers) once, cache as audio
-  files, play with near-zero latency. Re-render when the user changes voice.
-- **Radio SFX:** band-limit + light noise/compression + open/close clicks to sound like
-  a team radio. Subtle; user can disable.
+- **Radio SFX (F1-broadcast overlay) — implemented.** The engineer voice is routed through a Web
+  Audio comms chain in the renderer (`apps/desktop/src/radio-fx.ts`, wired in `wireAudioOut`):
+  **bandpass ~350–3500 Hz + light waveshaper grit + heavy compression + a faint static bed**, with a
+  short **"roger" beep** opening each *transmission* (a streamed reply is one transmission — the beep
+  fires once, not per sentence) — so it reads like a TV team-radio message. PTT adds a **mic-key
+  click** on press/release (the key-up/key-down of a transmitter). Pure params/curve are unit-tested;
+  the `AudioContext` graph runs only in the renderer and degrades to the clean voice if unavailable.
 
 > **Interim spoken replies (Web Speech API).** Until the local Piper/Kokoro engines + the
 > `VoicePlayer`→`AudioSink` byte pipeline land (T10.1 native half), the desktop app speaks the
 > engineer's **conversational text-ask reply** aloud via the browser `speechSynthesis` (the OS
 > voice) — free, no key, no model download. This path is deliberately **separate** from the tiered
-> queue above and is used **only** for the conversational reply; Tier-0 spotter/strategy audio still
-> goes through the pre-rendered `VoicePlayer` path. It's a `SpeechController` over an injected port
+> queue above and is used **only** for the conversational reply; proactive call-outs go through the
+> `VoicePlayer` queue path. It's a `SpeechController` over an injected port
 > (`apps/desktop/src/speech.ts`), with a mute toggle, degrading to text-only where speech is
 > unavailable.
 
 ## Audio playback & routing
 
-- **Priority queue.** Each utterance has a priority (urgent spotter > strategy > chatter).
-  Higher priority **preempts** or **ducks** lower; never let a long strategy explanation
-  step on a "car left".
+- **Priority queue.** Each utterance has a priority (conversation reply > warning > strategy >
+  chatter). Utterances **queue and play in priority order** — nothing is cut off mid-sentence
+  automatically. The only interrupts are the driver keying PTT (barge-in) or an explicit preempt flag.
 - **Quiet windows.** Suppress non-urgent speech during high-load moments (heavy braking,
   mid-corner) using telemetry (steering angle, combined g, throttle/brake). Urgent safety
   calls override.
@@ -133,13 +154,11 @@ interface VoicePlayer {
 
 | Path | Budget | How |
 | --- | --- | --- |
-| Spotter reflex (Tier 0) | < 300 ms | pre-rendered clip, no network — **never the LLM** |
-| Proactive strategy (Tier 1) | < ~1.5 s | **LLM generates from the event + data** → sentence-streamed TTS (template = degraded fallback) |
-| Conversational reply (Tier 2) | < 2 s to first audio | streaming STT + streaming LLM(+tools) + sentence-streamed TTS |
+| Proactive strategy (Tier 1) | looser — non-reflex | **LLM generates from the event + data** → sentence-streamed TTS (template = degraded fallback) |
+| Conversational reply (Tier 2) | < ~2 s to first audio | streaming STT + streaming LLM(+tools) + sentence-streamed TTS |
 
 ## Testing
 
 - Latency harness measuring each path end-to-end per provider.
 - Noise-robustness check for STT with recorded wheel/pedal/engine backgrounds.
-- Priority-queue tests: urgent preempts chatter; barge-in stops playback immediately.
-- Pre-render integrity: every Tier-0 phrase has a cached clip for the active voice.
+- Priority-queue tests: utterances play in priority order; barge-in stops playback immediately.

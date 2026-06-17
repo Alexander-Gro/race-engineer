@@ -1,5 +1,6 @@
 import type { VoiceProviderConfig } from '@race-engineer/voice';
 import { sttLocalReady, ttsLocalReady } from '../voice-route';
+import { kokoroTtsBackend } from './kokoro-backend';
 import { defaultSpawn, piperTtsBackend } from './piper-backend';
 import { whisperCppBackend } from './whisper-backend';
 
@@ -14,15 +15,15 @@ import { whisperCppBackend } from './whisper-backend';
  * the gate can't drift). Without the paths the backend is left off, so `provider.available` stays false
  * and the worker falls back to the fake rather than spawning a missing binary at synth time.
  *
- * Today's working free pair is **piper (TTS) + whisper-cpp (STT)**. `kokoro` (ONNX) and `faster-whisper`
- * have no native backend yet, so those engine ids still fall back until their backends land (follow-up).
- * Read-only/advisory throughout — voice in/out only.
+ * TTS backends: **Piper** (spawned binary + model paths) and **Kokoro** (in-process `kokoro-js`, an
+ * optional dep that self-downloads its model). STT: **whisper-cpp** today (`faster-whisper` is a
+ * follow-up, so that id still falls back to the fake). Read-only/advisory throughout — voice in/out only.
  */
 export const attachLocalBackends = (route: VoiceProviderConfig): VoiceProviderConfig => {
   const next: VoiceProviderConfig = { ...route };
 
   if (ttsLocalReady(route)) {
-    next.ttsBackend = piperTtsBackend();
+    next.ttsBackend = route.tts === 'kokoro' ? kokoroTtsBackend() : piperTtsBackend();
   }
 
   if (sttLocalReady(route)) {

@@ -31,15 +31,53 @@ describe('VoicePlayer', () => {
     expect(sink.started).toEqual(['chatter1', 'strategy', 'chatter2']);
   });
 
-  it('an urgent spotter call preempts a lower-priority utterance', () => {
+  it('preempts the current utterance when a clip meets a configured urgentThreshold (opt-in)', () => {
+    // Preemption is off by default now; a deployment can opt back in with a finite urgentThreshold.
+    const sink = new MockAudioSink();
+    const player = new VoicePlayer(sink, { urgentThreshold: VoicePriority.WARNING });
+    player.enqueue(clip('long-strategy'), VoicePriority.STRATEGY);
+    player.enqueue(clip('urgent'), VoicePriority.WARNING);
+
+    expect(sink.started).toEqual(['long-strategy', 'urgent']);
+    expect(sink.stopped).toEqual(['long-strategy']); // cut off, not queued behind
+    expect(player.playing?.clip.id).toBe('urgent');
+  });
+
+  it('does not preempt by priority alone with the default (unreachable) threshold', () => {
     const sink = new MockAudioSink();
     const player = new VoicePlayer(sink);
-    player.enqueue(clip('long-strategy'), VoicePriority.STRATEGY);
-    player.enqueue(clip('car_left'), VoicePriority.SPOTTER);
+    player.enqueue(clip('strategy'), VoicePriority.STRATEGY);
+    player.enqueue(clip('warning'), VoicePriority.WARNING); // higher, but nothing preempts by default
+    expect(sink.started).toEqual(['strategy']); // strategy keeps playing
+    expect(sink.stopped).toEqual([]);
+    expect(player.queueLength).toBe(1); // warning queued ahead, plays next
+  });
 
-    expect(sink.started).toEqual(['long-strategy', 'car_left']);
-    expect(sink.stopped).toEqual(['long-strategy']); // never stepped on by being queued — it was cut
-    expect(player.playing?.clip.id).toBe('car_left');
+  it('a generic call-out never cuts off a driver reply — it queues behind it', () => {
+    // The reported bug: ask a question, then a "box this lap"/"fuel low" fires and chops the answer.
+    const sink = new MockAudioSink();
+    const player = new VoicePlayer(sink);
+    player.enqueue(clip('reply'), VoicePriority.CONVERSATION); // the engineer is answering
+    player.enqueue(clip('box-this-lap'), VoicePriority.WARNING); // urgent call-out fires mid-answer
+
+    expect(sink.started).toEqual(['reply']); // the answer keeps playing — not cut
+    expect(sink.stopped).toEqual([]);
+    sink.finishCurrent();
+    expect(sink.started).toEqual(['reply', 'box-this-lap']); // then the call-out, in full
+  });
+
+  it('a reply stays ahead of call-outs queued while it speaks (no interleaving)', () => {
+    const sink = new MockAudioSink();
+    const player = new VoicePlayer(sink);
+    player.enqueue(clip('reply-1'), VoicePriority.CONVERSATION); // sentence 1 of the answer (playing)
+    player.enqueue(clip('reply-2'), VoicePriority.CONVERSATION); // sentence 2 (queued)
+    player.enqueue(clip('warning'), VoicePriority.WARNING); // call-out fires during the answer
+    player.enqueue(clip('strategy'), VoicePriority.STRATEGY);
+
+    sink.finishCurrent(); // reply-1 done
+    sink.finishCurrent(); // reply-2 done — the answer finishes before any call-out
+    sink.finishCurrent(); // warning
+    expect(sink.started).toEqual(['reply-1', 'reply-2', 'warning', 'strategy']);
   });
 
   it('does not preempt for an equal or sub-threshold priority', () => {
@@ -89,8 +127,8 @@ describe('VoicePlayer', () => {
       },
     });
     player.enqueue(clip('a'), VoicePriority.STRATEGY);
-    player.enqueue(clip('spot'), VoicePriority.SPOTTER); // preempts a
-    sink.finishCurrent(); // spot ends
-    expect(events).toEqual(['start:a', 'preempt:a', 'start:spot', 'end:spot']);
+    player.enqueue(clip('b'), VoicePriority.WARNING, { preempt: true }); // explicit preempt
+    sink.finishCurrent(); // b ends
+    expect(events).toEqual(['start:a', 'preempt:a', 'start:b', 'end:b']);
   });
 });

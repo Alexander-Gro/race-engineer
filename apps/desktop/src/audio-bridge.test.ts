@@ -149,7 +149,7 @@ describe('IpcAudioSink ↔ receiver — round trip through a real VoicePlayer', 
     expect(player.queueLength).toBe(0);
   });
 
-  it('an urgent spotter call preempts chatter across the bridge (stop + new play)', () => {
+  it('an explicit preempt cuts off chatter across the bridge (stop + new play)', () => {
     const rendererBackend = new MockAudioSink();
     let receive: (msg: AudioOutMessage) => void = () => {};
     const sink = new IpcAudioSink((m) => receive(m));
@@ -157,10 +157,10 @@ describe('IpcAudioSink ↔ receiver — round trip through a real VoicePlayer', 
 
     const player = new VoicePlayer(sink);
     player.enqueue(clip('chatter'), VoicePriority.CHATTER);
-    player.enqueue(clip('car-left'), VoicePriority.SPOTTER); // ≥ WARNING → preempts
+    player.enqueue(clip('urgent'), VoicePriority.WARNING, { preempt: true }); // explicit interrupt
 
     expect(rendererBackend.stopped).toEqual(['chatter']);
-    expect(rendererBackend.started).toEqual(['chatter', 'car-left']);
-    expect(player.playing?.clip.id).toBe('car-left');
+    expect(rendererBackend.started).toEqual(['chatter', 'urgent']);
+    expect(player.playing?.clip.id).toBe('urgent');
   });
 });

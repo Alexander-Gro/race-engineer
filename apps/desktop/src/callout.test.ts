@@ -3,7 +3,7 @@ import type { EngineerEvent, EventType } from '@race-engineer/core';
 import { CalloutSpeaker, calloutForEvent, type CalloutSpeechPort } from './callout';
 
 let seq = 0;
-/** Build an event. Defaults to `tier: 1` (the speakable range); pass `tier: 0` for a reflex spotter. */
+/** Build an event. Defaults to `tier: 1` (the speakable range); pass `tier` to override. */
 const ev = (
   type: EventType,
   priority: number,
@@ -57,13 +57,6 @@ describe('calloutForEvent', () => {
     expect(calloutForEvent(ev('lap_completed', 10))).toBeNull();
     expect(calloutForEvent(ev('flag_changed', 50))).toBeNull();
   });
-
-  it('NEVER voices a Tier-0 reflex spotter call (pre-rendered VoicePlayer path only — docs/01/07)', () => {
-    expect(calloutForEvent(ev('car_left', 100, { tier: 0 }))).toBeNull();
-    expect(calloutForEvent(ev('three_wide', 100, { tier: 0 }))).toBeNull();
-    // The guard is on tier, not just the missing phrase — a Tier-0 event of any type is rejected.
-    expect(calloutForEvent(ev('fuel_low', 100, { tier: 0 }))).toBeNull();
-  });
 });
 
 describe('CalloutSpeaker', () => {
@@ -71,12 +64,6 @@ describe('CalloutSpeaker', () => {
     const { port, spoken } = makePort();
     new CalloutSpeaker(port).announce([ev('box_this_lap', 80)]);
     expect(spoken).toEqual(['Box this lap.']);
-  });
-
-  it('never speaks a Tier-0 spotter event even at top priority', () => {
-    const { port, spoken } = makePort();
-    new CalloutSpeaker(port).announce([ev('car_left', 100, { tier: 0 })]);
-    expect(spoken).toEqual([]);
   });
 
   it('speaks the highest-priority call-out in a batch', () => {

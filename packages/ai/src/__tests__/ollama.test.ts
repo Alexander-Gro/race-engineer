@@ -43,6 +43,44 @@ describe('OllamaProvider', () => {
     expect(tools[0]?.function.name).toBe('get_race_state');
   });
 
+  it('disables thinking by default and strips any leaked <think> preamble from the answer', async () => {
+    const captured: Array<Record<string, unknown>> = [];
+    const fetchImpl: FetchLike = (_url, init) => {
+      captured.push(JSON.parse(init.body) as Record<string, unknown>);
+      return Promise.resolve(
+        okJson({
+          message: {
+            role: 'assistant',
+            // qwen3's leak shape with think disabled: a short reasoning preamble, then the real answer.
+            content: 'Let me check the tank.\n</think>\n\nFuel: 14.6 laps remaining.',
+          },
+        }),
+      );
+    };
+    const res = await new OllamaProvider({ fetch: fetchImpl, model: 'qwen3' }).complete({
+      system: 'sys',
+      messages: [{ role: 'user', content: 'fuel?' }],
+      tools: [],
+    });
+    expect(captured[0]!.think).toBe(false);
+    expect(res.text).toBe('Fuel: 14.6 laps remaining.');
+  });
+
+  it('can opt back into thinking, and a clean answer passes through untouched', async () => {
+    const captured: Array<Record<string, unknown>> = [];
+    const fetchImpl: FetchLike = (_url, init) => {
+      captured.push(JSON.parse(init.body) as Record<string, unknown>);
+      return Promise.resolve(okJson({ message: { role: 'assistant', content: 'All good.' } }));
+    };
+    const res = await new OllamaProvider({ fetch: fetchImpl, think: true }).complete({
+      system: '',
+      messages: [],
+      tools: [],
+    });
+    expect(captured[0]!.think).toBe(true);
+    expect(res.text).toBe('All good.');
+  });
+
   it('parses string-encoded tool arguments', async () => {
     const fetchImpl: FetchLike = () =>
       Promise.resolve(

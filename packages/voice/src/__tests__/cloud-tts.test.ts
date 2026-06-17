@@ -78,6 +78,22 @@ describe('CloudTtsProvider — OpenAI-compatible request mapping', () => {
     expect(calls[0]!.body).toMatchObject({ model: 'tts-1', response_format: 'wav' });
   });
 
+  it('adds a delivery instruction for an expressive tone (urgent), steering voice not words', async () => {
+    const { fetch, calls } = mockFetch(AUDIO);
+    const tts = new CloudTtsProvider({ apiKey: 'k', fetch });
+    await drain(tts.synthesizeStream('Box this lap.', 'v1', { tone: 'urgent' }));
+    // The words are untouched; only an `instructions` field is added to steer delivery.
+    expect(calls[0]!.body).toMatchObject({ input: 'Box this lap.' });
+    expect((calls[0]!.body as { instructions?: string }).instructions).toMatch(/urgenc/i);
+  });
+
+  it('omits the instruction for the neutral default tone (calm)', async () => {
+    const { fetch, calls } = mockFetch(AUDIO);
+    const tts = new CloudTtsProvider({ apiKey: 'k', fetch });
+    await drain(tts.synthesizeStream('Fuel is fine.', 'v1', { tone: 'calm' }));
+    expect(calls[0]!.body).not.toHaveProperty('instructions');
+  });
+
   it('throws on a non-OK status, including the error body for diagnosis', async () => {
     const { fetch } = mockFetch(AUDIO, { ok: false, status: 401, errorBody: 'invalid key' });
     const tts = new CloudTtsProvider({ apiKey: 'bad', fetch });
@@ -85,17 +101,17 @@ describe('CloudTtsProvider — OpenAI-compatible request mapping', () => {
   });
 });
 
-describe('CloudTtsProvider — prerender retains bytes + MIME (Tier-0 audible)', () => {
+describe('CloudTtsProvider — prerender retains bytes + MIME (audible clips)', () => {
   it('returns a clip per phrase carrying the synthesized bytes and the format MIME type', async () => {
     const { fetch } = mockFetch(AUDIO, {});
     const tts = new CloudTtsProvider({ apiKey: 'k', format: 'wav', fetch });
-    const clips = await tts.prerender(['Car left.', 'Clear.'], 'v1');
+    const clips = await tts.prerender(['Box, box.', 'Pit confirm.'], 'v1');
 
-    expect([...clips.keys()]).toEqual(['Car left.', 'Clear.']);
-    const clip = clips.get('Car left.')!;
+    expect([...clips.keys()]).toEqual(['Box, box.', 'Pit confirm.']);
+    const clip = clips.get('Box, box.')!;
     expect(clip.audio?.data).toEqual(AUDIO);
     expect(clip.audio?.mimeType).toBe('audio/wav');
-    expect(clip.label).toBe('Car left.');
+    expect(clip.label).toBe('Box, box.');
   });
 });
 

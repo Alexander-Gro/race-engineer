@@ -1,11 +1,10 @@
+import type { LlmProvider } from '@race-engineer/ai';
 import {
   FakeSttProvider,
   FakeTtsProvider,
-  prerenderTier0,
   RadioCapture,
   selectSttProvider,
   selectTtsProvider,
-  type AudioClip,
   type SttProvider,
   type TtsProvider,
   type VoiceId,
@@ -50,6 +49,13 @@ export const createWorkerVoice = async (
   post: (msg: AudioOutMessage) => void,
   answer: (question: string) => Promise<string>,
   route: VoiceProviderConfig,
+  /**
+   * The configured LLM (or null for template mode). When present, proactive call-outs are
+   * **LLM-generated from the live data with an emotional tone** (the vision in CLAUDE.md), via
+   * `EngineerVoice`'s default `engineerPhraser`; null falls back to the calm template phraser. The
+   * reactive reply path keeps using the provider-aware `answer` either way.
+   */
+  provider: LlmProvider | null = null,
   /** Surface a completed radio exchange (heard + reply) to the UI; the worker relays it to the renderer. */
   onRadioLog?: (msg: { heard: string; reply: string }) => void,
 ): Promise<WorkerVoice> => {
@@ -59,24 +65,36 @@ export const createWorkerVoice = async (
   const selectedTts = selectTtsProvider(wired);
   // `audible` = a real TTS is producing sound (not the silent fake fallback). The renderer uses this to
   // decide whether to mute its free Web-Speech call-out fallback (avoid a robotic double-voice).
-  let audible = selectedTts.available !== false;
-  let tts: TtsProvider = audible ? selectedTts : new FakeTtsProvider();
+  const audible = selectedTts.available !== false;
+  const tts: TtsProvider = audible ? selectedTts : new FakeTtsProvider();
   const stt = pickStt(wired);
 
-  // Pre-render the Tier-0 spotter clips once (a cloud TTS makes ~6 calls here). If that fails (bad key
-  // / offline), fall back to the free offline voice rather than leaving the engineer mute mid-race.
-  let tier0Clips: ReadonlyMap<string, AudioClip>;
-  try {
-    tier0Clips = await prerenderTier0(tts, VOICE);
-  } catch (err) {
-    console.error('[voice] TTS pre-render failed — falling back to the offline voice', err);
-    tts = new FakeTtsProvider();
-    audible = false;
-    tier0Clips = await prerenderTier0(tts, VOICE);
-  }
-
   const sink = new IpcAudioSink(post);
-  const engineerVoice = new EngineerVoice({ tts, sink, tier0Clips, voice: VOICE });
+  // With a provider, EngineerVoice's default proactive phraser is the context-aware `engineerPhraser`
+  // (reasons over the live snapshot via read-only tools, emits a tone-tagged call-out) — the vision.
+  // Without one, it stays the calm template phraser. No `capture` is passed, so EngineerVoice's own
+  // reactive loop stays off — replies run through the worker's `createRadioReply` + `speakReply` path.
+  const engineerVoice = new EngineerVoice({
+    tts,
+    sink,
+    voice: VOICE,
+    ...(provider ? { provider } : {}),
+    // Make a silent degrade visible: if the AI call-out turn throws (e.g. Ollama not running), the
+    // engineer falls back to the pre-written template — log it so it isn't mistaken for "no AI".
+    onProactiveFallback: (err, event) =>
+      console.warn(
+        `[voice] proactive AI turn failed for "${event.type}" — using the pre-written template. ` +
+          `Is the engineer model (Ollama/cloud) running?`,
+        err,
+      ),
+    // A call-out was dropped because a spoken number didn't trace to a tool result (silence > a wrong
+    // number on an unsolicited call). Log it so the model's number discipline is observable.
+    onProactiveHallucination: (report, event) =>
+      console.warn(
+        `[voice] dropped "${event.type}" call-out — ungrounded number(s): ` +
+          `${report.ungrounded.map((u) => u.text).join(', ')}`,
+      ),
+  });
 
   const mic = new BridgedMicSource();
   const capture = new RadioCapture({ stt, mic });

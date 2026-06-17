@@ -10,14 +10,14 @@ import type { CandidateEvent, EventRule } from '../types';
  *  - `slower_class_ahead` — a car **ahead** you are catching, especially into braking zones:
  *    "GT3 ahead in sector 2, 1.5 slower." docs/05 §6.
  *
- * The `clear`/`car_left`/`car_right` spotter (T3.4) handles cars *already alongside* (a positional
- * fact); this rule is the *predictive* half its comment defers to — closing speed, not geometry.
+ * This is the *predictive* traffic layer — closing speed, not geometry. (There is no instant
+ * "car alongside" proximity spotter; the driver handles already-alongside cars by eye.)
  *
  * Signals (canonical, Normalizer-supplied — docs/04):
  *  - `gapToPlayerS` — signed time gap: **+ = behind the player, − = ahead** (docs/04).
  *  - `closingRateMps` — convergence speed. Convention assumed here: **positive = the gap is closing**
  *    (matches the live-rig multi-class capture: the lapping Hypercar reads +12.5). Confirm the sign
- *    against live data alongside the spotter's `lateralPos` sign (docs/03) before trusting it.
+ *    against live data (docs/03) before trusting it.
  *
  * Pure and allocation-light (runs every tick); level-triggered like `fuel_low`, with the
  * {@link EventDetector}'s cooldown keeping it to one call-out per car per window.
@@ -128,7 +128,7 @@ export interface TrafficForecast {
 
 /**
  * Classify the field into faster-approaching-from-behind and slower-ahead-you're-catching. Pure;
- * exported so the UI and tests reuse the exact predicate the rule fires on (mirrors `spotterContacts`).
+ * exported so the UI and tests reuse the exact predicate the rule fires on.
  */
 export const trafficForecast = (
   state: RaceState,

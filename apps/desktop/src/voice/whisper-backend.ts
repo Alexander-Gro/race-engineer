@@ -36,7 +36,33 @@ export interface WhisperBackendOptions {
   tmpDir?: string;
   /** Monotonic-ish source for a unique temp filename; defaults to `Date.now`. */
   now?: () => number;
+  /**
+   * whisper-cli beam-search width (`-bs`). Beam search beats greedy decoding on accented speech and
+   * jargon at a modest latency cost — fine here because we transcribe once, on PTT release. `0` keeps
+   * whisper's greedy default. Defaults to {@link DEFAULT_BEAM_SIZE}.
+   */
+  beamSize?: number;
+  /**
+   * Decoder bias prompt (`--prompt`). whisper conditions on this text, so seeding it with the radio's
+   * vocabulary ("box this lap", "brake bias", "undercut") sharply cuts mis-hears of racing jargon — the
+   * cheapest accuracy win short of a bigger model. Per-call `hints` (from `startStream`) are appended.
+   * Pass `''` to disable. Defaults to {@link DEFAULT_STT_PROMPT}.
+   */
+  prompt?: string;
 }
+
+/** whisper beam width — see {@link WhisperBackendOptions.beamSize}. */
+export const DEFAULT_BEAM_SIZE = 5;
+
+/**
+ * Default decoder-bias prompt for the push-to-talk radio. Not a transcript — it just primes whisper's
+ * vocabulary so endurance/strategy terms come through cleanly instead of phonetic guesses. Read-only:
+ * this only shapes recognition; it is never spoken and never reaches the game.
+ */
+export const DEFAULT_STT_PROMPT =
+  'Sim racing radio to the race engineer. Box this lap, pit, fuel, stint, tyre pressures, ' +
+  'brake bias, traction control, TC, ABS, engine map, undercut, overcut, push, lift and coast, ' +
+  'virtual energy, lap time, sector, degradation.';
 
 const defaultFs: WhisperFsLike = {
   writeFile: (path, data) => writeFile(path, data),
@@ -66,12 +92,14 @@ export const whisperCppBackend = (opts: WhisperBackendOptions = {}): LocalSttBac
   const fsLike = opts.fs ?? defaultFs;
   const dir = opts.tmpDir ?? tmpdir();
   const now = opts.now ?? ((): number => Date.now());
+  const beamSize = opts.beamSize ?? DEFAULT_BEAM_SIZE;
+  const basePrompt = opts.prompt ?? DEFAULT_STT_PROMPT;
   if (!spawn) {
     // The default spawner is supplied by the worker (node:child_process); tests inject a fake.
     throw new Error('whisperCppBackend: a spawn function is required');
   }
 
-  return (_opts, config: LocalSttConfig): SttStream => {
+  return (startOpts, config: LocalSttConfig): SttStream => {
     const chunks: Uint8Array[] = [];
     let cancelled = false;
 
@@ -91,13 +119,17 @@ export const whisperCppBackend = (opts: WhisperBackendOptions = {}): LocalSttBac
         // The renderer streams 16 kHz mono PCM frames; wrap them in a WAV container whisper-cli decodes.
         await fsLike.writeFile(file, pcmToWav(concat(chunks), { sampleRate: MIC_SAMPLE_RATE_HZ }));
         try {
+          // Append per-call hints (startStream → SttStartOptions) to the standing vocabulary prompt.
+          const prompt = [basePrompt, ...(startOpts.hints ?? [])].join(' ').trim();
           const args = [
             '-m',
             config.modelPath,
             '-f',
             file,
             '-nt', // no timestamps — stdout is plain transcript text
+            ...(beamSize > 0 ? ['-bs', String(beamSize)] : []),
             ...(config.language ? ['-l', config.language] : []),
+            ...(prompt ? ['--prompt', prompt] : []),
           ];
           const child = spawn(config.binaryPath, args);
           let spawnError: Error | null = null;

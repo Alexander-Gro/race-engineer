@@ -152,13 +152,10 @@ export interface AlertReading {
 
 /** Human labels for the event types the dashboard surfaces (lap_completed is a marker, not shown). */
 const EVENT_LABELS: Partial<Record<EventType, string>> = {
-  car_left: 'Car left',
-  car_right: 'Car right',
-  three_wide: 'Three wide',
-  clear: 'Clear',
   fuel_low: 'Fuel low',
   energy_low: 'Energy low',
   tire_temp_out_of_window: 'Tyres out of window',
+  tire_temp_recovered: 'Tyres up to temp',
   pit_window_open: 'Pit window open',
   box_this_lap: 'Box this lap',
   blue_flag: 'Blue flag',
@@ -171,7 +168,7 @@ const EVENT_LABELS: Partial<Record<EventType, string>> = {
   incident_ahead: 'Incident ahead',
 };
 
-/** Tier-0 reflex calls are act-now; Tier-1 are caution; deliberative ones are neutral. */
+/** Tier-1 alerts are caution; deliberative (Tier 2+) ones are neutral. */
 const alertSeverity = (tier: Tier): Severity =>
   tier === 0 ? 'critical' : tier === 1 ? 'caution' : 'neutral';
 

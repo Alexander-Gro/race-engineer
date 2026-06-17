@@ -30,10 +30,10 @@ export interface TireTempOptions {
   thresholds?: Partial<TireTempThresholds>;
 }
 
-const WHEELS = ['FL', 'FR', 'RL', 'RR'] as const;
+export const WHEELS = ['FL', 'FR', 'RL', 'RR'] as const;
 
 /** A tyre's representative temperature: the single value, or the mean of the 3 zones. */
-const representativeC = (tempC: Tire['tempC']): number =>
+export const representativeC = (tempC: Tire['tempC']): number =>
   typeof tempC === 'number' ? tempC : (tempC.inner + tempC.center + tempC.outer) / 3;
 
 export const tireTempRule = (options: TireTempOptions = {}): EventRule => {

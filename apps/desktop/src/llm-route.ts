@@ -20,3 +20,21 @@ export const resolveLlmRouteConfig = (
     ...(llm.model ? { model: llm.model } : {}),
   };
 };
+
+/**
+ * The vision (docs/15): the **free profile is local AI**, not the deterministic template. Given a
+ * resolved route and a live Ollama probe, upgrade the free `template` route to the local Ollama engine
+ * when it's actually running with a model pulled — so the engineer is LLM-generated at $0 out of the
+ * box, degrading back to the template only when no local model is reachable. Any non-free route (the
+ * user explicitly chose Ollama/cloud) is returned untouched. Pure — unit-tested; main awaits the probe.
+ */
+export const freeRouteWithLocalOllama = (
+  route: LlmRouteConfig,
+  ollama: { reachable: boolean; models: readonly string[] },
+): LlmRouteConfig => {
+  if (route.provider !== 'template') return route;
+  if (!ollama.reachable || ollama.models.length === 0) return route;
+  // Prefer a Qwen build (the vision's free engineer) among the pulled models, else the first.
+  const model = ollama.models.find((m) => /qwen/i.test(m)) ?? ollama.models[0]!;
+  return { provider: 'ollama', model };
+};

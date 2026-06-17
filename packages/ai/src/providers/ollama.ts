@@ -21,6 +21,13 @@ export interface OllamaOptions {
   model?: string;
   /** Daemon base URL. Default 'http://localhost:11434'. */
   baseUrl?: string;
+  /**
+   * Whether to let a reasoning model (qwen3, etc.) "think" before answering. Default **false**: the
+   * radio loop wants fast tool-phrasing, and the deterministic engine already did the reasoning
+   * (docs/06 §tiered latency). Leaving thinking on multiplies latency ~10× (a qwen3 radio reply went
+   * from ~6 s to ~50–100 s in rig testing) for no benefit — the LLM only narrates tool output here.
+   */
+  think?: boolean;
   fetch?: FetchLike;
 }
 
@@ -33,6 +40,19 @@ interface OllamaChatResponse {
 
 const DEFAULT_MODEL = 'qwen3';
 const DEFAULT_BASE = 'http://localhost:11434';
+
+/**
+ * Strip a reasoning model's chain-of-thought out of the spoken answer. With thinking disabled qwen3
+ * still occasionally leaks a short `<think>…</think>` preamble into `content`; we never want that
+ * narrated on the radio. Drops complete `<think>…</think>` blocks, then anything up to a stray closing
+ * `</think>` (the leak shape), and trims. A clean answer (no tags) passes through untouched.
+ */
+const stripThinking = (text: string): string => {
+  let out = text.replace(/<think>[\s\S]*?<\/think>/gi, '');
+  const lastClose = out.toLowerCase().lastIndexOf('</think>');
+  if (lastClose !== -1) out = out.slice(lastClose + '</think>'.length);
+  return out.trim();
+};
 
 const parseArgs = (a: Record<string, unknown> | string | undefined): Record<string, unknown> => {
   if (typeof a === 'string') {
@@ -69,11 +89,13 @@ export class OllamaProvider implements LlmProvider {
   readonly name = 'ollama';
   readonly #model: string;
   readonly #baseUrl: string;
+  readonly #think: boolean;
   readonly #fetch: FetchLike;
 
   constructor(opts: OllamaOptions = {}) {
     this.#model = opts.model ?? DEFAULT_MODEL;
     this.#baseUrl = (opts.baseUrl ?? DEFAULT_BASE).replace(/\/+$/, '');
+    this.#think = opts.think ?? false;
     const f = opts.fetch ?? (globalThis as { fetch?: FetchLike }).fetch;
     if (!f) {
       throw new Error('OllamaProvider: no fetch available on this runtime; pass opts.fetch');
@@ -85,6 +107,7 @@ export class OllamaProvider implements LlmProvider {
     const body = JSON.stringify({
       model: this.#model,
       stream: false,
+      think: this.#think,
       messages: toOllamaMessages(req),
       tools: req.tools.map((t) => ({
         type: 'function',
@@ -108,6 +131,7 @@ export class OllamaProvider implements LlmProvider {
       name: tc.function.name,
       args: parseArgs(tc.function.arguments),
     }));
-    return { text: msg?.content ? msg.content : null, toolCalls };
+    const text = msg?.content ? stripThinking(msg.content) : '';
+    return { text: text ? text : null, toolCalls };
   }
 }

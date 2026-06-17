@@ -192,7 +192,8 @@ describe('ReactiveRadioLoop — PTT plumbing', () => {
     await h.loop.whenIdle();
 
     expect(spokenText(h)).toBe('P3, two seconds clear.');
-    expect(h.player.playing?.priority).toBe(VoicePriority.CHATTER);
+    // A reply to the driver's question plays at CONVERSATION — only a safety reflex may cut it off.
+    expect(h.player.playing?.priority).toBe(VoicePriority.CONVERSATION);
   });
 
   it('does not talk over a re-keyed question (supersede guard)', async () => {

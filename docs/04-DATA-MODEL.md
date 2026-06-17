@@ -93,15 +93,14 @@ type CarState = {
   classId: string | null;
   className: string | null;     // "Hypercar" | "LMP2" | "GTE"/"GT3" ...
   driverName: string | null;
-  lapDistanceM: number;         // distance around the lap (for gaps + spotter)
+  lapDistanceM: number;         // distance around the lap (for gaps + traffic geometry)
   lapsCompleted: number;
   lastLapS: number | null;
   bestLapS: number | null;
-  worldPos: { x: number; y: number; z: number } | null; // spotter geometry
+  worldPos: { x: number; y: number; z: number } | null; // track geometry
   lateralPos: number | null;    // signed offset from racing line; +right / -left of the
-                                // driver (spotter convention — Normalizer T2.3 must honor
-                                // this sign; confirm against live LMU data, else flip via
-                                // spotterRule({ rightIsPositive: false }))
+                                // driver (Normalizer T2.3 must honor this sign; confirm
+                                // against live LMU data)
   pit: { inPitLane: boolean; inPitStall: boolean; stops: number; state: PitState };
   // Relative-to-player (computed by Normalizer):
   gapToPlayerS: number | null;  // + = behind player, - = ahead
@@ -141,17 +140,16 @@ type EngineerEvent = {
   id: string;
   tick: number;
   type: EventType;
-  tier: 0|1|2|3;                // latency/delivery tier (see 01-ARCHITECTURE)
-  priority: number;             // for the voice queue; higher preempts
+  tier: 1|2|3;                  // latency/delivery tier (see 01-ARCHITECTURE)
+  priority: number;             // voice queue ordering; utterances play in priority order
+                                // (top = a reply to the driver); no automatic preemption
   payload: Record<string, unknown>;
   dedupeKey?: string;           // suppress repeats (e.g. same car alongside)
   cooldownMs?: number;
 };
 
 type EventType =
-  // Tier 0 — reflex spotter (pre-rendered audio)
-  | 'car_left' | 'car_right' | 'three_wide' | 'clear'
-  // Tier 1 — templated
+  // Tier 1 — proactive call-outs (LLM-generated; template = degraded fallback)
   | 'lap_completed' | 'fuel_low' | 'energy_low' | 'tire_temp_out_of_window'
   | 'pit_window_open' | 'box_this_lap' | 'blue_flag'
   | 'faster_class_approaching' | 'flag_changed'
@@ -161,14 +159,8 @@ type EventType =
 ```
 
 The Event Detector owns **debounce, cooldown, and dedupe** so the engineer is not
-chatty. Example: `car_left` has a `dedupeKey` per adjacent car and a cooldown so it is
-announced once per pass, not every tick.
-
-> **Tier-0 pre-render set (voice layer, docs/07).** The voice package pre-renders a fixed
-> phrase set for near-zero-latency reflex playback: the four reflex spotter `EventType`s
-> (`car_left`/`car_right`/`three_wide`/`clear`) plus a couple of fixed call-out phrases that
-> are *not* event types — `position_up`/`position_down`. These extra phrases are voice assets,
-> not part of `EventType`; T5.4 wires events → cached clips.
+chatty. Example: `faster_class_approaching` has a `dedupeKey` per approaching car and a
+cooldown so it is raised once per pass, not every tick.
 
 ## Derived / strategy types (see 05 for the math)
 

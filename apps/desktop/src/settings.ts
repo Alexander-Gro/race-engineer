@@ -84,11 +84,16 @@ export interface AppSettings {
   ptt: ButtonRef | null;
 }
 
-/** The free/local default (docs/15, ships enabled): no key, no signup, fully offline. */
+/**
+ * The free/local default (docs/15, ships enabled): no key, no signup, fully offline. The saved LLM is
+ * `template`, but the **vision is local AI** — at runtime `main` auto-upgrades the free route to a
+ * running local **Ollama** (via `freeRouteWithLocalOllama`) so the engineer is LLM-generated at $0;
+ * `template` is the deterministic fallback only when no local model is reachable.
+ */
 export const DEFAULT_SETTINGS: AppSettings = {
   profile: 'free',
   llm: { provider: 'template' },
-  voice: { tts: 'kokoro', stt: 'faster-whisper' },
+  voice: { tts: 'piper', stt: 'whisper-cpp' }, // the engines with a working native backend today
   proactivity: 'normal',
   outputDeviceId: null,
   ptt: null,

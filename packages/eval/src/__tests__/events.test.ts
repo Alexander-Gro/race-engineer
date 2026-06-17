@@ -35,11 +35,4 @@ describe('evalEventCorrectness — real LMU recording (Le Mans multi-class)', ()
     expect(result.lapCompletedEvents).toBe(0);
     expect(result.lapMarkersMatch).toBe(true);
   });
-
-  it('surfaces real side-by-side spotter call-outs (the window is centred on a 0.0 m moment)', async () => {
-    const frames = await loadRealRecording();
-    const result = evalEventCorrectness(frames);
-    const sides = (result.countsByType.car_left ?? 0) + (result.countsByType.car_right ?? 0);
-    expect(sides).toBeGreaterThan(0);
-  });
 });

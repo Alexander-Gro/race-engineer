@@ -12,6 +12,7 @@ export {
   ProactiveVoiceRouter,
   templatePhraser,
   llmPhraser,
+  engineerPhraser,
   defaultVoicePriority,
   PROACTIVE_SYSTEM_PROMPT,
 } from './proactive';
@@ -20,6 +21,7 @@ export type {
   ProactiveVoiceRouterOptions,
   RoutedOutcome,
   LlmPhraserOptions,
+  EngineerPhraserOptions,
 } from './proactive';
 export { isQuietWindow, shouldAnnounce } from './proactivity';
 export type {

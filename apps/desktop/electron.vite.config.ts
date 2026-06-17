@@ -63,6 +63,8 @@ export default defineConfig({
           index: resolve(__dirname, 'renderer/index.html'),
           // The in-race overlay (T6.4) — a second, separate HTML entry served by the same preload.
           overlay: resolve(__dirname, 'renderer/overlay.html'),
+          // The push-to-talk "radio live" pill — a tiny bottom-centre HTML entry, shown only while held.
+          'ptt-overlay': resolve(__dirname, 'renderer/ptt-overlay.html'),
         },
       },
     },

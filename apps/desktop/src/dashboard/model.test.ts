@@ -212,13 +212,13 @@ describe('engineer alerts', () => {
       ...snap(multiClassTrafficState),
       events: [
         { id: 'a', tick: 1, type: 'fuel_low', tier: 1, priority: 8, payload: {} },
-        { id: 'b', tick: 1, type: 'car_left', tier: 0, priority: 90, payload: {} },
+        { id: 'b', tick: 1, type: 'pit_window_open', tier: 2, priority: 5, payload: {} },
         { id: 'c', tick: 1, type: 'lap_completed', tier: 1, priority: 3, payload: {} },
       ],
     };
     expect(buildDashboardModel(withEvents).alerts).toEqual([
       { label: 'Fuel low', severity: 'caution' }, // Tier 1 → caution
-      { label: 'Car left', severity: 'critical' }, // Tier 0 reflex → act-now
+      { label: 'Pit window open', severity: 'neutral' }, // Tier 2 → neutral
     ]);
   });
 

@@ -41,13 +41,13 @@ the Normalizer producing canonical `RaceState`; spike findings written back into
 - **Deterministic fuel model**: per-lap, laps-remaining, to-finish ([05](05-STRATEGY-ENGINE.md)).
 - **PTT** mapped to a wheel button (SDL2) → STT → **AI Engineer** (fast Claude + tools)
   → streaming TTS. Answer "how's my fuel / last lap / who's behind me?" correctly.
-- **Tier-0 spotter**: pre-rendered "car left/right" from world positions.
+- Anticipatory traffic awareness (faster class closing / blue flag) as an LLM-generated call-out.
 - Proactive **fuel-low** call-out.
 - Settings: voice pick, PTT mapping, API keys, cloud mode.
 
 **Acceptance:** in a live LMU race, ask three questions by voice and get correct spoken
-answers < ~2 s; spotter "car left/right" fires < 300 ms; fuel-to-finish shown and spoken;
-runs a full short race without crashing.
+answers < ~2 s; the engineer proactively raises an anticipatory traffic call-out; fuel-to-finish
+shown and spoken; runs a full short race without crashing.
 
 ## Phase 2 — Endurance strategy
 

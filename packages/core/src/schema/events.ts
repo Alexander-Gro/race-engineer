@@ -4,16 +4,12 @@ import { tierSchema } from './primitives';
 /** Discrete events emitted by the Event Detector (docs/04 §Events). */
 
 export const EventTypeSchema = z.enum([
-  // Tier 0 — reflex spotter (pre-rendered audio)
-  'car_left',
-  'car_right',
-  'three_wide',
-  'clear',
   // Tier 1 — templated
   'lap_completed',
   'fuel_low',
   'energy_low', // Virtual Energy running low (LMU) — the VE sibling of fuel_low
   'tire_temp_out_of_window',
+  'tire_temp_recovered', // tyres came back into the window after being cold (e.g. up to temp after the start)
   'pit_window_open',
   'box_this_lap',
   'blue_flag',

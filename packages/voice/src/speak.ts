@@ -1,4 +1,5 @@
 import type { VoicePlayer } from './player';
+import { parseToneTag, type VoiceDelivery } from './tone';
 import type { AudioClip, TtsProvider, VoiceId } from './types';
 import { VoicePriority } from './types';
 
@@ -49,10 +50,11 @@ export const synthesizeClip = async (
   tts: TtsProvider,
   text: string,
   voice: VoiceId,
+  delivery?: VoiceDelivery,
 ): Promise<AudioClip> => {
   const chunks: Uint8Array[] = [];
   let bytes = 0;
-  for await (const chunk of tts.synthesizeStream(text, voice)) {
+  for await (const chunk of tts.synthesizeStream(text, voice, delivery)) {
     chunks.push(chunk.data);
     bytes += chunk.data.length;
   }
@@ -73,6 +75,11 @@ export interface SpeakOptions {
   text: string;
   /** Queue priority. Default {@link VoicePriority.CHATTER} (conversational reply). */
   priority?: number;
+  /**
+   * The emotional register to speak in (docs/06 vision). Passed to the TTS provider per sentence so
+   * an expressive engine renders the tone the LLM chose; a flat engine ignores it. Default: neutral.
+   */
+  delivery?: VoiceDelivery;
   /** Abort before enqueuing the next sentence (e.g. the driver keyed PTT again — barge-in). */
   shouldStop?: () => boolean;
   /** Called once, when the first clip is enqueued — the "first audio" instant (latency harness). */
@@ -82,13 +89,20 @@ export interface SpeakOptions {
 /**
  * Speak a reply as sentence-streamed TTS and return the clips enqueued (the spoken transcript,
  * for logging/tests). `shouldStop` lets a barge-in halt the remaining sentences mid-reply.
+ *
+ * **Tone-aware:** the text may carry a leading tone tag (`[urgent] Box this lap.`) — the LLM's
+ * chosen emotional register (docs/06 vision). It is stripped here (never spoken aloud) and becomes
+ * the {@link VoiceDelivery} for every sentence, so any caller that hands us a model reply gets the
+ * emotion for free. An explicit `opts.delivery` wins over the tag; no tag ⇒ neutral default.
  */
 export const speak = async (opts: SpeakOptions): Promise<AudioClip[]> => {
   const priority = opts.priority ?? VoicePriority.CHATTER;
+  const parsed = parseToneTag(opts.text);
+  const delivery = opts.delivery ?? { tone: parsed.tone };
   const spoken: AudioClip[] = [];
-  for (const sentence of splitSentences(opts.text)) {
+  for (const sentence of splitSentences(parsed.text)) {
     if (opts.shouldStop?.()) break;
-    const clip = await synthesizeClip(opts.tts, sentence, opts.voice);
+    const clip = await synthesizeClip(opts.tts, sentence, opts.voice, delivery);
     if (opts.shouldStop?.()) break;
     opts.player.enqueue(clip, priority);
     if (spoken.length === 0) opts.onFirstClip?.(clip);

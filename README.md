@@ -38,8 +38,10 @@ The first supported game is **Le Mans Ultimate (LMU)**.
   fuel-save targets, tire-degradation modeling, multi-class traffic management. It works
   the strategy continuously in the background and jumps on the radio when it spots an
   opportunity.
-- **Spotter** — Proactive call-outs: cars alongside, closing rates, faster-class
-  traffic, flags, pit-window reminders.
+- **Anticipatory traffic** — Proactive call-outs from the live data: a faster class
+  closing, blue flags, a slower car ahead in a braking zone, pit-window reminders. (No
+  instant "car alongside" proximity call — that split-second awareness stays with the
+  driver's eyes and mirrors.)
 
 It advises; it never acts on the car for you.
 
@@ -91,6 +93,22 @@ See [CLAUDE.md](CLAUDE.md) for instructions to Claude Code working in this repo.
 
 Nothing flows back into the game. The engineer's only output to the driver is its voice
 (and the on-screen dashboard).
+
+## Installing (Windows)
+
+Race Engineer is a **Windows 10/11 (x64)** desktop app. Grab `Race Engineer-<version>-setup.exe`
+(installer) or `-portable.exe` (no install) from the releases, or build it yourself:
+
+```
+pnpm install
+pnpm --filter @race-engineer/desktop dist:win   # → apps/desktop/dist/
+```
+
+> **First run shows a SmartScreen warning — this is expected.** The app is **unsigned** (we ship
+> without a code-signing certificate, by choice — it keeps the project free; see
+> [docs/16](docs/16-PLATFORM-PREREQUISITES.md)). When Windows says *"Windows protected your PC,"*
+> click **More info → Run anyway**. If your antivirus flags it, that's a false positive on an
+> unsigned app that reads game memory and the mic — allow it, or build from source above.
 
 ## Free & open-source
 

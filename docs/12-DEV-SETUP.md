@@ -85,7 +85,7 @@ starting LMU, and gives reproducible fixtures for CI.
   normalizer conversions, event debounce/cooldown, tool result shapes.
 - **Replay/integration:** recorded sessions → assert strategy outputs at known moments
   (fuel-to-finish ±1 lap by mid-stint; pit call matches hand-labeled correct call).
-- **Latency harness:** measure STT→first-audio and spotter-trigger→audio per provider;
+- **Latency harness:** measure STT→first-audio and event-trigger→audio per provider;
   enforce tier budgets.
 - **AI hallucination guard:** assert every number the model speaks appears in a tool
   result that turn.

@@ -3,7 +3,6 @@ import { fileURLToPath } from 'node:url';
 import {
   EventDetector,
   RaceStateSchema,
-  spotterRule,
   trafficRule,
   type EngineerEvent,
   type RaceState,
@@ -35,16 +34,6 @@ describe('real LMU recording fixture (Le Mans multi-class)', () => {
     expect(classes.has('Hyper')).toBe(true);
     expect(classes.has('LMP2')).toBe(true);
     expect(classes.has('GT3')).toBe(true);
-  });
-
-  it('runs the spotter over real side-by-side traffic and produces side call-outs', async () => {
-    const frames = await loadFixture();
-    const detector = new EventDetector([spotterRule()]);
-    const events: EngineerEvent[] = [];
-    for (const frame of frames) events.push(...detector.process(frame));
-    // The window is centred on a 0.0 m along-track moment, so a real car draws alongside → left/right.
-    const sides = events.filter((e) => e.type === 'car_left' || e.type === 'car_right');
-    expect(sides.length).toBeGreaterThan(0);
   });
 
   // The player here is a GT3 — the slowest class in the field (Hyper ~218 s, LMP2 ~226 s, GT3 ~255 s).

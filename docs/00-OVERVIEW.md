@@ -60,7 +60,7 @@ The MVP is a **single vertical slice that talks**:
   / "who's behind me?" and get a correct spoken answer in < ~2 s.
 - Deterministic fuel calculation: laps remaining on current fuel, and laps-to-finish
   delta, spoken on request and proactively when fuel runs low.
-- Basic spotter call-out for a car alongside (templated audio, sub-300 ms).
+- Anticipatory traffic awareness (a faster class closing, a blue flag) as an LLM-generated call-out from the live data.
 
 Everything beyond that (full strategy optimizer, setup tuning, multi-game) is roadmap.
 See [10-ROADMAP.md](10-ROADMAP.md).
@@ -80,7 +80,7 @@ See [10-ROADMAP.md](10-ROADMAP.md).
 
 ## Success metrics
 
-- **Latency:** spotter call-outs < 300 ms; conversational answers < 2 s to first audio.
+- **Latency:** conversational answers < ~2 s to first audio; proactive call-outs are looser (non-reflex).
 - **Accuracy:** fuel-to-finish estimate within ±1 lap by mid-stint; pit-call timing
   agrees with a human strategist on replayed races.
 - **Trust:** the driver acts on the engineer's calls without double-checking a screen.

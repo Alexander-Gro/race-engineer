@@ -31,14 +31,15 @@ is genuinely worth saying (or answers when asked), generates the words from the 
 the TTS voices them. Judge **every** change against this: _does the engineer reason and speak like a
 real human race engineer, or is it reading a script?_
 
-- **The one deliberate exception — Tier-0 reflex spotter calls** ("car left", "3-wide", "clear").
-  These must land in **< 300 ms**, so they are **pre-rendered clips**, not a live LLM round-trip (a
-  late "car left" is useless). *Everything else* — fuel, energy, pit windows, traffic, coaching, and
-  every answer the driver asks — is **LLM-generated from data, by default**.
+- **No exceptions — every line is LLM-generated.** Fuel, energy, pit windows, traffic, coaching, and
+  every answer the driver asks are **LLM-generated from data, by default**. (There is **no** instant
+  proximity spotter — no "car left / 3-wide / clear" reflex clips. Split-second "a car is alongside
+  *right now*" awareness is the driver's own eyes and mirrors; the engineer's traffic job is the
+  *anticipatory* layer — a faster class closing, a blue flag — generated like everything else.)
 - **Template / canned phrasing is a _degraded fallback only_** — for when no model is available (no
   key, no local model, a cost cap hit, offline). It is **never** the intended default voice. If the
-  driver hears templated lines for anything above Tier-0, the AI engineer isn't actually running —
-  that's a **bug to fix**, not the design.
+  driver hears templated lines, the AI engineer isn't actually running — that's a **bug to fix**, not
+  the design.
 - **Local-first ≠ template-first.** The free default (docs/15) runs a **local model (Qwen via
   Ollama)** at $0 — that *is* the AI. Cloud Claude is the opt-in upgrade, not the only way to get a
   real engineer.
@@ -77,11 +78,11 @@ core is the one decision most likely to be revisited.
 1. **The LLM never computes numbers.** Fuel, stint, pit, and degradation math are pure,
    unit-tested TypeScript functions. The LLM *calls* them as tools and phrases results.
 2. **The AI generates the words; the voice only speaks them** (the vision above; tiers in docs/06).
-   Every **Tier-1+ utterance — proactive call-outs *and* answers — is LLM-generated from the live
-   data by default.** Canned/template phrasing is a **degraded fallback only** (no model / cost cap
-   / offline), never the default. The **sole exception is Tier-0 reflex spotter calls** ("car left",
-   "3-wide", "clear"): pre-rendered clips, **never** a live LLM round-trip (< 300 ms safety). Never
-   block the telemetry loop on network I/O.
+   **Every** utterance — proactive call-outs *and* answers — is LLM-generated from the live data by
+   default. Canned/template phrasing is a **degraded fallback only** (no model / cost cap / offline),
+   never the default. There is **no** pre-rendered reflex spotter (the old "car left / 3-wide / clear"
+   tier was removed): no instant proximity call-outs at all. Never block the telemetry loop on
+   network I/O.
 3. **The telemetry read loop is the hot path.** Keep it allocation-light and off the UI
    thread. Normalize raw game structs into the canonical schema in [docs/04-DATA-MODEL.md](docs/04-DATA-MODEL.md)
    immediately; nothing downstream should know about rF2/LMU struct layouts.

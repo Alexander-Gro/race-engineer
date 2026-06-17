@@ -58,7 +58,7 @@ incur inference cost, and a user must never be surprised by one. Full design in
 | R2 | LMU REST API undocumented and changes between builds | High | Med | Treat as unofficial; isolate in adapter; cache; feature-detect; fall back to shared memory |
 | R3 | Current TC/ABS/brake-bias values not readable (so advice can't reference exact baseline) | Med | Med | Spike S3; read from setup file if not in telemetry; or ask the driver to confirm the baseline once, then track relative advice |
 | R4 | Advice quality / wrong strategy or setup call erodes trust | Med | High | LLM never does math (tools only); confidence-gated proactivity; hallucination guard test; "trustworthy or silent"; before/after verification |
-| R5 | Voice latency too high to feel like a real engineer | Med | High | Tiered audio; pre-rendered spotter; sentence-streamed TTS; provider latency benchmarks; local mode |
+| R5 | Voice latency too high to feel like a real engineer | Med | High | Tiered audio; sentence-streamed TTS; streaming STT+LLM; provider latency benchmarks; local mode |
 | R6 | LLM hallucinates numbers | Med | High | LLM never computes; every spoken number must come from a tool result that turn (automated guard) |
 | R7 | Cloud AI/voice cost too high for multi-hour races | Med | Med | Fast-model default + caching; per-session budget cap; local STT/TTS mode; cost-per-hour estimator |
 | R8 | Electron footprint hurts sim performance | Med | Med | Hot loop in worker; throttled UI; minimal-overlay mode; Tauri escape hatch (pure core/strategy ports cleanly) |

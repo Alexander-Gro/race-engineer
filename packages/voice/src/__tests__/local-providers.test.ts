@@ -33,8 +33,10 @@ describe('local TTS shells (Piper / Kokoro)', () => {
     for (const provider of [piperTts(), kokoroTts()]) {
       expect(provider.name).toMatch(/piper|kokoro/);
       expect(provider.available).toBe(false);
-      expect(() => provider.synthesizeStream('car left', 'v1')).toThrow(ProviderNotReadyError);
-      await expect(provider.prerender(['Clear.'], 'v1')).rejects.toThrow(ProviderNotReadyError);
+      expect(() => provider.synthesizeStream('box box', 'v1')).toThrow(ProviderNotReadyError);
+      await expect(provider.prerender(['Pit confirm.'], 'v1')).rejects.toThrow(
+        ProviderNotReadyError,
+      );
     }
   });
 
@@ -43,13 +45,13 @@ describe('local TTS shells (Piper / Kokoro)', () => {
     expect(piper.available).toBe(true);
     expect(await drain(piper)).toBe(3); // "box this lap"
 
-    const clips = await piper.prerender(['Car left.', 'Clear.'], 'v1');
-    expect(clips.get('Car left.')?.label).toBe('Car left.');
+    const clips = await piper.prerender(['Box box.', 'Pit confirm.'], 'v1');
+    expect(clips.get('Box box.')?.label).toBe('Box box.');
     expect(clips.size).toBe(2);
-    // Bytes are retained so the Tier-0 clip is actually audible (was metadata-only before).
-    const audio = clips.get('Car left.')?.audio?.data;
+    // Bytes are retained so the pre-rendered clip is actually audible (was metadata-only before).
+    const audio = clips.get('Box box.')?.audio?.data;
     expect(audio).toBeInstanceOf(Uint8Array);
-    expect(new TextDecoder().decode(audio)).toBe('Carleft.'); // the fake backend's per-word chunks
+    expect(new TextDecoder().decode(audio)).toBe('Boxbox.'); // the fake backend's per-word chunks
   });
 });
 
@@ -81,10 +83,10 @@ describe('voice provider selection (provider-swap is config-only)', () => {
   });
 
   it('defaults to the free/local profile (docs/15) and swaps one field without touching code', () => {
-    expect(DEFAULT_VOICE_PROFILE).toEqual({ tts: 'kokoro', stt: 'faster-whisper' });
-    const swapped: VoiceProviderConfig = { ...DEFAULT_VOICE_PROFILE, tts: 'piper' };
-    expect(selectTtsProvider(swapped).name).toBe('piper');
-    expect(selectSttProvider(swapped).name).toBe('faster-whisper'); // unchanged
+    expect(DEFAULT_VOICE_PROFILE).toEqual({ tts: 'piper', stt: 'whisper-cpp' });
+    const swapped: VoiceProviderConfig = { ...DEFAULT_VOICE_PROFILE, tts: 'kokoro' };
+    expect(selectTtsProvider(swapped).name).toBe('kokoro');
+    expect(selectSttProvider(swapped).name).toBe('whisper-cpp'); // unchanged
   });
 
   it('threads injected backends through the selector so the local provider is ready', () => {

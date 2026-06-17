@@ -78,13 +78,14 @@ Wraps Anthropic Claude. Two roles:
 - **Reactive** — handles driver radio: STT transcript → Claude (with tools that query
   the Strategy Engine and current `RaceState`) → spoken answer.
 - **Proactive** — turns selected high-level events/strategy decisions into natural
-  engineer phrasing (e.g. announcing a pit window). Low-level spotter calls bypass the
-  LLM entirely. See [06-AI-ENGINEER.md](06-AI-ENGINEER.md).
+  engineer phrasing (e.g. announcing a pit window), all LLM-generated from the live data.
+  See [06-AI-ENGINEER.md](06-AI-ENGINEER.md).
 
 ### 6. Voice I/O
 - **STT:** capture mic while PTT held → streaming transcription.
-- **TTS:** synthesize the engineer voice; manage a priority queue so urgent spotter
-  calls preempt chatter; apply radio SFX; route to chosen output device.
+- **TTS:** synthesize the engineer voice; manage a priority queue so utterances play in
+  priority order (a reply to the driver tops the queue); apply radio SFX; route to chosen
+  output device.
 See [07-VOICE-IO.md](07-VOICE-IO.md).
 
 ### 7. Input Reader (read-only)
@@ -116,10 +117,8 @@ Adapter.readFrame()           # raw rF2 structs + REST snapshot
    → Normalizer.toRaceState() # canonical RaceState @ 60 Hz
    → EventDetector.diff(prev, next) → [Event...]
    → StrategyEngine.update(RaceState)        # cheap incremental update
-        ├─ events routed by tier:
-        │    tier 0 (spotter)   → Voice (pre-rendered clips) directly — never the LLM
-        │    tier 1+ (strategic) → AI Engineer GENERATES the line from the event + data → Voice
-        │                          (template phrasing only as a degraded fallback)
+        ├─ candidate events → AI Engineer GENERATES the line from the event + data → Voice
+        │                     (template phrasing only as a degraded fallback)
         └─ RaceState + strategy snapshot → UI (throttled to ~10–15 Hz)
    → Persistence.appendIfLapBoundary()
 ```
@@ -137,15 +136,14 @@ PTT pressed → mic capture → STT (stream) → AI Engineer
 
 | Tier | Example | Mechanism | Budget |
 | --- | --- | --- | --- |
-| 0 Reflex | "Car left", "3-wide" | Pre-rendered audio clips, no network — **never the LLM** | < 300 ms |
-| 1 Proactive (strategic) | "Box this lap", "Energy's tight — save ~2% a lap" | **LLM generates from the event + data** → TTS; template phrasing only as a degraded fallback | < ~1.5 s (looser — non-reflex) |
-| 2 Conversational | "Should I undercut the GTE ahead?" | STT → LLM(+read-only tools) → streaming TTS | < 2 s to first audio |
+| 1 Proactive (strategic) | "Box this lap", "Energy's tight — save ~2% a lap" | **LLM generates from the event + data** → TTS; template phrasing only as a degraded fallback | looser — non-reflex |
+| 2 Conversational | "Should I undercut the GTE ahead?" | STT → LLM(+read-only tools) → streaming TTS | < ~2 s to first audio |
 | 3 Deliberative | "Plan my whole stint sequence" | LLM with full context, may take seconds | best effort |
 
 The Event Detector tags each event with its tier so the right path is taken without a runtime
-decision in the hot loop. **Tier-0 is the only pre-rendered tier; Tiers 1–3 are LLM-generated** —
-template phrasing is the *fallback* when no model is available (no key / no local model / cost cap /
-offline), not the default voice (see the north star in [CLAUDE.md](../CLAUDE.md) and [docs/06](06-AI-ENGINEER.md)).
+decision in the hot loop. **Every tier is LLM-generated** — template phrasing is the *fallback* when
+no model is available (no key / no local model / cost cap / offline), not the default voice (see the
+north star in [CLAUDE.md](../CLAUDE.md) and [docs/06](06-AI-ENGINEER.md)).
 
 ## Failure & degradation
 

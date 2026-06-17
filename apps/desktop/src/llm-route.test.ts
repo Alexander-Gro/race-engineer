@@ -1,6 +1,6 @@
 import { selectLlmProvider } from '@race-engineer/ai';
 import { describe, expect, it } from 'vitest';
-import { resolveLlmRouteConfig } from './llm-route';
+import { freeRouteWithLocalOllama, resolveLlmRouteConfig } from './llm-route';
 import { InMemorySecretStore } from './secrets';
 
 describe('resolveLlmRouteConfig', () => {
@@ -36,5 +36,32 @@ describe('resolveLlmRouteConfig', () => {
     expect(() => selectLlmProvider(resolveLlmRouteConfig({ provider: 'claude' }, empty))).toThrow(
       /API key/i,
     );
+  });
+});
+
+describe('freeRouteWithLocalOllama (vision: free = local AI)', () => {
+  const template = { provider: 'template' as const };
+
+  it('upgrades the free template route to local Ollama when one is running, preferring Qwen', () => {
+    expect(
+      freeRouteWithLocalOllama(template, { reachable: true, models: ['llama3.1', 'qwen2.5:7b'] }),
+    ).toEqual({ provider: 'ollama', model: 'qwen2.5:7b' });
+  });
+
+  it('falls back to the first pulled model when no Qwen is present', () => {
+    expect(freeRouteWithLocalOllama(template, { reachable: true, models: ['llama3.1'] })).toEqual({
+      provider: 'ollama',
+      model: 'llama3.1',
+    });
+  });
+
+  it('keeps the template route when Ollama is unreachable or has no models (still talks offline)', () => {
+    expect(freeRouteWithLocalOllama(template, { reachable: false, models: [] })).toEqual(template);
+    expect(freeRouteWithLocalOllama(template, { reachable: true, models: [] })).toEqual(template);
+  });
+
+  it('never overrides an explicitly chosen route (user picked Ollama/cloud)', () => {
+    const claude = { provider: 'claude' as const, apiKey: 'k' };
+    expect(freeRouteWithLocalOllama(claude, { reachable: true, models: ['qwen2.5'] })).toBe(claude);
   });
 });

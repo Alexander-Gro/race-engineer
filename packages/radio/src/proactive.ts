@@ -1,6 +1,15 @@
-import type { EngineerEvent, EventType } from '@race-engineer/core';
-import type { LlmProvider } from '@race-engineer/ai';
+import type { EngineerEvent } from '@race-engineer/core';
 import {
+  runProactiveTurn,
+  TONE_TAG_INSTRUCTION,
+  type ChatMessage,
+  type HallucinationReport,
+  type LlmProvider,
+  type Persona,
+  type RaceContextProvider,
+} from '@race-engineer/ai';
+import {
+  parseToneTag,
   speak,
   VoicePriority,
   type AudioClip,
@@ -10,33 +19,26 @@ import {
 } from '@race-engineer/voice';
 
 /**
- * Proactive call-out routing (docs/06 §Proactive, docs/01 §Latency tiers): turn the Event
- * Detector's {@link EngineerEvent}s into engineer audio on the {@link VoicePlayer}, each on the
- * right tier.
- *
- *  - **Tier-0 reflex** (`car_left` / `car_right` / `three_wide` / `clear`) → a **pre-rendered**
- *    clip, played at near-zero latency. **Never an LLM round-trip and never live synthesis**
- *    (CLAUDE.md rule 2): the clip comes straight from {@link prerenderTier0}'s map.
- *  - **Tier 1+** (`fuel_low`, …) → a short phrase (LLM-phrased or templated) spoken via
- *    sentence-streamed TTS. The phrase only ever *reads back* numbers the strategy engine put in
- *    the event payload — the model phrases, it never computes (CLAUDE.md rule 1).
+ * Proactive call-out routing (docs/06 §Proactive): turn the Event Detector's {@link EngineerEvent}s
+ * into engineer audio on the {@link VoicePlayer}. Each event is phrased — LLM-reasoned from the live
+ * data by default ({@link engineerPhraser}), or templated as the degraded fallback — and spoken via
+ * sentence-streamed TTS. The model phrases; it never computes (CLAUDE.md rule 1). Nothing cuts off a
+ * line in progress; call-outs queue and play in priority order (the driver's PTT barge-in is the
+ * only interrupt).
  *
  * Read-only/advisory throughout: this produces audio only; nothing here touches the game.
  */
 
-/** Produces the spoken text for a (non-reflex) event, or `null` to stay silent. */
+/** Produces the spoken text for an event, or `null` to stay silent. */
 export type ProactivePhraser = (event: EngineerEvent) => string | null | Promise<string | null>;
 
-const URGENT_REFLEX = new Set<EventType>(['car_left', 'car_right', 'three_wide']);
-
 /**
- * Default mapping from an event to a {@link VoicePriority} for the queue. Urgent reflex calls
- * preempt (SPOTTER); a `clear` release just queues (STRATEGY); `fuel_low` is a WARNING at its
- * urgent threshold (≤2 laps) and a STRATEGY heads-up otherwise. (The rules' own `priority`
- * fields predate the voice scale and aren't reused directly.) Override via the router options.
+ * Default mapping from an event to a {@link VoicePriority} for the queue. `fuel_low`/`energy_low` are
+ * WARNING at their urgent threshold (≤2 laps) and a STRATEGY heads-up otherwise; `box_this_lap` and
+ * `blue_flag` are WARNING; Tier-2+ events are CHATTER; everything else is a STRATEGY heads-up. (The
+ * rules' own `priority` fields predate the voice scale and aren't reused.) Override via the router.
  */
 export const defaultVoicePriority = (event: EngineerEvent): number => {
-  if (URGENT_REFLEX.has(event.type)) return VoicePriority.SPOTTER;
   if (event.type === 'fuel_low' || event.type === 'energy_low') {
     const threshold = event.payload.thresholdLaps;
     return typeof threshold === 'number' && threshold <= 2
@@ -46,7 +48,7 @@ export const defaultVoicePriority = (event: EngineerEvent): number => {
   if (event.type === 'box_this_lap' || event.type === 'blue_flag') return VoicePriority.WARNING;
   if (event.type === 'pit_window_open') return VoicePriority.STRATEGY; // strategy heads-up, not chatter
   if (event.tier >= 2) return VoicePriority.CHATTER;
-  return VoicePriority.STRATEGY; // `clear` + other Tier-1 proactive call-outs
+  return VoicePriority.STRATEGY;
 };
 
 /**
@@ -77,6 +79,8 @@ export const templatePhraser: ProactivePhraser = (event) => {
       if (dir === 'cold') return 'Tyres are below temperature — push to get some heat in.';
       return 'Tyres are out of their window.';
     }
+    case 'tire_temp_recovered':
+      return 'Tyres are up to temperature now.';
     case 'strategy_update': {
       const kind = event.payload.kind;
       if (kind === 'energy-save') {
@@ -108,7 +112,9 @@ export const templatePhraser: ProactivePhraser = (event) => {
 };
 
 /** Short proactive system prompt (docs/06 §Proactive): one natural call-out from structured data. */
-export const PROACTIVE_SYSTEM_PROMPT = `You are the driver's race engineer on the radio. A race event just occurred. Produce ONE short, natural call-out (a sentence or two): calm, concise, numbers first. Use ONLY the numbers in the event data, exactly as given — never invent or recompute a number. You cannot change anything in the car; if action is needed, tell the driver the exact change. Output only the spoken words.`;
+export const PROACTIVE_SYSTEM_PROMPT = `You are the driver's race engineer on the radio. A race event just occurred. Produce ONE short, natural call-out (a sentence or two): concise, numbers first. Use ONLY the numbers in the event data, exactly as given — never invent or recompute a number. You cannot change anything in the car; if action is needed, tell the driver the exact change. Output only the spoken words.
+
+${TONE_TAG_INSTRUCTION}`;
 
 export interface LlmPhraserOptions {
   /** Override the proactive system prompt. */
@@ -135,19 +141,84 @@ export const llmPhraser =
     return text && text.length > 0 ? text : null;
   };
 
+export interface EngineerPhraserOptions {
+  provider: LlmProvider;
+  /** Snapshots the freshest race context each call, so the engineer reasons over live data. */
+  context: RaceContextProvider;
+  persona?: Persona;
+  /** Override the proactive system prompt. */
+  system?: string;
+  /**
+   * Degraded fallback (CLAUDE.md vision): used only when the reasoning turn can't run — no
+   * telemetry yet, the provider errored, a cost cap was hit, or we're offline. **Not** used when the
+   * engineer deliberately stays silent (that returns `null` and the call is correctly dropped).
+   * Defaults to {@link templatePhraser}.
+   */
+  fallback?: ProactivePhraser;
+  /**
+   * Observability hook fired when the AI turn throws and we degrade to {@link fallback}. Without it
+   * a failing provider (e.g. Ollama not running) silently produces pre-written call-outs with no
+   * clue why — wire this to a log so the degrade is visible.
+   */
+  onFallback?: (error: unknown, event: EngineerEvent) => void;
+  /**
+   * Recent call-outs (oldest→newest) fed to the engineer as prior turns, so it doesn't repeat a call
+   * the driver already heard (the skill's "the driver remembers" rule, now with the actual data).
+   * Snapshotted per call so it always reflects what's been said.
+   */
+  history?: () => ChatMessage[];
+  /**
+   * Fired when a generated call-out is **dropped** because a spoken number couldn't be traced to a
+   * tool result this turn (hallucination guard). For an unsolicited call, silence beats a wrong
+   * number — wire this to a log so the drop is visible.
+   */
+  onHallucination?: (report: HallucinationReport, event: EngineerEvent) => void;
+}
+
+/**
+ * The **context-aware engineer phraser** — the vision's default proactive voice (CLAUDE.md). Routes
+ * each flagged event through {@link runProactiveTurn}, so the engineer reads the whole live
+ * situation via its read-only tools, reasons about the cause, and decides whether (and what) to say.
+ * Returns `null` when the engineer judges the moment isn't worth a word (the router then stays
+ * silent). Falls back to {@link templatePhraser} (or a supplied fallback) only on failure — never
+ * computing numbers itself, never reaching a write path.
+ */
+export const engineerPhraser =
+  (opts: EngineerPhraserOptions): ProactivePhraser =>
+  async (event) => {
+    try {
+      const result = await runProactiveTurn({
+        provider: opts.provider,
+        context: opts.context,
+        event,
+        persona: opts.persona,
+        system: opts.system,
+        ...(opts.history ? { history: opts.history() } : {}),
+      });
+      // Never voice an unverified number on an unsolicited call — drop it (silence > a wrong number).
+      if (result.text && !result.hallucination.grounded) {
+        opts.onHallucination?.(result.hallucination, event);
+        return null;
+      }
+      return result.text; // string to speak, or null = the engineer chose silence
+    } catch (err) {
+      // No telemetry yet / provider error / cost cap / offline → degraded template fallback.
+      // Surface it (don't swallow): a silently-failing provider looks like "pre-written call-outs".
+      opts.onFallback?.(err, event);
+      return (opts.fallback ?? templatePhraser)(event);
+    }
+  };
+
 export type RoutedOutcome =
-  | { kind: 'prerendered'; event: EngineerEvent; clip: AudioClip; priority: number }
   | { kind: 'spoken'; event: EngineerEvent; text: string; clips: AudioClip[]; priority: number }
   | { kind: 'skipped'; event: EngineerEvent; reason: 'no-audio' };
 
 export interface ProactiveVoiceRouterOptions {
   player: VoicePlayer;
-  /** Pre-rendered Tier-0 clips keyed by event type (from {@link prerenderTier0}). */
-  tier0Clips: ReadonlyMap<string, AudioClip>;
-  /** TTS for phrased (Tier 1+) call-outs. */
+  /** TTS for phrased call-outs. */
   tts: TtsProvider;
   voice: VoiceId;
-  /** Phraser for non-reflex events. Default {@link templatePhraser}; swap in {@link llmPhraser}. */
+  /** Phraser for events. Default {@link templatePhraser}; the vision default is {@link engineerPhraser}. */
   phrase?: ProactivePhraser;
   /** Event → queue priority. Default {@link defaultVoicePriority}. */
   priorityFor?: (event: EngineerEvent) => number;
@@ -155,7 +226,6 @@ export interface ProactiveVoiceRouterOptions {
 
 export class ProactiveVoiceRouter {
   readonly #player: VoicePlayer;
-  readonly #tier0Clips: ReadonlyMap<string, AudioClip>;
   readonly #tts: TtsProvider;
   readonly #voice: VoiceId;
   readonly #phrase: ProactivePhraser;
@@ -163,23 +233,21 @@ export class ProactiveVoiceRouter {
 
   constructor(opts: ProactiveVoiceRouterOptions) {
     this.#player = opts.player;
-    this.#tier0Clips = opts.tier0Clips;
     this.#tts = opts.tts;
     this.#voice = opts.voice;
     this.#phrase = opts.phrase ?? templatePhraser;
     this.#priorityFor = opts.priorityFor ?? defaultVoicePriority;
   }
 
-  /** Route one event to the voice queue. Reflex events enqueue a pre-rendered clip synchronously. */
+  /** Route one event to the voice queue: phrase it, then synthesize + enqueue (or skip if silent). */
   async route(event: EngineerEvent): Promise<RoutedOutcome> {
     const priority = this.#priorityFor(event);
-    const clip = this.#tier0Clips.get(event.type);
-    if (clip) {
-      // Tier-0: pre-rendered, no synth, no LLM — hits the queue immediately (docs/01 Tier 0).
-      this.#player.enqueue(clip, priority);
-      return { kind: 'prerendered', event, clip, priority };
-    }
-    const text = (await this.#phrase(event))?.trim();
+    const raw = (await this.#phrase(event))?.trim();
+    if (!raw) return { kind: 'skipped', event, reason: 'no-audio' };
+    // Split the LLM's leading tone tag from the words: `text` is the clean spoken line (for the
+    // transcript/log/tests), `tone` drives the voice. `speak()` also strips the tag from audio, so
+    // passing the raw line would be safe too — we parse here to keep the outcome's `text` clean.
+    const { tone, text } = parseToneTag(raw);
     if (!text) return { kind: 'skipped', event, reason: 'no-audio' };
     const clips = await speak({
       player: this.#player,
@@ -187,22 +255,15 @@ export class ProactiveVoiceRouter {
       voice: this.#voice,
       text,
       priority,
+      delivery: { tone },
     });
     return { kind: 'spoken', event, text, clips, priority };
   }
 
-  /**
-   * Route a batch (one detector tick). Reflex (pre-rendered) events are enqueued **first** so a
-   * spotter call never waits behind a phrased call-out's TTS synthesis — preserving the Tier-0
-   * latency budget. Returns outcomes in original event order.
-   */
+  /** Route a batch (one detector tick) in order; higher-priority calls play first via the queue. */
   async routeAll(events: readonly EngineerEvent[]): Promise<RoutedOutcome[]> {
-    const outcomes = new Array<RoutedOutcome>(events.length);
-    const reflex: number[] = [];
-    const phrased: number[] = [];
-    events.forEach((e, i) => (this.#tier0Clips.has(e.type) ? reflex : phrased).push(i));
-    for (const i of reflex) outcomes[i] = await this.route(events[i]!);
-    for (const i of phrased) outcomes[i] = await this.route(events[i]!);
+    const outcomes: RoutedOutcome[] = [];
+    for (const event of events) outcomes.push(await this.route(event));
     return outcomes;
   }
 }

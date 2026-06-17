@@ -1,12 +1,15 @@
 /**
  * Voice output contracts (docs/07). Providers are swappable and testable with fakes; the
- * priority queue + Tier-0 pre-render are pure logic over an injectable {@link AudioSink}, so
- * all of it runs in unit tests with no audio device, no key, and no network.
+ * priority queue is pure logic over an injectable {@link AudioSink}, so all of it runs in unit
+ * tests with no audio device, no key, and no network.
  *
- * Tiered output (docs/01, docs/07): reflex spotter calls are pre-rendered clips played at the
- * highest priority; conversational replies stream from TTS at low priority. Higher priority
- * preempts lower so a long strategy explanation never steps on a "car left".
+ * Tiered output (docs/01, docs/07): every engineer line is synthesized and queued. Nothing cuts off
+ * a line in progress — call-outs and replies queue and play in priority order (a higher-priority
+ * call jumps ahead of lower-priority ones, but waits for the current clip to finish). The only
+ * interrupt is the driver keying push-to-talk (`bargeInStop`).
  */
+
+import type { VoiceDelivery } from './tone';
 
 export type VoiceId = string;
 
@@ -63,25 +66,39 @@ export interface TtsProvider {
    * graceful fallback chain instead of failing mid-race (docs/15 §free routes).
    */
   readonly available?: boolean;
-  /** Stream synthesized audio so playback can start before the whole reply is generated. */
-  synthesizeStream(text: string, voice: VoiceId): AsyncIterable<AudioChunk>;
+  /**
+   * Stream synthesized audio so playback can start before the whole reply is generated. The optional
+   * {@link VoiceDelivery} carries the emotional register (docs/06 vision): a provider that can express
+   * tone (Piper via its noise/length knobs, the cloud voice via a tone instruction) renders it; one
+   * that can't simply ignores it and speaks neutrally. Delivery only — it never changes the words.
+   */
+  synthesizeStream(
+    text: string,
+    voice: VoiceId,
+    delivery?: VoiceDelivery,
+  ): AsyncIterable<AudioChunk>;
   /** Pre-render fixed phrases once (Tier-0); returns a phrase→clip map. */
   prerender(phrases: readonly string[], voice: VoiceId): Promise<Map<string, AudioClip>>;
 }
 
 /**
- * Suggested priorities for {@link VoicePlayer.enqueue} (higher preempts lower). Items at or
- * above the player's urgent threshold (default {@link VoicePriority.WARNING}) preempt the
- * current utterance; below it, they queue and play in priority order.
+ * Suggested priorities for {@link VoicePlayer.enqueue} (higher plays first). Nothing **preempts**
+ * (cuts off) the current utterance by priority alone — items **queue** and play in priority order, a
+ * higher-priority one jumping ahead of lower-priority ones but waiting for the current clip to
+ * finish. The only interrupt is the driver keying PTT ({@link VoicePlayer.bargeInStop}) — or an
+ * explicit `preempt` flag on `enqueue`.
  */
 export const VoicePriority = {
-  /** Tier-0 reflex safety call-outs ("car left", "three wide"). */
-  SPOTTER: 100,
-  /** Urgent strategy ("box this lap", blue flag). */
+  /**
+   * A live reply to the driver's own question. The top tier: an answer is delivered ahead of any
+   * queued call-out (the driver asked; finish answering before volunteering something else).
+   */
+  CONVERSATION: 90,
+  /** Urgent strategy ("box this lap", blue flag) — jumps the queue, ahead of routine call-outs. */
   WARNING: 80,
   /** Normal strategy call-outs. */
   STRATEGY: 50,
-  /** Conversational replies / low-priority chatter. */
+  /** Low-priority chatter (e.g. unsolicited Tier-2 colour). */
   CHATTER: 20,
 } as const;
 

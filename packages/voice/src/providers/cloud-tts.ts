@@ -1,4 +1,17 @@
+import { DEFAULT_TONE, type VocalTone, type VoiceDelivery } from '../tone';
 import type { AudioChunk, AudioClip, TtsProvider, VoiceId } from '../types';
+
+/**
+ * Tone → a natural-language delivery instruction for an instruction-aware cloud voice (OpenAI
+ * `gpt-4o-mini-tts` takes an `instructions` field that steers *how* it speaks). This is where the
+ * LLM's chosen register becomes audible emotion. `calm` sends none — the voice's neutral default.
+ */
+const TONE_INSTRUCTION: Record<VocalTone, string | null> = {
+  calm: null,
+  urgent: 'Speak with urgency and tension — fast, clipped, and firm, like a race engineer calling the driver in right now.',
+  upbeat: 'Speak with warmth and energy — encouraging and pleased, like praising a strong lap.',
+  serious: 'Speak in a low, deliberate, serious tone — measured and grave, no lightness.',
+};
 
 /**
  * Cloud TTS provider (build-plan T10.1 slice 3b, docs/07 §TTS, docs/15 §premium BYO-key). Speaks via
@@ -92,7 +105,12 @@ export class CloudTtsProvider implements TtsProvider {
    * is an app-level handle, not an OpenAI voice). The endpoint returns the whole clip, yielded as one
    * chunk — `speak()` synthesizes per sentence, so the first sentence still plays while the next renders.
    */
-  async *synthesizeStream(text: string, _voice: VoiceId): AsyncIterable<AudioChunk> {
+  async *synthesizeStream(
+    text: string,
+    _voice: VoiceId,
+    delivery?: VoiceDelivery,
+  ): AsyncIterable<AudioChunk> {
+    const instructions = TONE_INSTRUCTION[delivery?.tone ?? DEFAULT_TONE];
     const res = await this.#fetch(`${this.#baseUrl}/audio/speech`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', authorization: `Bearer ${this.#apiKey}` },
@@ -101,6 +119,9 @@ export class CloudTtsProvider implements TtsProvider {
         input: text,
         voice: this.#voice,
         response_format: this.#format,
+        // Steer *delivery* only (the LLM's chosen tone) — never the words. Omitted for the neutral
+        // default and for models that don't accept it (the field is simply ignored server-side).
+        ...(instructions ? { instructions } : {}),
       }),
     });
     if (!res.ok) {

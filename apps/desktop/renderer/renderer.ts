@@ -24,6 +24,14 @@ import {
 import { buildHandlingModel, type HandlingModel } from '../src/dashboard/handling-model';
 import { CalloutSpeaker, type CalloutSpeechPort } from '../src/callout';
 import { estimateCloudCost } from '../src/cost';
+import {
+  buildRadioChain,
+  makeNoiseBuffer,
+  playKeyClick,
+  playRogerBeep,
+  startStatic,
+} from '../src/radio-fx';
+import { modelCatalogFor, providerUsesModel } from '../src/model-catalog';
 import type { PttApi } from '../src/ptt-mapping';
 import {
   LLM_PROVIDER_IDS,
@@ -563,12 +571,50 @@ const wireAudioOut = (): void => {
   const audio = document.getElementById('engineer-audio') as HTMLAudioElement | null;
   if (!audio) return;
 
+  // F1-broadcast radio overlay: route the engineer-audio element through a comms-style chain (bandpass
+  // + grit + compression) and bracket each *transmission* with a roger beep + faint static. Built once
+  // (a MediaElementSource can only be created per element once); a failure degrades to the clean voice.
+  let radioFx: { ctx: AudioContext; chainIn: AudioNode; noise: AudioBuffer } | null = null;
+  let radioInitTried = false;
+  const ensureRadioFx = (): typeof radioFx => {
+    if (radioInitTried) return radioFx;
+    radioInitTried = true;
+    try {
+      const Ctx: typeof AudioContext | undefined =
+        window.AudioContext ??
+        (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+      if (!Ctx) return null;
+      const ctx = new Ctx();
+      const source = ctx.createMediaElementSource(audio);
+      const chain = buildRadioChain(ctx);
+      source.connect(chain.input);
+      chain.output.connect(ctx.destination);
+      radioFx = { ctx, chainIn: chain.input, noise: makeNoiseBuffer(ctx, 1) };
+    } catch (err) {
+      console.warn('[radio-fx] radio overlay unavailable — playing the clean voice', err);
+      radioFx = null;
+    }
+    return radioFx;
+  };
+  // A transmission = one or more back-to-back clips (a streamed reply is many sentence-clips). Beep
+  // only when a *new* transmission opens (a real gap since the last clip ended), not per sentence.
+  const NEW_TRANSMISSION_GAP_MS = 400;
+  let lastClipEndedMs = Number.NEGATIVE_INFINITY;
+
   const backend: AudioSink = {
     play(clip: AudioClip, opts: { volume: number; onEnded: () => void }): PlaybackHandle {
       if (!clip.audio) {
         // No synthesized bytes: keep the queue moving by completing after the estimated duration.
         const timer = window.setTimeout(() => opts.onEnded(), clip.durationMs ?? 0);
         return { stop: () => window.clearTimeout(timer), setVolume: () => {} };
+      }
+      const fx = ensureRadioFx();
+      let stopStatic: (() => void) | null = null;
+      if (fx) {
+        void fx.ctx.resume().catch(() => undefined); // no-op if already running
+        const openingTransmission = performance.now() - lastClipEndedMs > NEW_TRANSMISSION_GAP_MS;
+        if (openingTransmission) playRogerBeep(fx.ctx, fx.chainIn, fx.noise);
+        stopStatic = startStatic(fx.ctx, fx.chainIn, fx.noise);
       }
       // Copy into a fresh ArrayBuffer-backed view (the IPC-cloned bytes are `ArrayBufferLike`, which
       // the DOM `BlobPart` type rejects) — cheap for a sentence-sized clip.
@@ -581,6 +627,8 @@ const wireAudioOut = (): void => {
       const cleanup = (): void => {
         if (done) return;
         done = true;
+        stopStatic?.(); // tear down the static bed for this clip
+        lastClipEndedMs = performance.now(); // a gap after this marks the next clip a new transmission
         audio.removeEventListener('ended', onEnded);
         audio.removeEventListener('error', onError);
         URL.revokeObjectURL(url);
@@ -610,7 +658,15 @@ const wireAudioOut = (): void => {
         },
       };
     },
-    setOutputDevice: (id: string) => void applyOutputDevice(audio, id),
+    setOutputDevice: (id: string) => {
+      void applyOutputDevice(audio, id);
+      // Once the element is routed through the radio FX graph, its own sink no longer controls what's
+      // heard — move the AudioContext's sink too (best-effort; runtimes without it keep the element sink).
+      const ctx = radioFx?.ctx as
+        | (AudioContext & { setSinkId?: (id: string) => Promise<void> })
+        | undefined;
+      void ctx?.setSinkId?.(id)?.catch(() => undefined);
+    },
   };
 
   const receive = createAudioReceiver(backend, (m) => window.audioOut.ended(m.pid));
@@ -732,18 +788,48 @@ const wireRadioInput = (): void => {
     if (radioAnswer) radioAnswer.textContent = `🎙 “${msg.heard}” → ${msg.reply}`;
   });
 
+  // A radio "mic key" click on press/release — the key-up/key-down tick of a real transmitter, so the
+  // driver hears the mic open and close. Its own tiny AudioContext (created on the first press gesture,
+  // so autoplay allows it); isolated from the engineer-voice FX path. Degrades silently if unavailable.
+  let clickCtx: AudioContext | null = null;
+  let clickNoise: AudioBuffer | null = null;
+  const micClick = (open: boolean): void => {
+    try {
+      const Ctx: typeof AudioContext | undefined =
+        window.AudioContext ??
+        (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+      if (!Ctx) return;
+      if (!clickCtx) {
+        clickCtx = new Ctx();
+        clickNoise = makeNoiseBuffer(clickCtx, 0.3);
+      }
+      void clickCtx.resume().catch(() => undefined);
+      if (clickNoise) playKeyClick(clickCtx, clickCtx.destination, clickNoise, open);
+    } catch {
+      /* no Web Audio → no click, PTT still works */
+    }
+  };
+
   const setHeld = (held: boolean): void => button.setAttribute('aria-pressed', String(held));
-  button.addEventListener('pointerdown', () => {
+  const press = (): void => {
+    micClick(true); // key up — mic open
     radio.pttDown();
     setHeld(true);
-  });
+  };
   const release = (): void => {
+    micClick(false); // key down — mic closed
     radio.pttUp();
     setHeld(false);
   };
+  button.addEventListener('pointerdown', press);
   button.addEventListener('pointerup', release);
   button.addEventListener('pointerleave', release); // dragged off / released outside → end capture
   button.addEventListener('pointercancel', release);
+
+  // The mapped **hardware wheel button** drives the exact same radio path as the on-screen button:
+  // main reads the bound button (SDL2) and pushes the edge here, so holding it captures the mic →
+  // STT → AI reply → spoken response, hands on the wheel. Input-only — no game path.
+  window.ptt.onLivePtt((down) => (down ? press() : release()));
 };
 wireRadioInput();
 
@@ -756,6 +842,8 @@ wireRadioInput();
 const wireSettingsPanel = (): void => {
   const profile = document.getElementById('set-profile') as HTMLSelectElement | null;
   const llm = document.getElementById('set-llm') as HTMLSelectElement | null;
+  const model = document.getElementById('set-model') as HTMLInputElement | null;
+  const modelList = document.getElementById('set-model-list') as HTMLDataListElement | null;
   const voiceTts = document.getElementById('set-voice-tts') as HTMLSelectElement | null;
   const voiceStt = document.getElementById('set-voice-stt') as HTMLSelectElement | null;
   const proactivity = document.getElementById('set-proactivity') as HTMLSelectElement | null;
@@ -768,6 +856,8 @@ const wireSettingsPanel = (): void => {
   if (
     !profile ||
     !llm ||
+    !model ||
+    !modelList ||
     !voiceTts ||
     !voiceStt ||
     !proactivity ||
@@ -804,12 +894,43 @@ const wireSettingsPanel = (): void => {
     costLabel.textContent = estimateCloudCost(settings).summary;
   };
 
+  // Point the model picker at the chosen engineer: disable it for template mode, show the provider's
+  // default as the placeholder (blank field == that default), and offer its known models as hints. For
+  // Ollama we additionally probe the daemon and surface the models you've actually pulled (effortless
+  // local choice). A blank field always means "use the provider default" (T6.3 follow-up).
+  const refreshModelField = (provider: AppSettings['llm']['provider']): void => {
+    const entry = modelCatalogFor(provider);
+    model.disabled = !providerUsesModel(provider);
+    model.placeholder = entry.default ? `default: ${entry.default}` : 'no model needed';
+    model.title = entry.hint;
+    const fillList = (installed: readonly string[]): void =>
+      modelList.replaceChildren(
+        ...[...new Set([...installed, ...entry.suggestions])].map((value) => {
+          const opt = document.createElement('option');
+          opt.value = value;
+          return opt;
+        }),
+      );
+    fillList([]);
+    if (provider === 'ollama') {
+      void window.settings.listOllamaModels().then((info) => {
+        // The user may have switched provider while we awaited — only paint if Ollama is still selected.
+        if (llm.value === 'ollama' && info.models.length > 0) fillList(info.models);
+      });
+    }
+  };
+
   const persist = (): void => {
     if (!current) return;
+    const modelId = model.value.trim();
     const next: AppSettings = {
       ...current,
       profile: profile.value as AppSettings['profile'],
-      llm: { ...current.llm, provider: llm.value as AppSettings['llm']['provider'] },
+      llm: {
+        provider: llm.value as AppSettings['llm']['provider'],
+        // Omit when blank so the worker falls back to the provider's own default model.
+        ...(modelId ? { model: modelId } : {}),
+      },
       voice: {
         ...current.voice,
         tts: voiceTts.value as AppSettings['voice']['tts'],
@@ -827,8 +948,18 @@ const wireSettingsPanel = (): void => {
     keysLabel.textContent = slots.length > 0 ? `keys set: ${slots.join(', ')}` : 'no keys set';
   };
 
-  for (const control of [profile, llm, voiceTts, voiceStt, proactivity])
+  for (const control of [profile, voiceTts, voiceStt, proactivity])
     control.addEventListener('change', persist);
+
+  // Switching engineer resets the model field: a model id is provider-specific, so the new provider
+  // starts from its own default (blank) rather than carrying a stale id across.
+  llm.addEventListener('change', () => {
+    model.value = '';
+    refreshModelField(llm.value as AppSettings['llm']['provider']);
+    persist();
+  });
+  // 'change' (blur/enter), not 'input', so we don't persist on every keystroke while typing a model id.
+  model.addEventListener('change', persist);
 
   save.addEventListener('click', () => {
     const value = keyInput.value.trim();
@@ -851,6 +982,8 @@ const wireSettingsPanel = (): void => {
     current = loaded;
     profile.value = loaded.profile;
     llm.value = loaded.llm.provider;
+    model.value = loaded.llm.model ?? '';
+    refreshModelField(loaded.llm.provider);
     voiceTts.value = loaded.voice.tts;
     voiceStt.value = loaded.voice.stt;
     proactivity.value = loaded.proactivity;

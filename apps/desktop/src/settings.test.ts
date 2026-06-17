@@ -41,7 +41,7 @@ describe('parseSettings', () => {
     expect(parsed.profile).toBe('premium');
     expect(parsed.llm).toEqual({ provider: 'claude', model: 'claude-opus-4-8' });
     expect(parsed.voice.tts).toBe('piper');
-    expect(parsed.voice.stt).toBe('faster-whisper'); // invalid → default
+    expect(parsed.voice.stt).toBe('whisper-cpp'); // invalid → default
     expect(parsed.proactivity).toBe('high');
     expect(parsed.outputDeviceId).toBe('hp-1');
     expect(parsed.ptt).toEqual({ deviceGuid: 'wheel', buttonIndex: 7 });
