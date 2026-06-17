@@ -14,7 +14,8 @@ copyright: © 2026 Race Engineer contributors (Apache-2.0)
 
 # Auto-update feed (electron-updater, docs/16 §4). Embeds app-update.yml in the app so the installed
 # build knows where to look, and emits latest.yml in dist/ for the release. We attach the artifacts via
-# the release workflow (softprops), not electron-builder's own publish, so no token is needed at build.
+# the release workflow (softprops), NOT electron-builder's own publish — the dist scripts pass
+# `--publish never` so electron-builder doesn't try to upload (which on CI+tag would demand a token).
 publish:
   provider: github
   owner: Alexander-Gro
