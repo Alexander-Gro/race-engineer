@@ -1,4 +1,5 @@
 import path from 'node:path';
+import { appendFile } from 'node:fs';
 import {
   app,
   BrowserWindow,
@@ -155,7 +156,20 @@ const setupAutoUpdater = (): void => {
 // Pending text-ask requests, correlated by id: renderer → main (invoke) → worker → main → resolve.
 let askSeq = 0;
 const pendingAsks = new Map<number, (answer: string) => void>();
+const pendingQuestions = new Map<number, string>(); // id → question text, for the transcript log
 const ASK_TIMEOUT_MS = 5000;
+
+// Append every exchange (voice STT transcript + the engineer's reply, and text-ask Q&A) to a local
+// JSONL transcript at <userData>/transcript.jsonl. Local-only, no network — a debugging aid to see
+// exactly what the recognizer heard vs. what was answered. Fire-and-forget; never block on disk.
+const logTranscript = (entry: Record<string, unknown>): void => {
+  try {
+    const line = `${JSON.stringify({ t: new Date().toISOString(), ...entry })}\n`;
+    appendFile(path.join(app.getPath('userData'), 'transcript.jsonl'), line, () => undefined);
+  } catch {
+    /* never let logging break the app */
+  }
+};
 
 // Push the saved engineer route (LLM provider + decrypted key, or template) to the worker. Assigned
 // in `whenReady` once the stores exist; called when the worker signals ready and on every settings/
@@ -360,6 +374,9 @@ const startEngineerWorker = (): void => {
         pendingAsks.delete(message.id);
         resolve(message.answer);
       }
+      const question = pendingQuestions.get(message.id);
+      pendingQuestions.delete(message.id);
+      logTranscript({ kind: 'text', question: question ?? '', reply: message.answer });
     } else if (message.type === 'audio') {
       // The voice queue (worker) wants the renderer to play/stop a clip. Send to the main window
       // only — the overlay shares the snapshot feed but must not double up the audio.
@@ -374,6 +391,7 @@ const startEngineerWorker = (): void => {
           reply: message.reply,
         });
       }
+      logTranscript({ kind: 'voice', heard: message.heard, reply: message.reply });
     } else if (message.type === 'ready') {
       // The worker attached its listener — safe to send the engineer route now (no fork race).
       pushEngineerConfig?.();
@@ -385,6 +403,7 @@ const startEngineerWorker = (): void => {
 const askEngineerViaWorker = (question: string): Promise<string> => {
   if (!worker) return Promise.resolve("The engineer isn't running yet — give it a moment.");
   const id = ++askSeq;
+  pendingQuestions.set(id, question); // remember it so the transcript log can pair Q with the reply
   return new Promise<string>((resolve) => {
     pendingAsks.set(id, resolve);
     worker?.postMessage({ type: 'ask', id, question } satisfies AskRequestMessage);

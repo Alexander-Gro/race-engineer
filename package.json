@@ -1,6 +1,6 @@
 {
   "name": "race-engineer",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "private": true,
   "type": "module",
   "description": "AI race engineer for sim racing (Le Mans Ultimate). Windows-only runtime; read-only and advisory.",
