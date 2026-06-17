@@ -1,0 +1,73 @@
+name: Release (Windows)
+
+# Build the Windows installer and publish it to a GitHub Release. Triggers on a version tag
+# (e.g. v0.1.0) pushed to the repo; also runnable manually from the Actions tab. Windows-only,
+# the hard platform target — this is the one job that actually packages the Electron app.
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch: {}
+
+# The release step needs to create a Release + upload assets.
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  windows-installer:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        # Version comes from the "packageManager" field in package.json (matches CI).
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      # Full install (NOT skipping the Electron binary — we need it to package).
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # electron-vite build -> electron-builder (NSIS installer + portable, x64). Unsigned by design
+      # (CSC_IDENTITY_AUTO_DISCOVERY=false is set inside the dist:win script).
+      - name: Build Windows installer
+        run: pnpm --filter @race-engineer/desktop dist:win
+
+      - name: List artifacts
+        run: dir apps\desktop\dist
+        shell: cmd
+
+      # Create/Update the GitHub Release for this tag and attach the installers. Marked as a
+      # prerelease (Beta). On workflow_dispatch (no tag) this step is skipped.
+      - name: Publish to GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          name: Race Engineer ${{ github.ref_name }} (Beta)
+          prerelease: true
+          generate_release_notes: true
+          body: |
+            **Race Engineer ${{ github.ref_name }} — Beta.** An AI race engineer for sim racing
+            (Le Mans Ultimate first). Windows 10/11 (x64).
+
+            ### Install
+            - **Installer:** `Race Engineer-*-setup.exe`
+            - **Portable:** `Race Engineer-*-portable.exe` (no install)
+
+            > ⚠️ The app is **unsigned** (free OSS, by choice), so on first run Windows SmartScreen
+            > shows *"Windows protected your PC"* → click **More info → Run anyway**. If antivirus
+            > flags it, that's a false positive on an unsigned app that reads game memory + the mic.
+
+            Free & local-first: runs at $0 with a local model (Ollama) + local voice; cloud
+            providers are opt-in, bring-your-own-key. See the README for setup.
+          files: |
+            apps/desktop/dist/*.exe
+            apps/desktop/dist/*.blockmap
