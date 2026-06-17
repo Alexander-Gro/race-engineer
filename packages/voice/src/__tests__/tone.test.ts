@@ -28,7 +28,10 @@ describe('parseToneTag', () => {
 
   it('maps a synonym a small model improvises (e.g. [Routine]) to its register and strips it', () => {
     // llama3.2 emits non-canonical tags like [Routine]/[Warning]; map to the nearest tone.
-    expect(parseToneTag('[Routine] Fuel is fine.')).toEqual({ tone: 'calm', text: 'Fuel is fine.' });
+    expect(parseToneTag('[Routine] Fuel is fine.')).toEqual({
+      tone: 'calm',
+      text: 'Fuel is fine.',
+    });
     expect(parseToneTag('[Warning] Tyres going off.')).toEqual({
       tone: 'serious',
       text: 'Tyres going off.',

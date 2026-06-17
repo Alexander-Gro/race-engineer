@@ -8,7 +8,8 @@ import type { AudioChunk, AudioClip, TtsProvider, VoiceId } from '../types';
  */
 const TONE_INSTRUCTION: Record<VocalTone, string | null> = {
   calm: null,
-  urgent: 'Speak with urgency and tension — fast, clipped, and firm, like a race engineer calling the driver in right now.',
+  urgent:
+    'Speak with urgency and tension — fast, clipped, and firm, like a race engineer calling the driver in right now.',
   upbeat: 'Speak with warmth and energy — encouraging and pleased, like praising a strong lap.',
   serious: 'Speak in a low, deliberate, serious tone — measured and grave, no lightness.',
 };

@@ -145,9 +145,14 @@ describe('piperTtsBackend', () => {
   it('bends the prosody flags by the delivery tone (urgent ⇒ faster + livelier than calm)', async () => {
     const fake = makeSpawn({ chunks: [new Uint8Array([1])] });
     await collect(
-      piperTtsBackend({ spawn: fake.spawn, readText: readText22050 })('box this lap', 'default', CONFIG, {
-        tone: 'urgent',
-      }),
+      piperTtsBackend({ spawn: fake.spawn, readText: readText22050 })(
+        'box this lap',
+        'default',
+        CONFIG,
+        {
+          tone: 'urgent',
+        },
+      ),
     );
     expect(fake.calls[0]?.args).toEqual([
       '--output-raw',

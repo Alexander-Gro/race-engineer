@@ -106,7 +106,13 @@ describe('speak (sentence-streamed TTS → VoicePlayer)', () => {
   it('an explicit delivery overrides the inline tag', async () => {
     const tts = new RecordingTts();
     const player = new VoicePlayer(new MockAudioSink());
-    await speak({ player, tts, voice: 'v1', text: '[upbeat] Nice lap.', delivery: { tone: 'serious' } });
+    await speak({
+      player,
+      tts,
+      voice: 'v1',
+      text: '[upbeat] Nice lap.',
+      delivery: { tone: 'serious' },
+    });
     expect(tts.calls[0]?.text).toBe('Nice lap.'); // tag still stripped from the words
     expect(tts.calls[0]?.delivery?.tone).toBe('serious'); // caller's delivery wins
   });
