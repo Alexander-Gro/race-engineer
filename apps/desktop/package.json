@@ -2,6 +2,8 @@
   "name": "@race-engineer/desktop",
   "version": "0.0.0",
   "private": true,
+  "description": "An AI race engineer for sim racing — live telemetry, strategy, and a push-to-talk AI voice on the radio.",
+  "author": "Race Engineer contributors",
   "main": "./out/main/index.js",
   "exports": {
     ".": "./src/index.ts"
@@ -10,25 +12,32 @@
     "typecheck": "tsc --noEmit",
     "typecheck:electron": "tsc --noEmit -p electron/tsconfig.json",
     "dev": "electron-vite dev",
-    "dev:lmu": "cross-env ENGINEER_SOURCE=lmu electron-vite dev",
+    "dev:lmu": "cross-env ENGINEER_SOURCE=lmu ENGINEER_SDL2_DLL=C:\\re-voice\\SDL2.dll electron-vite dev",
     "build:electron": "electron-vite build",
-    "preview": "electron-vite preview"
+    "preview": "electron-vite preview",
+    "dist": "electron-vite build && cross-env CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder",
+    "dist:win": "electron-vite build && cross-env CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --win"
   },
+  "//": "The @race-engineer/* workspace packages are bundled into out/ by electron-vite at build time, so they are devDependencies — NOT runtime deps to package (electron-builder would follow their symlinks into packages/ and choke). The genuine externalized runtime deps the bundle require()s (koffi, @anthropic-ai/sdk, zod) ARE dependencies so electron-builder packages them.",
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.104.1",
+    "koffi": "^3.0.0",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
     "@race-engineer/adapter-lmu": "workspace:*",
     "@race-engineer/adapter-sim-replay": "workspace:*",
     "@race-engineer/ai": "workspace:*",
     "@race-engineer/core": "workspace:*",
     "@race-engineer/engineer-core": "workspace:*",
     "@race-engineer/input": "workspace:*",
+    "@race-engineer/platform": "workspace:*",
     "@race-engineer/radio": "workspace:*",
-    "@race-engineer/voice": "workspace:*",
-    "koffi": "^3.0.0"
-  },
-  "devDependencies": {
     "@race-engineer/strategy": "workspace:*",
+    "@race-engineer/voice": "workspace:*",
     "cross-env": "^7.0.3",
     "electron": "^42.4.0",
+    "electron-builder": "^25.1.8",
     "electron-vite": "^5.0.0",
     "vite": "^7.3.5"
   }

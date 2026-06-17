@@ -1,0 +1,2 @@
+# Placed next to the installed .exe by electron-builder (extraFiles).
+# Drop SDL2.dll here for wheel push-to-talk in the packaged app.

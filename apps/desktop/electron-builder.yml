@@ -1,0 +1,54 @@
+# electron-builder packaging — turns the electron-vite `out/` build into a real, installable Windows
+# app (docs/16). **Windows-only**, the hard platform constraint (no mac/linux targets). Run it AFTER
+# `electron-vite build` (the `dist:win` script chains them). The actual installer build runs on Windows
+# (the human/rig half); this config + the scripts are the OS-agnostic part authored here.
+appId: dk.fluxconsulting.raceengineer
+productName: Race Engineer
+copyright: © 2026 Race Engineer contributors (Apache-2.0)
+
+# Code signing is **intentionally disabled** — we ship unsigned, by choice (free OSS, $0; docs/16 §4).
+# No certificate is configured and the `dist` scripts set CSC_IDENTITY_AUTO_DISCOVERY=false so
+# electron-builder never hunts for one. Result: a one-time SmartScreen "More info → Run anyway" on
+# first run. (winCodeSign is still fetched — it also provides `rcedit`, which embeds the app icon.)
+# To sign later, wire SignPath (free for OSS) — no other change needed here.
+
+directories:
+  output: dist # installers land in apps/desktop/dist/ (gitignored)
+  buildResources: build-resources # icon.ico etc. live in apps/desktop/build-resources/ (auto-picked)
+
+# electron-vite already bundles every workspace package's TS into out/; we package that + the manifest.
+# The external runtime deps (koffi, better-sqlite3, @anthropic-ai/sdk, zod) are pulled in by
+# electron-builder's production-dependency tracing from node_modules.
+files:
+  - out/**/*
+  - package.json
+
+# Native addons must live OUTSIDE the asar archive so their .node/.dll binaries can be loaded at runtime.
+# (The @race-engineer/* workspace packages are devDependencies — bundled into out/, never packaged from
+# node_modules — so only the real externalized natives need handling. koffi ships prebuilt .node binaries.)
+asarUnpack:
+  - '**/node_modules/koffi/**'
+
+win:
+  target:
+    - target: nsis
+      arch: [x64] # Windows x64 only (docs/16)
+    - target: portable
+      arch: [x64]
+
+# Drop SDL2.dll (wheel input) — and any other native libs you want shipped — in build-resources/win-extra/.
+# They land next to the .exe, where the input backend resolves "SDL2.dll" by default
+# (overridable via ENGINEER_SDL2_DLL). The folder is committed empty so the build doesn't fail.
+extraFiles:
+  - from: build-resources/win-extra
+    to: .
+    filter: ['**/*']
+
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  artifactName: ${productName}-${version}-setup.${ext}
+
+portable:
+  artifactName: ${productName}-${version}-portable.${ext}
